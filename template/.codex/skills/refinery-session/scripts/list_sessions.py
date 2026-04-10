@@ -5,28 +5,30 @@ import argparse
 from pathlib import Path
 
 
-def parse_scalar(raw: str):
-    value = raw.strip()
-    if value == "null":
-        return None
-    if value == "[]":
-        return []
-    if value.startswith("'") and value.endswith("'") and len(value) >= 2:
-        return value[1:-1].replace("''", "'")
-    if value.isdigit():
-        return int(value)
-    return value
+def load_yaml(text: str) -> object:
+    try:
+        import yaml  # type: ignore
+
+        return yaml.safe_load(text)
+    except ModuleNotFoundError:
+        try:
+            from ruamel.yaml import YAML  # type: ignore
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "YAML parser is required. Install PyYAML or ruamel.yaml."
+            ) from exc
+
+        parser = YAML(typ="safe")
+        return parser.load(text)
 
 
-def parse_simple_yaml(path: Path) -> dict[str, object]:
-    out: dict[str, object] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or ":" not in line:
-            continue
-        key, raw = line.split(":", 1)
-        out[key.strip()] = parse_scalar(raw)
-    return out
+def parse_meta_yaml(path: Path) -> dict[str, object]:
+    data = load_yaml(path.read_text(encoding="utf-8"))
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError(f"meta.yaml must contain a mapping: {path}")
+    return data
 
 
 def list_sessions(root: Path) -> list[tuple[Path, dict[str, object]]]:
@@ -36,7 +38,7 @@ def list_sessions(root: Path) -> list[tuple[Path, dict[str, object]]]:
         return results
 
     for meta_path in sorted(sessions_root.glob("*/meta.yaml")):
-        results.append((meta_path, parse_simple_yaml(meta_path)))
+        results.append((meta_path, parse_meta_yaml(meta_path)))
     return results
 
 
@@ -62,7 +64,7 @@ def main() -> int:
         flow_status = str(meta.get("flow_status", ""))
         updated = str(meta.get("last_updated_at", ""))
         print(
-            f"{rel}\tsession_id={session_id}\tstatus={status}\tphase={phase}\tflow_status={flow_status}\tlast_updated_at={updated}"
+            f"{rel}	session_id={session_id}	status={status}	phase={phase}	flow_status={flow_status}	last_updated_at={updated}"
         )
     return 0
 

@@ -28,3 +28,9 @@ description: セッション運用（capture/curation）を標準化する skill
 
 - `shared/` を直接更新しない。
 - promotion が必要な場合はユーザー明示を待つ。
+
+## meta.yaml 更新規約
+
+- `sessions/*/meta.yaml` は正規 YAML として扱い、文字列置換ベースで更新しない。
+- 既存フィールドの意味・型互換（`null`, list, scalar）を維持する。
+- 更新後は `scripts/list_sessions.py` で読み取り確認し、必要なら差分説明に型変更有無を明記する。

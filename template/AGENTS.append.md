@@ -14,3 +14,10 @@
 - `.codex/skills/refinery-session/scripts/list_headers.py`
 - `.codex/skills/refinery-session/scripts/list_sessions.py`
 - `.codex/skills/refinery-shared/SKILL.md`
+
+### meta.yaml 更新規約
+
+- `sessions/*/meta.yaml` は YAML として正しく保つ（キー:値の手書き置換で壊さない）。
+- 更新時は既存キーを維持し、意図しない削除・型変更を避ける。
+- 文字列は必要に応じて YAML クオートを使い、`null` / `[]` などの型を崩さない。
+- 更新後は `list_sessions.py` など YAML パーサー利用ツールで読み取り確認する。

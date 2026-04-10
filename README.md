@@ -14,15 +14,17 @@ template/
   AGENTS.append.md
   .codex/
     skills/
-      refinery-session/SKILL.md
-      refinery-shared/SKILL.md
+      refinery-session/
+        SKILL.md
+        scripts/
+          init_session.py
+          list_headers.py
+      refinery-shared/
+        SKILL.md
   .refinery/
     shared/
       state.md
       stock/README.md
-  scripts/
-    init_session.py
-    list_headers.py
 ```
 
 ## 導入手順
@@ -42,9 +44,13 @@ python3 scripts/apply_template.py --target /path/to/your-repo
 以下が存在することを確認してください。
 
 - `.codex/skills/refinery-session/SKILL.md`
+- `.codex/skills/refinery-session/scripts/init_session.py`
+- `.codex/skills/refinery-session/scripts/list_headers.py`
 - `.codex/skills/refinery-shared/SKILL.md`
 
 ## 補助スクリプト
 
-- `scripts/init_session.py`: `sessions/<session_id>/` 初期化
-- `scripts/list_headers.py`: `.refinery/` 配下の front matter 一覧化
+- `scripts/apply_template.py`: `template/` の配布適用
+- `.codex/skills/refinery-session/scripts/init_session.py`: `sessions/<session_id>/` 初期化
+- `.codex/skills/refinery-session/scripts/list_headers.py`: `.refinery/` 配下の front matter 一覧化
+

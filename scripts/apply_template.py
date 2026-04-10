@@ -47,6 +47,8 @@ def main() -> int:
     print("1) Append template/AGENTS.append.md content into your repo AGENTS.md")
     print("2) Confirm skills:")
     print("   - .codex/skills/refinery-session/SKILL.md")
+    print("   - .codex/skills/refinery-session/scripts/init_session.py")
+    print("   - .codex/skills/refinery-session/scripts/list_headers.py")
     print("   - .codex/skills/refinery-shared/SKILL.md")
 
     return 0

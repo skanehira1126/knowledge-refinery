@@ -11,6 +11,13 @@
 3. `flow/` に暫定知識を整理
 4. `state.md` を最小更新（目的・進捗・次アクション）
 
+## Skill local scripts
+
+- `scripts/init_session.py`
+- `scripts/list_headers.py`
+
+> この skill 配下に配置した script を優先利用する。
+
 ## Guardrails
 
 - `shared/` を直接更新しない

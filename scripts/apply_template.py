@@ -49,6 +49,7 @@ def main() -> int:
     print("   - .codex/skills/refinery-session/SKILL.md")
     print("   - .codex/skills/refinery-session/scripts/init_session.py")
     print("   - .codex/skills/refinery-session/scripts/list_headers.py")
+    print("   - .codex/skills/refinery-session/scripts/list_sessions.py")
     print("   - .codex/skills/refinery-shared/SKILL.md")
 
     return 0

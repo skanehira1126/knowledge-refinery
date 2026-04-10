@@ -12,4 +12,5 @@
 - `.codex/skills/refinery-session/SKILL.md`
 - `.codex/skills/refinery-session/scripts/init_session.py`
 - `.codex/skills/refinery-session/scripts/list_headers.py`
+- `.codex/skills/refinery-session/scripts/list_sessions.py`
 - `.codex/skills/refinery-shared/SKILL.md`

@@ -20,6 +20,7 @@ description: セッション運用（capture/curation）を標準化する skill
 
 - `scripts/init_session.py`
 - `scripts/list_headers.py`
+- `scripts/list_sessions.py`
 
 この skill 配下に配置した script を優先利用する。
 

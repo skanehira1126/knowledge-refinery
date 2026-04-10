@@ -53,3 +53,4 @@ python3 scripts/apply_template.py --target /path/to/your-repo
 - `scripts/apply_template.py`: `template/` の配布適用
 - `.codex/skills/refinery-session/scripts/init_session.py`: `sessions/<session_id>/` 初期化
 - `.codex/skills/refinery-session/scripts/list_headers.py`: `.refinery/` 配下の front matter 一覧化
+

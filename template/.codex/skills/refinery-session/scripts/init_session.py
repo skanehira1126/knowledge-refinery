@@ -6,6 +6,7 @@ session_id format: YYYYMMDDTHHMMSSZ-<random>
 
 import argparse
 import datetime as dt
+import json
 import secrets
 import string
 from pathlib import Path
@@ -20,10 +21,6 @@ def generate_session_id(now: dt.datetime | None = None, suffix_len: int = 6) -> 
     suffix = "".join(secrets.choice(ALPHABET) for _ in range(suffix_len))
     return f"{timestamp}-{suffix}"
 
-
-def yaml_quote(value: str) -> str:
-    escaped = value.replace("'", "''")
-    return f"'{escaped}'"
 
 
 def write_text(path: Path, content: str) -> None:
@@ -47,45 +44,40 @@ def init_session(
         (session_root / rel).mkdir(parents=True, exist_ok=True)
 
     created_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    meta_yaml = "\n".join(
-        [
-            f"session_id: {session_id}",
-            f"kind: {kind}",
-            f"title: {yaml_quote(title)}",
-            f"task: {yaml_quote(task)}",
-            f"created_at: {created_at}",
-            f"created_by: {created_by}",
-            f"repository: {yaml_quote(repository) if repository else 'null'}",
-            f"domain: {yaml_quote(domain) if domain else 'null'}",
-            "",
-            "status: active",
-            "phase: capture",
-            "current_step: 'session initialized'",
-            "next_action: 'raw に初期証拠を追加する'",
-            f"last_updated_at: {created_at}",
-            "closed_at: null",
-            "blocked_reason: null",
-            "resume_condition: null",
-            "",
-            "parent_session_id: null",
-            "child_session_ids: []",
-            "related_sessions: []",
-            "depends_on: []",
-            "supersedes: []",
-            "superseded_by: null",
-            "",
-            "evidence_status: collecting",
-            "flow_status: not_started",
-            "synthesis_status: not_started",
-            "coverage_status: unknown",
-            "confidence: low",
-            "raw_item_count: 0",
-            "flow_item_count: 0",
-            "last_flow_update_at: null",
-            "",
-        ]
-    )
-    write_text(session_root / "meta.yaml", meta_yaml)
+    meta = {
+        "session_id": session_id,
+        "kind": kind,
+        "title": title,
+        "task": task,
+        "created_at": created_at,
+        "created_by": created_by,
+        "repository": repository,
+        "domain": domain,
+        "status": "active",
+        "phase": "capture",
+        "current_step": "session initialized",
+        "next_action": "raw に初期証拠を追加する",
+        "last_updated_at": created_at,
+        "closed_at": None,
+        "blocked_reason": None,
+        "resume_condition": None,
+        "parent_session_id": None,
+        "child_session_ids": [],
+        "related_sessions": [],
+        "depends_on": [],
+        "supersedes": [],
+        "superseded_by": None,
+        "evidence_status": "collecting",
+        "flow_status": "not_started",
+        "synthesis_status": "not_started",
+        "coverage_status": "unknown",
+        "confidence": "low",
+        "raw_item_count": 0,
+        "flow_item_count": 0,
+        "last_flow_update_at": None,
+    }
+    meta_json = json.dumps(meta, ensure_ascii=False, indent=2) + "\n"
+    write_text(session_root / "meta.json", meta_json)
 
     state_md = (
         "---\n"

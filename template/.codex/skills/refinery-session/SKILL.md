@@ -34,3 +34,8 @@ description: セッション運用（capture/curation）を標準化する skill
 - `sessions/*/meta.yaml` は正規 YAML として扱い、文字列置換ベースで更新しない。
 - 既存フィールドの意味・型互換（`null`, list, scalar）を維持する。
 - 更新後は `scripts/list_sessions.py` で読み取り確認し、必要なら差分説明に型変更有無を明記する。
+
+
+## Dependencies
+
+- `scripts/list_sessions.py` 実行前に `python3 -m pip install -r .codex/skills/refinery-session/requirements.txt` を実施する。

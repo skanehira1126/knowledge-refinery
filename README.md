@@ -50,6 +50,21 @@ python3 scripts/apply_template.py --target /path/to/your-repo
 - `.codex/skills/refinery-session/scripts/list_sessions.py`
 - `.codex/skills/refinery-shared/SKILL.md`
 
+
+## Python 依存関係
+
+`list_sessions.py` は `meta.yaml` を正規 YAML として扱うため、`PyYAML` を利用する。
+
+```bash
+python3 -m pip install -r template/scripts/requirements.txt
+```
+
+配布先リポジトリでは、skill 側 requirements を使って同様にインストールできる。
+
+```bash
+python3 -m pip install -r .codex/skills/refinery-session/requirements.txt
+```
+
 ## 補助スクリプト
 
 - `scripts/apply_template.py`: `template/` の配布適用

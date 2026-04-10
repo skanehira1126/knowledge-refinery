@@ -5,25 +5,15 @@ import argparse
 from pathlib import Path
 
 
-def load_yaml(text: str) -> object:
+def parse_meta_yaml(path: Path) -> dict[str, object]:
     try:
         import yaml  # type: ignore
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "PyYAML is required to parse meta.yaml. Install with: python3 -m pip install -r .codex/skills/refinery-session/requirements.txt"
+        ) from exc
 
-        return yaml.safe_load(text)
-    except ModuleNotFoundError:
-        try:
-            from ruamel.yaml import YAML  # type: ignore
-        except ModuleNotFoundError as exc:
-            raise RuntimeError(
-                "YAML parser is required. Install PyYAML or ruamel.yaml."
-            ) from exc
-
-        parser = YAML(typ="safe")
-        return parser.load(text)
-
-
-def parse_meta_yaml(path: Path) -> dict[str, object]:
-    data = load_yaml(path.read_text(encoding="utf-8"))
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if data is None:
         return {}
     if not isinstance(data, dict):
@@ -64,7 +54,7 @@ def main() -> int:
         flow_status = str(meta.get("flow_status", ""))
         updated = str(meta.get("last_updated_at", ""))
         print(
-            f"{rel}	session_id={session_id}	status={status}	phase={phase}	flow_status={flow_status}	last_updated_at={updated}"
+            f"{rel}\tsession_id={session_id}\tstatus={status}\tphase={phase}\tflow_status={flow_status}\tlast_updated_at={updated}"
         )
     return 0
 

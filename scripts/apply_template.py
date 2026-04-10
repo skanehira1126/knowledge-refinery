@@ -45,12 +45,15 @@ def main() -> int:
     print(f"Copied files: {len(copied)}")
     print("\nNext steps:")
     print("1) Append template/AGENTS.append.md content into your repo AGENTS.md")
-    print("2) Confirm skills:")
+    print("2) Install Python dependency for session tools:")
+    print("   - python3 -m pip install -r .codex/skills/refinery-session/requirements.txt")
+    print("3) Confirm skills:")
     print("   - .codex/skills/refinery-session/SKILL.md")
     print("   - .codex/skills/refinery-session/scripts/init_session.py")
     print("   - .codex/skills/refinery-session/scripts/list_headers.py")
     print("   - .codex/skills/refinery-session/scripts/list_sessions.py")
     print("   - .codex/skills/refinery-shared/SKILL.md")
+    print("   - .codex/skills/refinery-session/requirements.txt")
 
     return 0
 

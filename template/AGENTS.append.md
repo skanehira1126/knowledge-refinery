@@ -21,3 +21,8 @@
 - 更新時は既存キーを維持し、意図しない削除・型変更を避ける。
 - 文字列は必要に応じて YAML クオートを使い、`null` / `[]` などの型を崩さない。
 - 更新後は `list_sessions.py` など YAML パーサー利用ツールで読み取り確認する。
+
+
+### Python 依存関係
+
+- `list_sessions.py` 実行前に `python3 -m pip install -r .codex/skills/refinery-session/requirements.txt` で `PyYAML` を導入する。

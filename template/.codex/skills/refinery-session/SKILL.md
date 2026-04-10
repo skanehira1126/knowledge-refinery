@@ -28,3 +28,15 @@ description: セッション運用（capture/curation）を標準化する skill
 
 - `shared/` を直接更新しない。
 - promotion が必要な場合はユーザー明示を待つ。
+
+## meta.json 更新規約
+
+- `sessions/*/meta.json` は JSON として扱い、文字列置換ベースで更新しない。
+- 既存フィールドの意味・型互換（`null`, list, scalar）を維持する。
+- 更新後は `scripts/list_sessions.py` で読み取り確認し、必要なら差分説明に型変更有無を明記する。
+
+
+## meta.json 形式
+
+- `meta.json` を唯一のセッションメタデータ形式として扱う。
+- 非 JSON 形式（YAML 等）の併用はしない。

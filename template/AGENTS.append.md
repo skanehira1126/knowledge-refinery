@@ -14,3 +14,16 @@
 - `.codex/skills/refinery-session/scripts/list_headers.py`
 - `.codex/skills/refinery-session/scripts/list_sessions.py`
 - `.codex/skills/refinery-shared/SKILL.md`
+
+### meta.json 更新規約
+
+- `sessions/*/meta.json` は JSON として正しく保つ（手書き置換で壊さない）。
+- 更新時は既存キーを維持し、意図しない削除・型変更を避ける。
+- `null` / `[]` / 文字列などの型を崩さない。
+- 更新後は `list_sessions.py` など JSON 読み取りツールで確認する。
+
+
+### meta.json 形式
+
+- `meta.json` を唯一のセッションメタデータ形式として管理する。
+- 非 JSON 形式（YAML 等）の併用はしない。

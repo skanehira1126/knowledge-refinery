@@ -1,32 +1,16 @@
 #!/usr/bin/env python3
-"""List refinery sessions by reading session meta.yaml files."""
+"""List refinery sessions by reading session meta.json files."""
 
 import argparse
+import json
 from pathlib import Path
 
 
-def parse_scalar(raw: str):
-    value = raw.strip()
-    if value == "null":
-        return None
-    if value == "[]":
-        return []
-    if value.startswith("'") and value.endswith("'") and len(value) >= 2:
-        return value[1:-1].replace("''", "'")
-    if value.isdigit():
-        return int(value)
-    return value
-
-
-def parse_simple_yaml(path: Path) -> dict[str, object]:
-    out: dict[str, object] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or ":" not in line:
-            continue
-        key, raw = line.split(":", 1)
-        out[key.strip()] = parse_scalar(raw)
-    return out
+def parse_meta_json(path: Path) -> dict[str, object]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"meta.json must contain a mapping: {path}")
+    return data
 
 
 def list_sessions(root: Path) -> list[tuple[Path, dict[str, object]]]:
@@ -35,13 +19,13 @@ def list_sessions(root: Path) -> list[tuple[Path, dict[str, object]]]:
     if not sessions_root.exists():
         return results
 
-    for meta_path in sorted(sessions_root.glob("*/meta.yaml")):
-        results.append((meta_path, parse_simple_yaml(meta_path)))
+    for meta_path in sorted(sessions_root.glob("*/meta.json")):
+        results.append((meta_path, parse_meta_json(meta_path)))
     return results
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="List sessions from meta.yaml")
+    parser = argparse.ArgumentParser(description="List sessions from meta.json")
     parser.add_argument("--root", default=".refinery", help="Refinery root directory")
     return parser.parse_args()
 

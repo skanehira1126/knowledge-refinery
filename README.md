@@ -50,19 +50,10 @@ python3 scripts/apply_template.py --target /path/to/your-repo
 - `.codex/skills/refinery-session/scripts/list_sessions.py`
 - `.codex/skills/refinery-shared/SKILL.md`
 
+## `template/AGENTS.append.md` について
 
-## meta.json 形式方針
+`template/AGENTS.append.md` は、**この配布テンプレートを他リポジトリへ展開するときに**、
+展開先リポジトリの `AGENTS.md` へ追記するためのテンプレートです。
 
-`meta.json` を単一フォーマットとして採用する。
-`list_sessions.py` / `init_session.py` は標準ライブラリ (`json`) のみで完結する。
-
-- セッションメタデータは `sessions/*/meta.json` に保存する。
-- 文字列置換で壊さず、必ず JSON として整合性を保って更新する。
-
-## 補助スクリプト
-
-- `scripts/apply_template.py`: `template/` の配布適用
-- `.codex/skills/refinery-session/scripts/init_session.py`: `sessions/<session_id>/` 初期化
-- `.codex/skills/refinery-session/scripts/list_headers.py`: `.refinery/` 配下の front matter 一覧化
-- `.codex/skills/refinery-session/scripts/list_sessions.py`: `sessions/*/meta.json` を読み `status` / `phase` / `flow_status` を一覧化
-
+運用ルール（refinery 利用ルール・`meta.json` 更新規約・形式方針）を変更する場合は、
+まず `template/AGENTS.append.md` を更新してください。

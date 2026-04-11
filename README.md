@@ -6,7 +6,7 @@
 今回のテンプレートは、利用時に必要な以下2点を最優先で揃える構成です。
 
 1. `skills` の配置
-2. `AGENTS.md` への管理ブロック追記
+2. `AGENTS.md` または `CLAUDE.md` への管理ブロック追記
 
 ## テンプレート構成
 
@@ -85,17 +85,34 @@ uv run knowledge-refinery --help
 
 `pyproject.toml` の依存に `PyYAML` を含めているため、このパッケージをインストールして CLI を使う場合は別途 `PyYAML` を追加する必要はありません。
 
+## 開発時の検証
+
+このリポジトリの検証は `tox` を入口にして、`ruff`・`mypy`・`pytest` をまとめて実行します。
+
+```bash
+uv run tox
+```
+
+個別に確認したい場合は、env を絞って実行できます。
+
+```bash
+uv run tox -e ruff
+uv run tox -e mypy
+uv run tox -e py313
+```
+
 ## 導入手順
 
 ### 1) テンプレートを対象リポジトリへコピー
 
 ```bash
 uv run knowledge-refinery apply-template --target /path/to/your-repo
+uv run knowledge-refinery apply-template --target /path/to/your-repo --skill-destination agent
 ```
 
 `apply-template` は package に埋め込まれた template 資産から以下をまとめて配置します。
 
-- `.codex/skills/` 配下の skill 配布
+- `.codex/skills/` または `.agent/skills/` 配下の skill 配布
 - `.refinery/shared/` の初期配置
 
 ### 2) 対象リポジトリで CLI を使えるようにする
@@ -108,27 +125,44 @@ uv tool install /path/to/knowledge-refinery
 
 `PyYAML` は CLI の依存に含まれているため、追加で `uv add PyYAML` する必要はありません。
 
-### 3) 対象リポジトリの `AGENTS.md` に追記
+パッケージ更新後にインストール済み CLI を追従させたい場合も、同じ `uv tool install /path/to/knowledge-refinery` を再実行すればよいです。
 
-`AGENTS.md` には別コマンドで管理ブロックを追記または更新します。
+### 3) 対象リポジトリの `AGENTS.md` または `CLAUDE.md` に追記
+
+対象のガイドファイルには別コマンドで管理ブロックを追記または更新します。
 
 ```bash
 knowledge-refinery update-agents-md --target /path/to/your-repo --lang jp
 knowledge-refinery update-agents-md --target /path/to/your-repo --lang en
+knowledge-refinery update-agents-md --target /path/to/your-repo --filename CLAUDE.md --lang jp
 ```
 
-このコマンドは、展開先の `AGENTS.md` に managed block を追加し、既存ブロックがある場合は選んだ言語で更新します。
+このコマンドは、展開先の `AGENTS.md` または `CLAUDE.md` に managed block を追加し、既存ブロックがある場合は選んだ言語で更新します。`--target` にファイルパスを直接渡した場合は、そのファイル名を優先します。
 
-### 4) skills 配置確認
+### 4) パッケージ更新後に配布物を追従更新
+
+埋め込み template を更新したあとに配布先の skill や shared 配下を追従させたい場合は、更新専用コマンドを使います。
+
+```bash
+knowledge-refinery update-template --target /path/to/your-repo
+knowledge-refinery update-template --target /path/to/your-repo --skill-destination agent
+knowledge-refinery update-agents-md --target /path/to/your-repo --lang jp
+```
+
+`update-template` は `apply-template --force` 相当で、既存の `.codex/skills/` または `.agent/skills/` と `.refinery/shared/` を上書き更新します。
+
+ただし、運用で育てる前提の `.refinery/shared/state.md` は既存ファイルがある場合に保持し、上書きしません。
+
+### 5) skills 配置確認
 
 以下が存在することを確認してください。
 
-- `.codex/skills/refinery-session/SKILL.md`
-- `.codex/skills/refinery-shared/SKILL.md`
+- `.codex/skills/refinery-session/SKILL.md` または `.agent/skills/refinery-session/SKILL.md`
+- `.codex/skills/refinery-shared/SKILL.md` または `.agent/skills/refinery-shared/SKILL.md`
 - `.refinery/shared/review/AGENTS.md`
 - `.refinery/shared/stock/AGENTS.md`
 
-### 5) セッション操作 CLI
+### 6) セッション操作 CLI
 
 展開先では、インストール済みの `knowledge-refinery` CLI をそのまま使えます。
 
@@ -149,8 +183,9 @@ knowledge-refinery reject-review --review-file .refinery/shared/review/20260411T
 
 各 CLI の役割は以下です。
 
-- `apply-template`: リポジトリへ refinery テンプレートを配布し、skills と shared フォルダを初期化する
-- `update-agents-md`: `AGENTS.md` の managed block を `jp` または `en` で追加・更新する
+- `apply-template`: リポジトリへ refinery テンプレートを配布し、skills を `.codex` または `.agent` に配置しつつ shared フォルダを初期化する
+- `update-template`: 既存の配布先に対して template を再適用し、skills と shared フォルダを上書き更新する
+- `update-agents-md`: `AGENTS.md` または `CLAUDE.md` の managed block を `jp` または `en` で追加・更新する
 - `init-session`: `sessions/<session_id>/` 配下の `raw/`, `flow/`, それぞれのローカルルール `AGENTS.md`, `state.md`, `meta.yaml` を作る
 - `list-sessions`: `sessions/*/meta.yaml` を一覧する
 - `list-headers`: `.refinery` 配下の Markdown YAML front matter を一覧する。`--scope raw|flow|review|stock` と `--session-id` で絞り込める

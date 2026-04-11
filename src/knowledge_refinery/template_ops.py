@@ -3,6 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 
+from knowledge_refinery import get_version
+from knowledge_refinery.session_metadata import write_yaml
+
 
 SKILL_DESTINATION_CHOICES = ("codex", "agent")
 SKILL_TEMPLATE_ROOT = "codex"
@@ -11,6 +14,7 @@ SKILL_DESTINATION_ROOTS = {
     "agent": ".agent",
 }
 STATIC_TEMPLATE_COPY_PATHS = (("refinery", ".refinery"),)
+TEMPLATE_METADATA_RELATIVE_PATH = Path(".refinery") / "template-meta.yaml"
 PRESERVE_ON_FORCE_COPY = {
     ("refinery", "shared/state.md"),
 }
@@ -73,4 +77,13 @@ def apply_template(
     copied = copy_tree(
         template_root, target_root, force=force, skill_destination=skill_destination
     )
+    metadata_path = target_root / TEMPLATE_METADATA_RELATIVE_PATH
+    if force or not metadata_path.exists():
+        write_yaml(
+            metadata_path,
+            {
+                "cli_version": get_version(),
+            },
+        )
+        copied.append(metadata_path)
     return template_root, copied

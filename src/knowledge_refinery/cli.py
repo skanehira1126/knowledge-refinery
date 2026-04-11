@@ -3,10 +3,13 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from pathlib import Path
+import sys
 
+from knowledge_refinery import get_version
 from knowledge_refinery.agents_ops import GUIDE_FILENAME_CHOICES
 from knowledge_refinery.agents_ops import LANG_CHOICES
 from knowledge_refinery.agents_ops import apply_agents_md
+from knowledge_refinery.errors import RefineryCliError
 from knowledge_refinery.front_matter import list_headers_filtered
 from knowledge_refinery.knowledge_ops import list_review
 from knowledge_refinery.knowledge_ops import prepare_review
@@ -15,7 +18,9 @@ from knowledge_refinery.knowledge_ops import refresh_review
 from knowledge_refinery.knowledge_ops import reject_review
 from knowledge_refinery.session_metadata import init_session
 from knowledge_refinery.session_metadata import list_sessions
+from knowledge_refinery.session_metadata import read_yaml_mapping
 from knowledge_refinery.template_ops import SKILL_DESTINATION_CHOICES
+from knowledge_refinery.template_ops import TEMPLATE_METADATA_RELATIVE_PATH
 from knowledge_refinery.template_ops import apply_template
 
 
@@ -223,7 +228,10 @@ def run_apply_template(args: argparse.Namespace) -> int:
         "2) Update the managed AGENTS.md or CLAUDE.md section with "
         "`knowledge-refinery update-agents-md --target ... --lang jp|en`."
     )
-    print(f"3) Confirm .{args.skill_destination}/skills/ and .refinery/shared/ were copied.")
+    print(
+        f"3) Confirm .{args.skill_destination}/skills/, .refinery/shared/, and "
+        "`.refinery/template-meta.yaml` were copied."
+    )
     print(
         "4) Later template updates can be applied with "
         "`knowledge-refinery update-template --target ...`."
@@ -257,8 +265,12 @@ def run_update_template(args: argparse.Namespace) -> int:
         f"3) Review the updated diffs under "
         f".{args.skill_destination}/skills/ and .refinery/shared/."
     )
-    print("4) Existing .refinery/shared/state.md is preserved during template refreshes.")
-    print("5) Keep sessions/*/meta.yaml as the single session metadata format.")
+    print(
+        "4) `.refinery/template-meta.yaml` is refreshed to match the CLI version used "
+        "for this update."
+    )
+    print("5) Existing .refinery/shared/state.md is preserved during template refreshes.")
+    print("6) Keep sessions/*/meta.yaml as the single session metadata format.")
     return 0
 
 
@@ -420,7 +432,55 @@ def run_reject_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def resolve_refinery_root(args: argparse.Namespace) -> Path | None:
+    if hasattr(args, "root"):
+        return Path(args.root).resolve()
+
+    if not hasattr(args, "target"):
+        return None
+
+    target = Path(args.target).resolve()
+    if args.command == "update-agents-md" and target.name in GUIDE_FILENAME_CHOICES:
+        target = target.parent
+
+    return target / TEMPLATE_METADATA_RELATIVE_PATH.parent.name
+
+
+def warn_if_cli_version_mismatch(args: argparse.Namespace) -> None:
+    refinery_root = resolve_refinery_root(args)
+    if refinery_root is None:
+        return
+
+    metadata_path = refinery_root / TEMPLATE_METADATA_RELATIVE_PATH.name
+    if not metadata_path.is_file():
+        return
+
+    try:
+        metadata = read_yaml_mapping(metadata_path)
+    except (OSError, SystemExit, RefineryCliError) as exc:
+        detail = exc.render() if isinstance(exc, RefineryCliError) else str(exc)
+        print(
+            f"Warning: failed to read template metadata at {metadata_path}: {detail}",
+            file=sys.stderr,
+        )
+        return
+
+    applied_version = metadata.get("cli_version")
+    current_version = get_version()
+    if applied_version != current_version:
+        print(
+            "Warning: distributed refinery template was applied with CLI version "
+            f"{applied_version}, but the current CLI version is {current_version}.",
+            file=sys.stderr,
+        )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.handler(args)
+    try:
+        warn_if_cli_version_mismatch(args)
+        return args.handler(args)
+    except RefineryCliError as exc:
+        print(exc.render(), file=sys.stderr)
+        return exc.exit_code

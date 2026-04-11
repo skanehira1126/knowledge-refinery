@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 from argparse import Namespace
+from contextlib import redirect_stderr
 from contextlib import redirect_stdout
 import io
 from pathlib import Path
 import tempfile
 
 import pytest
+import yaml
 
+from knowledge_refinery import __version__
+from knowledge_refinery import get_version
 import knowledge_refinery.cli as cli
+from knowledge_refinery.errors import RefineryConflictError
+from knowledge_refinery.template_ops import TEMPLATE_METADATA_RELATIVE_PATH
+from knowledge_refinery.template_ops import apply_template
 from knowledge_refinery.template_ops import copy_tree
 
 
@@ -20,6 +27,10 @@ def test_parser_accepts_update_template() -> None:
     assert args.handler is cli.run_update_template
     assert args.target == "/tmp/example"
     assert args.skill_destination == "agent"
+
+
+def test_get_version_returns_package_version() -> None:
+    assert get_version() == __version__
 
 
 def test_run_apply_template_mentions_update_template(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -111,3 +122,195 @@ def test_copy_tree_creates_shared_state_when_missing() -> None:
         assert (dst / ".refinery" / "shared" / "state.md").read_text(
             encoding="utf-8"
         ) == "template state\n"
+
+
+def test_apply_template_writes_template_metadata() -> None:
+    with tempfile.TemporaryDirectory() as target_dir:
+        target_root = Path(target_dir)
+
+        _, copied = apply_template(target_root, force=False, skill_destination="codex")
+
+        metadata_path = target_root / TEMPLATE_METADATA_RELATIVE_PATH
+        assert metadata_path in copied
+        assert yaml.safe_load(metadata_path.read_text(encoding="utf-8")) == {
+            "cli_version": __version__,
+        }
+
+
+def test_apply_template_preserves_existing_metadata_without_force() -> None:
+    with tempfile.TemporaryDirectory() as target_dir:
+        target_root = Path(target_dir)
+        metadata_path = target_root / TEMPLATE_METADATA_RELATIVE_PATH
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        metadata_path.write_text(
+            "cli_version: 0.0.1\n",
+            encoding="utf-8",
+        )
+
+        _, copied = apply_template(target_root, force=False, skill_destination="codex")
+
+        assert metadata_path not in copied
+        assert yaml.safe_load(metadata_path.read_text(encoding="utf-8")) == {
+            "cli_version": "0.0.1",
+        }
+
+
+def test_apply_template_overwrites_existing_metadata_with_force() -> None:
+    with tempfile.TemporaryDirectory() as target_dir:
+        target_root = Path(target_dir)
+        metadata_path = target_root / TEMPLATE_METADATA_RELATIVE_PATH
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        metadata_path.write_text(
+            "cli_version: 0.0.1\n",
+            encoding="utf-8",
+        )
+
+        _, copied = apply_template(target_root, force=True, skill_destination="codex")
+
+        assert metadata_path in copied
+        assert yaml.safe_load(metadata_path.read_text(encoding="utf-8")) == {
+            "cli_version": __version__,
+        }
+
+
+def test_main_warns_when_template_cli_version_differs() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        root.mkdir(parents=True)
+        (root / "template-meta.yaml").write_text("cli_version: 9.9.9\n", encoding="utf-8")
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            exit_code = cli.main(["list-sessions", "--root", str(root)])
+
+        assert exit_code == 0
+        assert "No sessions found." in stdout.getvalue()
+        assert "applied with CLI version 9.9.9" in stderr.getvalue()
+        assert __version__ in stderr.getvalue()
+
+
+def test_main_does_not_warn_when_template_cli_version_matches() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        root.mkdir(parents=True)
+        (root / "template-meta.yaml").write_text(f"cli_version: {__version__}\n", encoding="utf-8")
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            exit_code = cli.main(["list-sessions", "--root", str(root)])
+
+        assert exit_code == 0
+        assert "No sessions found." in stdout.getvalue()
+        assert stderr.getvalue() == ""
+
+
+def test_main_renders_structured_error_for_invalid_front_matter() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        bad_file = root / "sessions" / "session-123" / "flow" / "bad.md"
+        bad_file.parent.mkdir(parents=True, exist_ok=True)
+        bad_file.write_text("---\n- invalid\n---\n", encoding="utf-8")
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            exit_code = cli.main(["list-headers", "--root", str(root)])
+
+        assert exit_code == 2
+        assert stdout.getvalue() == ""
+        rendered = stderr.getvalue()
+        assert "refinery_error: invalid_file_format" in rendered
+        rendered_path = next(
+            line.removeprefix("path: ")
+            for line in rendered.splitlines()
+            if line.startswith("path: ")
+        )
+        assert Path(rendered_path).resolve() == bad_file.resolve()
+        assert "repair_skill: refinery-repair" in rendered
+        assert "Traceback" not in rendered
+
+
+def test_main_renders_structured_error_for_invalid_meta_yaml() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        meta_path = root / "sessions" / "session-123" / "meta.yaml"
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        meta_path.write_text("- invalid\n", encoding="utf-8")
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            exit_code = cli.main(["list-sessions", "--root", str(root)])
+
+        assert exit_code == 2
+        assert stdout.getvalue() == ""
+        rendered = stderr.getvalue()
+        assert "refinery_error: invalid_file_format" in rendered
+        rendered_path = next(
+            line.removeprefix("path: ")
+            for line in rendered.splitlines()
+            if line.startswith("path: ")
+        )
+        assert Path(rendered_path).resolve() == meta_path.resolve()
+        assert "repair_skill: refinery-repair" in rendered
+
+
+def test_main_renders_structured_error_for_refinery_conflict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conflict = RefineryConflictError(
+        summary="Multiple flow files resolve to the same review file.",
+        path=Path("/repo/.refinery/sessions/s1/flow/topic.md"),
+        detail="knowledge_id collision",
+        expected="Each flow file in the same session should produce a unique review target.",
+        suggested_action="Fix the conflicting knowledge_id and rerun the command.",
+    )
+
+    def fake_run_list_sessions(_args: Namespace) -> int:
+        raise conflict
+
+    monkeypatch.setattr(cli, "run_list_sessions", fake_run_list_sessions)
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        exit_code = cli.main(["list-sessions"])
+
+    assert exit_code == 2
+    assert stdout.getvalue() == ""
+    rendered = stderr.getvalue()
+    assert "refinery_error: conflicting_knowledge" in rendered
+    assert "repair_skill: refinery-repair" in rendered
+
+
+def test_main_renders_structured_error_for_missing_review_file() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        missing_review_path = root / "shared" / "review" / "missing.md"
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            exit_code = cli.main(
+                [
+                    "promote-review",
+                    "--root",
+                    str(root),
+                    "--review-file",
+                    str(missing_review_path),
+                ]
+            )
+
+        assert exit_code == 2
+        assert stdout.getvalue() == ""
+        rendered = stderr.getvalue()
+        assert "refinery_error: invalid_path" in rendered
+        rendered_path = next(
+            line.removeprefix("path: ")
+            for line in rendered.splitlines()
+            if line.startswith("path: ")
+        )
+        assert Path(rendered_path).resolve() == missing_review_path.resolve()
+        assert "Traceback" not in rendered

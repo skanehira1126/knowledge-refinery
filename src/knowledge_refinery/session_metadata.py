@@ -7,6 +7,8 @@ import secrets
 import string
 from typing import Any
 
+from knowledge_refinery.errors import RefineryFormatError
+
 
 ALPHABET = string.ascii_lowercase + string.digits
 
@@ -60,9 +62,24 @@ def build_directory_agents(title: str, description: str, layer: str, body_lines:
 
 def read_yaml_mapping(path: Path) -> dict[str, object]:
     yaml = require_yaml()
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise RefineryFormatError(
+            summary="Session metadata file has invalid YAML syntax.",
+            path=path,
+            detail=str(exc),
+            expected="Valid YAML syntax in `meta.yaml`.",
+            suggested_action="Repair the YAML syntax in meta.yaml, then rerun the same command.",
+        ) from exc
     if not isinstance(data, dict):
-        raise ValueError(f"meta.yaml must contain a mapping: {path}")
+        raise RefineryFormatError(
+            summary="Session metadata file has invalid YAML structure.",
+            path=path,
+            detail="meta.yaml must contain a YAML mapping",
+            expected="A top-level YAML mapping with keys such as `session_id` and `status`.",
+            suggested_action="Repair the meta.yaml structure, then rerun the same command.",
+        )
     return data
 
 

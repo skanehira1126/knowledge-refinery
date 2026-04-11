@@ -17,6 +17,8 @@ src/
     template/
       codex/
         skills/
+          refinery-repair/
+            SKILL.md
           refinery-session/
             SKILL.md
           refinery-shared/
@@ -25,14 +27,11 @@ src/
         shared/
           review/
             AGENTS.md
-            README.md
             rejected/
               AGENTS.md
-              README.md
           state.md
           stock/
             AGENTS.md
-            README.md
 ```
 
 ## 知識ファイル形式
@@ -114,6 +113,7 @@ uv run knowledge-refinery apply-template --target /path/to/your-repo --skill-des
 
 - `.codex/skills/` または `.agent/skills/` 配下の skill 配布
 - `.refinery/shared/` の初期配置
+- `.refinery/template-meta.yaml` への `cli_version` 記録
 
 ### 2) 対象リポジトリで CLI を使えるようにする
 
@@ -149,7 +149,7 @@ knowledge-refinery update-template --target /path/to/your-repo --skill-destinati
 knowledge-refinery update-agents-md --target /path/to/your-repo --lang jp
 ```
 
-`update-template` は `apply-template --force` 相当で、既存の `.codex/skills/` または `.agent/skills/` と `.refinery/shared/` を上書き更新します。
+`update-template` は `apply-template --force` 相当で、既存の `.codex/skills/` または `.agent/skills/` と `.refinery/shared/` を上書き更新します。あわせて `.refinery/template-meta.yaml` も更新し、その時点で使った CLI バージョンを `cli_version` として記録します。
 
 ただし、運用で育てる前提の `.refinery/shared/state.md` は既存ファイルがある場合に保持し、上書きしません。
 
@@ -159,6 +159,8 @@ knowledge-refinery update-agents-md --target /path/to/your-repo --lang jp
 
 - `.codex/skills/refinery-session/SKILL.md` または `.agent/skills/refinery-session/SKILL.md`
 - `.codex/skills/refinery-shared/SKILL.md` または `.agent/skills/refinery-shared/SKILL.md`
+- `.codex/skills/refinery-repair/SKILL.md` または `.agent/skills/refinery-repair/SKILL.md`
+- `.refinery/template-meta.yaml`
 - `.refinery/shared/review/AGENTS.md`
 - `.refinery/shared/stock/AGENTS.md`
 

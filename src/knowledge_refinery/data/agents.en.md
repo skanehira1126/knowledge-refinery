@@ -43,6 +43,7 @@ confidence: medium
 
 - `.codex/skills/refinery-session/SKILL.md` or `.agent/skills/refinery-session/SKILL.md`
 - `.codex/skills/refinery-shared/SKILL.md` or `.agent/skills/refinery-shared/SKILL.md`
+- `.codex/skills/refinery-repair/SKILL.md` or `.agent/skills/refinery-repair/SKILL.md`
 - `.refinery/shared/review/AGENTS.md`
 - `.refinery/shared/review/rejected/AGENTS.md`
 - `.refinery/shared/stock/AGENTS.md`

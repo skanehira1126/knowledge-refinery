@@ -4,6 +4,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from knowledge_refinery.errors import RefineryFormatError
+
 
 def require_yaml() -> Any:
     try:
@@ -42,23 +44,46 @@ def parse_front_matter(text: str) -> dict[str, object]:
         return {}
 
     yaml = require_yaml()
-    data = yaml.safe_load(block)
+    try:
+        data = yaml.safe_load(block)
+    except yaml.YAMLError as exc:
+        raise RefineryFormatError(
+            summary="Markdown knowledge file has invalid YAML front matter.",
+            path=Path("<memory>"),
+            detail=str(exc),
+            expected="Valid YAML syntax inside the `---` front matter block.",
+        ) from exc
     if data is None:
         return {}
     if not isinstance(data, dict):
-        raise ValueError("front matter must contain a YAML mapping")
+        raise RefineryFormatError(
+            summary="Markdown knowledge file has invalid YAML front matter.",
+            path=Path("<memory>"),
+            detail="front matter must contain a YAML mapping",
+            expected="A `---` block at the top of the Markdown file that parses to a mapping.",
+        )
     return data
 
 
 def split_front_matter(text: str) -> tuple[dict[str, object], str]:
     split = _split_front_matter_block(text)
     if split is None:
-        raise ValueError("markdown file must start with YAML front matter")
+        raise RefineryFormatError(
+            summary="Markdown knowledge file is missing YAML front matter.",
+            path=Path("<memory>"),
+            detail="markdown file must start with YAML front matter",
+            expected="A `---` block at the top of the Markdown file.",
+        )
 
     block, body = split
     header = parse_front_matter(text)
     if not header:
-        raise ValueError("markdown file must contain a YAML mapping in front matter")
+        raise RefineryFormatError(
+            summary="Markdown knowledge file has empty YAML front matter.",
+            path=Path("<memory>"),
+            detail="markdown file must contain a YAML mapping in front matter",
+            expected="A non-empty YAML mapping with fields such as `title` and `description`.",
+        )
     return header, body
 
 
@@ -92,8 +117,16 @@ def list_headers_filtered(
             continue
         try:
             header = parse_front_matter(path.read_text(encoding="utf-8"))
-        except ValueError as exc:
-            raise ValueError(f"{path}: {exc}") from exc
+        except RefineryFormatError as exc:
+            raise RefineryFormatError(
+                summary=exc.summary,
+                path=path,
+                detail=exc.detail or "invalid YAML front matter",
+                expected=exc.expected
+                or "A valid YAML front matter mapping at the top of the Markdown file.",
+                suggested_action=exc.suggested_action
+                or "Repair the Markdown front matter, then rerun the same command.",
+            ) from exc
         if header:
             results.append((path, header))
     return results

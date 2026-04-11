@@ -5,6 +5,10 @@ from pathlib import Path
 import re
 import shutil
 
+from knowledge_refinery.errors import RefineryCliError
+from knowledge_refinery.errors import RefineryConflictError
+from knowledge_refinery.errors import RefineryFormatError
+from knowledge_refinery.errors import RefineryPathError
 from knowledge_refinery.front_matter import render_front_matter
 from knowledge_refinery.front_matter import split_front_matter
 
@@ -45,7 +49,12 @@ def slugify(value: str) -> str:
 
 def ensure_string(value: object, *, field: str, path: Path) -> str:
     if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{path}: `{field}` must be a non-empty string")
+        raise RefineryFormatError(
+            summary="Knowledge file has an invalid field value.",
+            path=path,
+            detail=f"`{field}` must be a non-empty string",
+            expected=f"A non-empty string for `{field}`.",
+        )
     return value.strip()
 
 
@@ -58,12 +67,22 @@ def ensure_string_list(value: object, *, field: str, path: Path) -> list[str]:
             return []
         return [stripped]
     if not isinstance(value, list):
-        raise ValueError(f"{path}: `{field}` must be a string or list of strings")
+        raise RefineryFormatError(
+            summary="Knowledge file has an invalid field value.",
+            path=path,
+            detail=f"`{field}` must be a string or list of strings",
+            expected=f"`{field}` must be a string or a YAML list of strings.",
+        )
 
     items: list[str] = []
     for item in value:
         if not isinstance(item, str) or not item.strip():
-            raise ValueError(f"{path}: `{field}` must contain only non-empty strings")
+            raise RefineryFormatError(
+                summary="Knowledge file has an invalid field value.",
+                path=path,
+                detail=f"`{field}` must contain only non-empty strings",
+                expected=f"`{field}` must be a YAML list containing only non-empty strings.",
+            )
         items.append(item.strip())
     return items
 
@@ -71,7 +90,12 @@ def ensure_string_list(value: object, *, field: str, path: Path) -> list[str]:
 def ensure_knowledge_id(value: object, *, path: Path) -> str:
     text = ensure_string(value, field="knowledge_id", path=path)
     if not KNOWLEDGE_ID_PATTERN.fullmatch(text):
-        raise ValueError(f"{path}: `knowledge_id` must match `{KNOWLEDGE_ID_PATTERN.pattern}`")
+        raise RefineryFormatError(
+            summary="Knowledge file has an invalid knowledge_id.",
+            path=path,
+            detail=f"`knowledge_id` must match `{KNOWLEDGE_ID_PATTERN.pattern}`",
+            expected="A lowercase slug using letters, digits, and hyphens.",
+        )
     return text
 
 
@@ -84,7 +108,37 @@ def unique_strings(values: list[str]) -> list[str]:
 
 
 def parse_knowledge_document(path: Path) -> KnowledgeDocument:
-    header, body = split_front_matter(path.read_text(encoding="utf-8"))
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise RefineryPathError(
+            summary="Knowledge file was not found.",
+            path=path,
+            detail="the selected file does not exist",
+            expected="An existing Markdown knowledge file.",
+            suggested_action="Check the file path and rerun the command.",
+        ) from exc
+    except OSError as exc:
+        raise RefineryPathError(
+            summary="Knowledge file could not be read.",
+            path=path,
+            detail=str(exc),
+            expected="A readable Markdown knowledge file.",
+            suggested_action="Check file permissions and rerun the command.",
+        ) from exc
+
+    try:
+        header, body = split_front_matter(text)
+    except RefineryFormatError as exc:
+        raise RefineryFormatError(
+            summary=exc.summary,
+            path=path,
+            detail=exc.detail or "invalid Markdown knowledge file",
+            expected=exc.expected
+            or "A valid YAML front matter mapping at the top of the Markdown file.",
+            suggested_action=exc.suggested_action
+            or "Repair the file format, then rerun the same knowledge-refinery command.",
+        ) from exc
     return KnowledgeDocument(path=path, header=dict(header), body=body)
 
 
@@ -99,9 +153,11 @@ def render_knowledge_document(header: dict[str, object], body: str) -> str:
 def extract_session_id(root: Path, path: Path) -> str:
     relative_parts = path.resolve().relative_to(root.resolve()).parts
     if len(relative_parts) < 4 or relative_parts[0] != "sessions":
-        raise ValueError(
-            f"{path}: expected a session knowledge file under "
-            "`.refinery/sessions/<session_id>/...`"
+        raise RefineryFormatError(
+            summary="Knowledge file is outside the expected refinery session layout.",
+            path=path,
+            detail="expected a session knowledge file under `.refinery/sessions/<session_id>/...`",
+            expected="A path under `.refinery/sessions/<session_id>/raw/` or `flow/`.",
         )
     return relative_parts[1]
 
@@ -162,9 +218,12 @@ def iter_flow_files(root: Path, session_id: str | None = None) -> list[Path]:
     root = root.resolve()
     sessions_root = root / "sessions"
     if session_id is not None:
-        candidates = sorted((sessions_root / session_id / "flow").rglob("*.md"))
+        flow_roots = [sessions_root / session_id / "flow"]
     else:
-        candidates = sorted(sessions_root.glob("*/flow/*.md"))
+        flow_roots = sorted(sessions_root.glob("*/flow"))
+    candidates = sorted(
+        path for flow_root in flow_roots if flow_root.exists() for path in flow_root.rglob("*.md")
+    )
     return [path for path in candidates if path.name not in GUIDE_FILENAMES]
 
 
@@ -207,6 +266,24 @@ def prepare_review(
         knowledge_id = ensure_knowledge_id(header["knowledge_id"], path=flow_path)
         target = review_root / f"{current_session_id}--{knowledge_id}.md"
         if target.exists() and not force:
+            existing_doc = parse_knowledge_document(target)
+            existing_lineage = ensure_string_list(
+                existing_doc.header.get("derived_from"), field="derived_from", path=target
+            )
+            current_lineage = relative_to_repository(root, flow_path)
+            if current_lineage not in existing_lineage:
+                raise RefineryConflictError(
+                    summary="Multiple flow files resolve to the same review file.",
+                    path=flow_path,
+                    detail=f"`knowledge_id={knowledge_id}` already maps to {target.as_posix()}",
+                    expected=(
+                        "Each flow file in the same session should produce a unique review target."
+                    ),
+                    suggested_action=(
+                        "Set a distinct `knowledge_id` or rename one of the flow files, "
+                        "then rerun `knowledge-refinery prepare-review`."
+                    ),
+                )
             results.append(CopyResult(source=flow_path, target=target, copied=False))
             continue
 
@@ -250,6 +327,72 @@ def list_review(
     return [entry for entry in entries if session_id in entry.source_sessions]
 
 
+def resolve_selected_review_file(root: Path, review_file: str) -> Path:
+    path = Path(review_file)
+    resolved = path if path.is_absolute() else (root.parent / path)
+    if not resolved.exists():
+        raise RefineryPathError(
+            summary="Selected review file was not found.",
+            path=resolved,
+            detail="`--review-file` points to a path that does not exist",
+            expected="An existing review Markdown file.",
+            suggested_action="Check the review file path and rerun the command.",
+        )
+    if not resolved.is_file():
+        raise RefineryPathError(
+            summary="Selected review path is not a file.",
+            path=resolved,
+            detail="`--review-file` must point to a Markdown file",
+            expected="An existing review Markdown file.",
+            suggested_action="Pass a file path to `--review-file` and rerun the command.",
+        )
+    return resolved
+
+
+def build_review_index(root: Path) -> dict[str, list[Path]]:
+    by_knowledge_id: dict[str, list[Path]] = {}
+    for review_path in iter_review_files(root):
+        doc = parse_knowledge_document(review_path)
+        knowledge_id = ensure_string(
+            doc.header.get("knowledge_id"), field="knowledge_id", path=review_path
+        )
+        by_knowledge_id.setdefault(knowledge_id, []).append(review_path)
+    return by_knowledge_id
+
+
+def select_review_files_by_knowledge_id(root: Path, knowledge_ids: list[str]) -> list[Path]:
+    by_knowledge_id = build_review_index(root)
+    selected: list[Path] = []
+    for knowledge_id in knowledge_ids:
+        matches = by_knowledge_id.get(knowledge_id, [])
+        if not matches:
+            raise RefineryCliError(
+                code="review_not_found",
+                summary="No review file matched the requested knowledge_id.",
+                path=root / "shared" / "review",
+                detail=f"No review file found for knowledge_id={knowledge_id}",
+                expected=(
+                    "An existing review file selected by `--knowledge-id` or `--review-file`."
+                ),
+                suggested_action=(
+                    "Check `knowledge-refinery list-review` and rerun with a valid selector."
+                ),
+            )
+        if len(matches) > 1:
+            raise RefineryConflictError(
+                summary="Multiple review files matched the requested knowledge_id.",
+                path=root / "shared" / "review",
+                detail=(
+                    f"Multiple review files found for knowledge_id={knowledge_id}; "
+                    "use `--review-file` to select one explicitly"
+                ),
+                expected="A single unambiguous review file for the selected knowledge_id.",
+                suggested_action="Rerun with `--review-file` and pick the exact review file.",
+            )
+        selected.append(matches[0])
+    return selected
+
+
 def select_review_files(
     root: Path, *, knowledge_ids: list[str], review_files: list[str], all_files: bool
 ) -> list[Path]:
@@ -260,30 +403,10 @@ def select_review_files(
         selected.extend(iter_review_files(root))
 
     for review_file in review_files:
-        path = Path(review_file)
-        selected.append(path if path.is_absolute() else (root.parent / path))
+        selected.append(resolve_selected_review_file(root, review_file))
 
     if knowledge_ids:
-        review_paths = iter_review_files(root)
-        by_knowledge_id: dict[str, list[Path]] = {}
-        for review_path in review_paths:
-            doc = parse_knowledge_document(review_path)
-            knowledge_id = ensure_string(
-                doc.header.get("knowledge_id"), field="knowledge_id", path=review_path
-            )
-            by_knowledge_id.setdefault(knowledge_id, []).append(review_path)
-
-        for knowledge_id in knowledge_ids:
-            matches = by_knowledge_id.get(knowledge_id, [])
-            if not matches:
-                raise ValueError(f"No review file found for knowledge_id={knowledge_id}")
-            if len(matches) > 1:
-                raise ValueError(
-                    "Multiple review files found for "
-                    f"knowledge_id={knowledge_id}; use --review-file "
-                    "to select one explicitly"
-                )
-            selected.append(matches[0])
+        selected.extend(select_review_files_by_knowledge_id(root, knowledge_ids))
 
     unique_paths: list[Path] = []
     for path in selected:
@@ -309,7 +432,13 @@ def promote_review(
         root, knowledge_ids=knowledge_ids, review_files=review_files, all_files=all_files
     )
     if not selected:
-        raise ValueError("No review files selected. Use --all, --knowledge-id, or --review-file.")
+        raise RefineryCliError(
+            code="review_selection_required",
+            summary="No review files were selected.",
+            detail="Use `--all`, `--knowledge-id`, or `--review-file`.",
+            expected="At least one review file selected for the command.",
+            suggested_action="Choose which review files to operate on, then rerun the command.",
+        )
 
     results: list[CopyResult] = []
     for review_path in selected:
@@ -367,7 +496,13 @@ def reject_review(
         root, knowledge_ids=knowledge_ids, review_files=review_files, all_files=all_files
     )
     if not selected:
-        raise ValueError("No review files selected. Use --all, --knowledge-id, or --review-file.")
+        raise RefineryCliError(
+            code="review_selection_required",
+            summary="No review files were selected.",
+            detail="Use `--all`, `--knowledge-id`, or `--review-file`.",
+            expected="At least one review file selected for the command.",
+            suggested_action="Choose which review files to operate on, then rerun the command.",
+        )
 
     results: list[CopyResult] = []
     for review_path in selected:
@@ -398,7 +533,15 @@ def select_flow_source(root: Path, review_doc: KnowledgeDocument) -> Path:
         parts = candidate.parts
         if "sessions" in parts and "flow" in parts and candidate.exists():
             return candidate
-    raise ValueError(f"{review_doc.path}: no flow source found in `derived_from`")
+    raise RefineryFormatError(
+        summary="Review file cannot be refreshed because its flow source is missing.",
+        path=review_doc.path,
+        detail="no flow source found in `derived_from`",
+        expected="At least one existing flow file path in `derived_from`.",
+        suggested_action=(
+            "Repair `derived_from` or restore the missing flow file, then rerun refresh."
+        ),
+    )
 
 
 def refresh_review(
@@ -413,7 +556,13 @@ def refresh_review(
         root, knowledge_ids=knowledge_ids, review_files=review_files, all_files=all_files
     )
     if not selected:
-        raise ValueError("No review files selected. Use --all, --knowledge-id, or --review-file.")
+        raise RefineryCliError(
+            code="review_selection_required",
+            summary="No review files were selected.",
+            detail="Use `--all`, `--knowledge-id`, or `--review-file`.",
+            expected="At least one review file selected for the command.",
+            suggested_action="Choose which review files to operate on, then rerun the command.",
+        )
 
     results: list[CopyResult] = []
     for review_path in selected:

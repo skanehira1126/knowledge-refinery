@@ -43,19 +43,32 @@ def render_managed_block(lang: str) -> str:
     return f"{START_MARKER_PREFIX} lang={lang} -->\n{snippet}\n{END_MARKER}\n"
 
 
+def replace_managed_block(current: str, block: str) -> str:
+    managed_match = MANAGED_BLOCK_RE.search(current)
+    if managed_match is not None:
+        return MANAGED_BLOCK_RE.sub(block, current, count=1)
+
+    start_match = START_MARKER_RE.search(current)
+    if start_match is None:
+        if current and not current.endswith("\n"):
+            current = f"{current}\n"
+        separator = "\n" if current.strip() else ""
+        return f"{current}{separator}{block}"
+
+    prefix = current[: start_match.start()]
+    if prefix and not prefix.endswith("\n"):
+        prefix = f"{prefix}\n"
+    separator = "\n" if prefix.strip() else ""
+    return f"{prefix}{separator}{block}"
+
+
 def apply_agents_md(target: Path, lang: str, filename: str = "AGENTS.md") -> Path:
     agents_path = resolve_agents_path(target, filename=filename)
     block = render_managed_block(lang)
 
     if agents_path.exists():
         current = agents_path.read_text(encoding="utf-8")
-        if START_MARKER_RE.search(current):
-            updated = MANAGED_BLOCK_RE.sub(block, current, count=1)
-        else:
-            if current and not current.endswith("\n"):
-                current = f"{current}\n"
-            separator = "\n" if current.strip() else ""
-            updated = f"{current}{separator}{block}"
+        updated = replace_managed_block(current, block)
     else:
         updated = block
 

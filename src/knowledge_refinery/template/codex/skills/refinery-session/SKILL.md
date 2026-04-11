@@ -15,7 +15,8 @@ description: セッション運用（capture/curation）を標準化する skill
 2. `raw/` に Markdown 知識ファイルを追加し、証拠材を追記する（append-only を維持する）。
 3. `flow/` に Markdown 知識ファイルを追加し、暫定知識を整理する。
 4. `knowledge-refinery prepare-review` で `flow` から `shared/review` へ review 用スナップショットをコピーする。
-5. `state.md` を最小更新する（目的・進捗・次アクション）。
+5. `shared` へ昇格すべき候補があれば `refinery-shared` の手順に進み、`shared/stock` と `shared/state.md` を更新する。
+6. `state.md` を最小更新する（目的・進捗・次アクション）。
 
 ## Preferred commands
 
@@ -27,7 +28,7 @@ description: セッション運用（capture/curation）を標準化する skill
 ## Guardrails
 
 - `shared/` を直接更新しない。
-- promotion が必要な場合はユーザー明示を待つ。
+- promotion が必要になったら `refinery-shared` の手順で処理し、追加のユーザー確認待ちは不要とする。
 - `sessions/*/meta.yaml` を更新するときは `PyYAML` を利用する。
 - `raw/` と `flow/` の知識ファイルは原則 `.md` とし、先頭に YAML front matter を付ける。
 - `flow -> review` は move ではなく copy で扱う。

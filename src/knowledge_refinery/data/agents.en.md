@@ -9,7 +9,7 @@ This repository uses refinery to manage working notes.
 - Store removed review candidates in `shared/review/rejected`.
 - Knowledge files should generally be Markdown (`.md`) with YAML front matter at the top for searchability.
 - Put directory-specific operating rules in each directory's `AGENTS.md`.
-- Update shared content only when the user explicitly asks for it.
+- You may update shared content autonomously when the change satisfies the shared-layer rules.
 - Use `PyYAML` when reading or updating `sessions/*/meta.yaml`.
 
 ### Knowledge File Format

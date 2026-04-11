@@ -198,3 +198,5 @@ knowledge-refinery reject-review --review-file .refinery/shared/review/20260411T
 - `reject-review`: 指定した review ファイルを `shared/review/rejected/` へ移動する
 
 `init-session` はリポジトリ全体の初期化ではなく、セッション単位の作業フォルダ初期化です。
+
+配布される skill / AGENTS では、shared 更新ルールを満たす場合に `shared/stock` や `shared/state.md` を追加のユーザー確認なしで更新してよい運用を前提とします。CLI 自体は引き続き明示コマンドですが、利用者が毎回「promote してよい」と手動指示する前提ではありません。

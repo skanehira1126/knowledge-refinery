@@ -1,0 +1,37 @@
+[project]
+name = "knowledge-refinery"
+version = "0.1.0"
+description = "CLI tools and template distribution for knowledge refinery"
+readme = "README.md"
+authors = [
+    { name = "Shinichi Kanehira", email = "shinichi.kanehira@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "PyYAML>=6.0.2,<7",
+]
+
+[project.scripts]
+knowledge-refinery = "knowledge_refinery.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["knowledge_refinery*"]
+
+[tool.setuptools.package-data]
+knowledge_refinery = [
+    "py.typed",
+    "data/*.md",
+    "template/codex/skills/*/*.md",
+    "template/refinery/shared/*.md",
+    "template/refinery/shared/*/*.md",
+    "template/refinery/shared/*/*/*.md",
+]

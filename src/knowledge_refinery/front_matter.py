@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 
 def require_yaml() -> Any:
     try:
         import yaml
     except ImportError as exc:  # pragma: no cover - depends on runtime environment
-        raise SystemExit("PyYAML is required for front matter commands. Install it with `uv add PyYAML` or `pip install PyYAML`.") from exc
+        raise SystemExit(
+            "PyYAML is required for front matter commands. "
+            "Install it with `uv add PyYAML` or `pip install PyYAML`."
+        ) from exc
     return yaml
 
 
@@ -17,7 +21,9 @@ def _split_front_matter_block(text: str) -> tuple[str, str] | None:
     if len(lines) < 3 or lines[0].strip() != "---":
         return None
 
-    closing_index = next((index for index, line in enumerate(lines[1:], start=1) if line.strip() == "---"), None)
+    closing_index = next(
+        (index for index, line in enumerate(lines[1:], start=1) if line.strip() == "---"), None
+    )
     if closing_index is None:
         return None
 

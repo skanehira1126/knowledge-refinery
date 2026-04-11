@@ -31,6 +31,7 @@ description: セッション運用（capture/curation）を標準化する skill
 - `sessions/*/meta.yaml` を更新するときは `PyYAML` を利用する。
 - `raw/` と `flow/` の知識ファイルは原則 `.md` とし、先頭に YAML front matter を付ける。
 - `flow -> review` は move ではなく copy で扱う。
+- skill や shared の配布物を更新するときは手動コピーではなく `knowledge-refinery update-template --target <repo>` を使う。
 
 ## Knowledge file format
 

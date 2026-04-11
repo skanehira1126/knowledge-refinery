@@ -1,37 +1,80 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
-from knowledge_refinery.agents_ops import LANG_CHOICES, apply_agents_md
+from knowledge_refinery.agents_ops import GUIDE_FILENAME_CHOICES
+from knowledge_refinery.agents_ops import LANG_CHOICES
+from knowledge_refinery.agents_ops import apply_agents_md
 from knowledge_refinery.front_matter import list_headers_filtered
-from knowledge_refinery.knowledge_ops import list_review, prepare_review, promote_review, refresh_review, reject_review
-from knowledge_refinery.session_metadata import init_session, list_sessions
+from knowledge_refinery.knowledge_ops import list_review
+from knowledge_refinery.knowledge_ops import prepare_review
+from knowledge_refinery.knowledge_ops import promote_review
+from knowledge_refinery.knowledge_ops import refresh_review
+from knowledge_refinery.knowledge_ops import reject_review
+from knowledge_refinery.session_metadata import init_session
+from knowledge_refinery.session_metadata import list_sessions
+from knowledge_refinery.template_ops import SKILL_DESTINATION_CHOICES
 from knowledge_refinery.template_ops import apply_template
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="knowledge-refinery", description="Knowledge refinery CLI")
+    parser = argparse.ArgumentParser(
+        prog="knowledge-refinery", description="Knowledge refinery CLI"
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    apply_parser = subparsers.add_parser("apply-template", help="Copy the refinery template into a target repository")
+    apply_parser = subparsers.add_parser(
+        "apply-template", help="Copy the refinery template into a target repository"
+    )
     apply_parser.add_argument("--target", default=".", help="target repository path")
     apply_parser.add_argument("--force", action="store_true", help="overwrite existing files")
+    apply_parser.add_argument(
+        "--skill-destination",
+        choices=SKILL_DESTINATION_CHOICES,
+        default="codex",
+        help="directory for distributed skills: .codex or .agent",
+    )
     apply_parser.set_defaults(handler=run_apply_template)
+
+    update_template_parser = subparsers.add_parser(
+        "update-template",
+        help="Refresh distributed refinery skills and shared files in a target repository",
+    )
+    update_template_parser.add_argument("--target", default=".", help="target repository path")
+    update_template_parser.add_argument(
+        "--skill-destination",
+        choices=SKILL_DESTINATION_CHOICES,
+        default="codex",
+        help="directory for distributed skills: .codex or .agent",
+    )
+    update_template_parser.set_defaults(handler=run_update_template)
 
     agents_parser = subparsers.add_parser(
         "update-agents-md",
-        help="Append or update the managed refinery section in a target AGENTS.md",
+        help="Append or update the managed refinery section in a target AGENTS.md or CLAUDE.md",
     )
-    agents_parser.add_argument("--target", default=".", help="target repository path or AGENTS.md path")
-    agents_parser.add_argument("--lang", choices=LANG_CHOICES, default="jp", help="snippet language")
+    agents_parser.add_argument(
+        "--target", default=".", help="target repository path, AGENTS.md path, or CLAUDE.md path"
+    )
+    agents_parser.add_argument(
+        "--lang", choices=LANG_CHOICES, default="jp", help="snippet language"
+    )
+    agents_parser.add_argument(
+        "--filename",
+        choices=GUIDE_FILENAME_CHOICES,
+        default="AGENTS.md",
+        help="guide file to create when --target is a directory",
+    )
     agents_parser.set_defaults(handler=run_apply_agents_md)
 
     init_parser = subparsers.add_parser("init-session", help="Initialize a refinery session")
     init_parser.add_argument("--task", required=True, help="Task summary")
     init_parser.add_argument("--kind", default="task", help="Session kind (default: task)")
-    init_parser.add_argument("--title", default=None, help="Session title (default: same as --task)")
+    init_parser.add_argument(
+        "--title", default=None, help="Session title (default: same as --task)"
+    )
     init_parser.add_argument(
         "--created-by",
         default="user",
@@ -43,11 +86,17 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
     init_parser.set_defaults(handler=run_init_session)
 
-    list_sessions_parser = subparsers.add_parser("list-sessions", help="List refinery sessions from meta.yaml")
-    list_sessions_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
+    list_sessions_parser = subparsers.add_parser(
+        "list-sessions", help="List refinery sessions from meta.yaml"
+    )
+    list_sessions_parser.add_argument(
+        "--root", default=".refinery", help="Refinery root directory"
+    )
     list_sessions_parser.set_defaults(handler=run_list_sessions)
 
-    list_headers_parser = subparsers.add_parser("list-headers", help="List markdown YAML front matter headers in refinery")
+    list_headers_parser = subparsers.add_parser(
+        "list-headers", help="List markdown YAML front matter headers in refinery"
+    )
     list_headers_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
     list_headers_parser.add_argument(
         "--scope",
@@ -63,13 +112,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     list_headers_parser.set_defaults(handler=run_list_headers)
 
-    review_parser = subparsers.add_parser("prepare-review", help="Copy flow knowledge files into shared/review")
+    review_parser = subparsers.add_parser(
+        "prepare-review", help="Copy flow knowledge files into shared/review"
+    )
     review_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
-    review_parser.add_argument("--session-id", default=None, help="Session ID to process (default: all sessions)")
-    review_parser.add_argument("--force", action="store_true", help="overwrite existing review files")
+    review_parser.add_argument(
+        "--session-id", default=None, help="Session ID to process (default: all sessions)"
+    )
+    review_parser.add_argument(
+        "--force", action="store_true", help="overwrite existing review files"
+    )
     review_parser.set_defaults(handler=run_prepare_review)
 
-    promote_parser = subparsers.add_parser("promote-review", help="Copy review knowledge files into shared/stock")
+    promote_parser = subparsers.add_parser(
+        "promote-review", help="Copy review knowledge files into shared/stock"
+    )
     promote_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
     promote_parser.add_argument("--all", action="store_true", help="promote all review files")
     promote_parser.add_argument(
@@ -84,16 +141,26 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="review file path to promote; may be specified multiple times",
     )
-    promote_parser.add_argument("--force", action="store_true", help="overwrite existing stock files")
+    promote_parser.add_argument(
+        "--force", action="store_true", help="overwrite existing stock files"
+    )
     promote_parser.set_defaults(handler=run_promote_review)
 
-    list_review_parser = subparsers.add_parser("list-review", help="List review knowledge files in shared/review")
+    list_review_parser = subparsers.add_parser(
+        "list-review", help="List review knowledge files in shared/review"
+    )
     list_review_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
-    list_review_parser.add_argument("--include-rejected", action="store_true", help="include rejected review files")
-    list_review_parser.add_argument("--session-id", default=None, help="filter by source session ID")
+    list_review_parser.add_argument(
+        "--include-rejected", action="store_true", help="include rejected review files"
+    )
+    list_review_parser.add_argument(
+        "--session-id", default=None, help="filter by source session ID"
+    )
     list_review_parser.set_defaults(handler=run_list_review)
 
-    refresh_parser = subparsers.add_parser("refresh-review", help="Refresh review files from their flow sources")
+    refresh_parser = subparsers.add_parser(
+        "refresh-review", help="Refresh review files from their flow sources"
+    )
     refresh_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
     refresh_parser.add_argument("--all", action="store_true", help="refresh all review files")
     refresh_parser.add_argument(
@@ -110,7 +177,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     refresh_parser.set_defaults(handler=run_refresh_review)
 
-    reject_parser = subparsers.add_parser("reject-review", help="Move review files out of the active review queue")
+    reject_parser = subparsers.add_parser(
+        "reject-review", help="Move review files out of the active review queue"
+    )
     reject_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
     reject_parser.add_argument("--all", action="store_true", help="reject all review files")
     reject_parser.add_argument(
@@ -125,7 +194,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="review file path to reject; may be specified multiple times",
     )
-    reject_parser.add_argument("--force", action="store_true", help="overwrite existing rejected files")
+    reject_parser.add_argument(
+        "--force", action="store_true", help="overwrite existing rejected files"
+    )
     reject_parser.set_defaults(handler=run_reject_review)
 
     return parser
@@ -133,21 +204,66 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run_apply_template(args: argparse.Namespace) -> int:
     target_root = Path(args.target).resolve()
-    template_root, copied = apply_template(target_root, force=args.force)
+    template_root, copied = apply_template(
+        target_root,
+        force=args.force,
+        skill_destination=args.skill_destination,
+    )
 
     print(f"Applied template from: {template_root}")
     print(f"Target repository: {target_root}")
+    print(f"Skill destination: .{args.skill_destination}/skills")
     print(f"Copied files: {len(copied)}")
     print("\nNext steps:")
-    print("1) Install `knowledge-refinery` with `uv tool install ...` in the environment that will run the CLI.")
-    print("2) Update the managed AGENTS.md section with `knowledge-refinery update-agents-md --target ... --lang jp|en`.")
-    print("3) Confirm .codex/skills/ and .refinery/shared/ were copied.")
-    print("4) Use sessions/*/meta.yaml as the single session metadata format.")
+    print(
+        "1) Install `knowledge-refinery` with `uv tool install ...` "
+        "in the environment that will run the CLI."
+    )
+    print(
+        "2) Update the managed AGENTS.md or CLAUDE.md section with "
+        "`knowledge-refinery update-agents-md --target ... --lang jp|en`."
+    )
+    print(f"3) Confirm .{args.skill_destination}/skills/ and .refinery/shared/ were copied.")
+    print(
+        "4) Later template updates can be applied with "
+        "`knowledge-refinery update-template --target ...`."
+    )
+    print("5) Use sessions/*/meta.yaml as the single session metadata format.")
+    return 0
+
+
+def run_update_template(args: argparse.Namespace) -> int:
+    target_root = Path(args.target).resolve()
+    template_root, copied = apply_template(
+        target_root,
+        force=True,
+        skill_destination=args.skill_destination,
+    )
+
+    print(f"Updated template from: {template_root}")
+    print(f"Target repository: {target_root}")
+    print(f"Skill destination: .{args.skill_destination}/skills")
+    print(f"Updated files: {len(copied)}")
+    print("\nNext steps:")
+    print(
+        "1) Reinstall `knowledge-refinery` in the environment that runs "
+        "the CLI if the package source was updated."
+    )
+    print(
+        "2) Refresh the managed AGENTS.md or CLAUDE.md section with "
+        "`knowledge-refinery update-agents-md --target ... --lang jp|en`."
+    )
+    print(
+        f"3) Review the updated diffs under "
+        f".{args.skill_destination}/skills/ and .refinery/shared/."
+    )
+    print("4) Existing .refinery/shared/state.md is preserved during template refreshes.")
+    print("5) Keep sessions/*/meta.yaml as the single session metadata format.")
     return 0
 
 
 def run_apply_agents_md(args: argparse.Namespace) -> int:
-    agents_path = apply_agents_md(Path(args.target), lang=args.lang)
+    agents_path = apply_agents_md(Path(args.target), lang=args.lang, filename=args.filename)
     print(agents_path.as_posix())
     return 0
 

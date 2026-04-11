@@ -41,11 +41,13 @@ confidence: medium
 
 ### Required Files
 
-- `.codex/skills/refinery-session/SKILL.md`
-- `.codex/skills/refinery-shared/SKILL.md`
+- `.codex/skills/refinery-session/SKILL.md` or `.agent/skills/refinery-session/SKILL.md`
+- `.codex/skills/refinery-shared/SKILL.md` or `.agent/skills/refinery-shared/SKILL.md`
 - `.refinery/shared/review/AGENTS.md`
 - `.refinery/shared/review/rejected/AGENTS.md`
 - `.refinery/shared/stock/AGENTS.md`
+
+After updating the package, refresh distributed skills and shared template files with `knowledge-refinery update-template --target .`, then refresh the managed guide block with `knowledge-refinery update-agents-md --target . --lang jp|en`. Existing `shared/state.md` is preserved during `update-template`.
 
 ### meta.yaml Update Rules
 

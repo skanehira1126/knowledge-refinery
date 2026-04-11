@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import re
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
+import re
+import shutil
 
-from knowledge_refinery.front_matter import render_front_matter, split_front_matter
+from knowledge_refinery.front_matter import render_front_matter
+from knowledge_refinery.front_matter import split_front_matter
 
 
 GUIDE_FILENAMES = {"AGENTS.md", "README.md"}
@@ -98,7 +99,10 @@ def render_knowledge_document(header: dict[str, object], body: str) -> str:
 def extract_session_id(root: Path, path: Path) -> str:
     relative_parts = path.resolve().relative_to(root.resolve()).parts
     if len(relative_parts) < 4 or relative_parts[0] != "sessions":
-        raise ValueError(f"{path}: expected a session knowledge file under `.refinery/sessions/<session_id>/...`")
+        raise ValueError(
+            f"{path}: expected a session knowledge file under "
+            "`.refinery/sessions/<session_id>/...`"
+        )
     return relative_parts[1]
 
 
@@ -124,7 +128,9 @@ def normalize_knowledge_header(
     else:
         header["knowledge_id"] = ensure_knowledge_id(knowledge_id_value, path=doc.path)
 
-    source_sessions = ensure_string_list(header.get("source_sessions"), field="source_sessions", path=doc.path)
+    source_sessions = ensure_string_list(
+        header.get("source_sessions"), field="source_sessions", path=doc.path
+    )
     if fallback_session_id is not None:
         source_sessions = unique_strings([fallback_session_id, *source_sessions])
     header["source_sessions"] = source_sessions
@@ -148,7 +154,7 @@ def normalize_knowledge_header(
         header.pop("derived_from", None)
 
     # Keep only repository-relative strings in lineage fields.
-    header["source_sessions"] = unique_strings(header["source_sessions"])
+    header["source_sessions"] = unique_strings(source_sessions)
     return header
 
 
@@ -175,10 +181,14 @@ def iter_review_files(root: Path) -> list[Path]:
 def iter_rejected_review_files(root: Path) -> list[Path]:
     root = root.resolve()
     rejected_root = root / "shared" / "review" / "rejected"
-    return [path for path in sorted(rejected_root.rglob("*.md")) if path.name not in GUIDE_FILENAMES]
+    return [
+        path for path in sorted(rejected_root.rglob("*.md")) if path.name not in GUIDE_FILENAMES
+    ]
 
 
-def prepare_review(root: Path, session_id: str | None = None, force: bool = False) -> list[CopyResult]:
+def prepare_review(
+    root: Path, session_id: str | None = None, force: bool = False
+) -> list[CopyResult]:
     root = root.resolve()
     review_root = root / "shared" / "review"
     review_root.mkdir(parents=True, exist_ok=True)
@@ -206,7 +216,9 @@ def prepare_review(root: Path, session_id: str | None = None, force: bool = Fals
     return results
 
 
-def list_review(root: Path, include_rejected: bool = False, session_id: str | None = None) -> list[ReviewEntry]:
+def list_review(
+    root: Path, include_rejected: bool = False, session_id: str | None = None
+) -> list[ReviewEntry]:
     root = root.resolve()
     candidates = iter_review_files(root)
     if include_rejected:
@@ -221,9 +233,15 @@ def list_review(root: Path, include_rejected: bool = False, session_id: str | No
                 path=review_path,
                 knowledge_id=ensure_knowledge_id(header["knowledge_id"], path=review_path),
                 title=ensure_string(header["title"], field="title", path=review_path),
-                description=ensure_string(header["description"], field="description", path=review_path),
-                source_sessions=ensure_string_list(header.get("source_sessions"), field="source_sessions", path=review_path),
-                derived_from=ensure_string_list(header.get("derived_from"), field="derived_from", path=review_path),
+                description=ensure_string(
+                    header["description"], field="description", path=review_path
+                ),
+                source_sessions=ensure_string_list(
+                    header.get("source_sessions"), field="source_sessions", path=review_path
+                ),
+                derived_from=ensure_string_list(
+                    header.get("derived_from"), field="derived_from", path=review_path
+                ),
             )
         )
 
@@ -232,7 +250,9 @@ def list_review(root: Path, include_rejected: bool = False, session_id: str | No
     return [entry for entry in entries if session_id in entry.source_sessions]
 
 
-def select_review_files(root: Path, *, knowledge_ids: list[str], review_files: list[str], all_files: bool) -> list[Path]:
+def select_review_files(
+    root: Path, *, knowledge_ids: list[str], review_files: list[str], all_files: bool
+) -> list[Path]:
     root = root.resolve()
     selected: list[Path] = []
 
@@ -248,7 +268,9 @@ def select_review_files(root: Path, *, knowledge_ids: list[str], review_files: l
         by_knowledge_id: dict[str, list[Path]] = {}
         for review_path in review_paths:
             doc = parse_knowledge_document(review_path)
-            knowledge_id = ensure_string(doc.header.get("knowledge_id"), field="knowledge_id", path=review_path)
+            knowledge_id = ensure_string(
+                doc.header.get("knowledge_id"), field="knowledge_id", path=review_path
+            )
             by_knowledge_id.setdefault(knowledge_id, []).append(review_path)
 
         for knowledge_id in knowledge_ids:
@@ -257,7 +279,9 @@ def select_review_files(root: Path, *, knowledge_ids: list[str], review_files: l
                 raise ValueError(f"No review file found for knowledge_id={knowledge_id}")
             if len(matches) > 1:
                 raise ValueError(
-                    f"Multiple review files found for knowledge_id={knowledge_id}; use --review-file to select one explicitly"
+                    "Multiple review files found for "
+                    f"knowledge_id={knowledge_id}; use --review-file "
+                    "to select one explicitly"
                 )
             selected.append(matches[0])
 
@@ -281,7 +305,9 @@ def promote_review(
     stock_root = root / "shared" / "stock"
     stock_root.mkdir(parents=True, exist_ok=True)
 
-    selected = select_review_files(root, knowledge_ids=knowledge_ids, review_files=review_files, all_files=all_files)
+    selected = select_review_files(
+        root, knowledge_ids=knowledge_ids, review_files=review_files, all_files=all_files
+    )
     if not selected:
         raise ValueError("No review files selected. Use --all, --knowledge-id, or --review-file.")
 
@@ -303,12 +329,20 @@ def promote_review(
             existing_doc = parse_knowledge_document(target)
             existing_header = normalize_knowledge_header(existing_doc)
             header["source_sessions"] = unique_strings(
-                ensure_string_list(existing_header.get("source_sessions"), field="source_sessions", path=target)
-                + ensure_string_list(header.get("source_sessions"), field="source_sessions", path=review_path)
+                ensure_string_list(
+                    existing_header.get("source_sessions"), field="source_sessions", path=target
+                )
+                + ensure_string_list(
+                    header.get("source_sessions"), field="source_sessions", path=review_path
+                )
             )
             header["derived_from"] = unique_strings(
-                ensure_string_list(existing_header.get("derived_from"), field="derived_from", path=target)
-                + ensure_string_list(header.get("derived_from"), field="derived_from", path=review_path)
+                ensure_string_list(
+                    existing_header.get("derived_from"), field="derived_from", path=target
+                )
+                + ensure_string_list(
+                    header.get("derived_from"), field="derived_from", path=review_path
+                )
             )
 
         target.write_text(render_knowledge_document(header, doc.body), encoding="utf-8")
@@ -329,7 +363,9 @@ def reject_review(
     rejected_root = root / "shared" / "review" / "rejected"
     rejected_root.mkdir(parents=True, exist_ok=True)
 
-    selected = select_review_files(root, knowledge_ids=knowledge_ids, review_files=review_files, all_files=all_files)
+    selected = select_review_files(
+        root, knowledge_ids=knowledge_ids, review_files=review_files, all_files=all_files
+    )
     if not selected:
         raise ValueError("No review files selected. Use --all, --knowledge-id, or --review-file.")
 
@@ -354,7 +390,9 @@ def resolve_repository_relative_path(root: Path, rel_path: str) -> Path:
 
 
 def select_flow_source(root: Path, review_doc: KnowledgeDocument) -> Path:
-    derived_from = ensure_string_list(review_doc.header.get("derived_from"), field="derived_from", path=review_doc.path)
+    derived_from = ensure_string_list(
+        review_doc.header.get("derived_from"), field="derived_from", path=review_doc.path
+    )
     for rel_path in derived_from:
         candidate = resolve_repository_relative_path(root, rel_path)
         parts = candidate.parts
@@ -371,7 +409,9 @@ def refresh_review(
     all_files: bool,
 ) -> list[CopyResult]:
     root = root.resolve()
-    selected = select_review_files(root, knowledge_ids=knowledge_ids, review_files=review_files, all_files=all_files)
+    selected = select_review_files(
+        root, knowledge_ids=knowledge_ids, review_files=review_files, all_files=all_files
+    )
     if not selected:
         raise ValueError("No review files selected. Use --all, --knowledge-id, or --review-file.")
 

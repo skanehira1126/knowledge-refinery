@@ -41,11 +41,13 @@ confidence: medium
 
 ### skill 配置
 
-- `.codex/skills/refinery-session/SKILL.md`
-- `.codex/skills/refinery-shared/SKILL.md`
+- `.codex/skills/refinery-session/SKILL.md` または `.agent/skills/refinery-session/SKILL.md`
+- `.codex/skills/refinery-shared/SKILL.md` または `.agent/skills/refinery-shared/SKILL.md`
 - `.refinery/shared/review/AGENTS.md`
 - `.refinery/shared/review/rejected/AGENTS.md`
 - `.refinery/shared/stock/AGENTS.md`
+
+パッケージ更新後に配布済み skill や shared テンプレートを追従させる場合は、`knowledge-refinery update-template --target .` を使い、その後 `knowledge-refinery update-agents-md --target . --lang jp|en` で管理ブロックも更新する。既存の `shared/state.md` は update-template では上書きしない。
 
 ### meta.yaml 更新規約
 

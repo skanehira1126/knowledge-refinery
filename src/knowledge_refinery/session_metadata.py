@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 import datetime as dt
+from pathlib import Path
 import secrets
 import string
-from pathlib import Path
 from typing import Any
 
 
@@ -14,12 +15,15 @@ def require_yaml() -> Any:
     try:
         import yaml
     except ImportError as exc:  # pragma: no cover - depends on runtime environment
-        raise SystemExit("PyYAML is required for session metadata commands. Install it with `uv add PyYAML` or `pip install PyYAML`.") from exc
+        raise SystemExit(
+            "PyYAML is required for session metadata commands. "
+            "Install it with `uv add PyYAML` or `pip install PyYAML`."
+        ) from exc
     return yaml
 
 
 def generate_session_id(now: dt.datetime | None = None, suffix_len: int = 6) -> str:
-    now = now or dt.datetime.now(dt.timezone.utc)
+    now = now or dt.datetime.now(dt.UTC)
     timestamp = now.strftime("%Y%m%dT%H%M%SZ")
     suffix = "".join(secrets.choice(ALPHABET) for _ in range(suffix_len))
     return f"{timestamp}-{suffix}"
@@ -30,7 +34,7 @@ def write_text(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def write_yaml(path: Path, data: dict[str, object]) -> None:
+def write_yaml(path: Path, data: Mapping[str, object]) -> None:
     yaml = require_yaml()
     rendered = yaml.safe_dump(
         data,
@@ -77,8 +81,8 @@ def init_session(
     for rel in ("raw", "flow"):
         (session_root / rel).mkdir(parents=True, exist_ok=True)
 
-    created_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    meta = {
+    created_at = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    meta: dict[str, object] = {
         "session_id": session_id,
         "kind": kind,
         "title": title,
@@ -130,8 +134,10 @@ def init_session(
             layer="raw",
             body_lines=[
                 "このディレクトリの知識ファイルは原則 Markdown (`.md`) で管理する。",
-                "各ファイルの先頭に YAML front matter を付け、最低でも `title` と `description` を記載する。",
-                "raw は一次証拠レイヤーなので、原文・抜粋・観測事実を優先し、要約を盛り込みすぎない。",
+                "各ファイルの先頭に YAML front matter を付け、"
+                "最低でも `title` と `description` を記載する。",
+                "raw は一次証拠レイヤーなので、原文・抜粋・観測事実を優先し、"
+                "要約を盛り込みすぎない。",
                 "1ファイル1トピックを基本とし、原文・抜粋・観測事実を優先して記録する。",
             ],
         ),
@@ -144,7 +150,8 @@ def init_session(
             layer="flow",
             body_lines=[
                 "このディレクトリの知識ファイルは原則 Markdown (`.md`) で管理する。",
-                "各ファイルの先頭に YAML front matter を付け、最低でも `title`, `description`, `summary` を記載する。",
+                "各ファイルの先頭に YAML front matter を付け、"
+                "最低でも `title`, `description`, `summary` を記載する。",
                 "`knowledge_id` は省略可能だが、未指定時はファイル名から導出される。",
                 "`source_sessions` は省略可能だが、review 生成時に session_id が補完される。",
                 "1ファイル1トピックを基本とし、解釈・仮説・要約は証拠への参照と一緒に整理する。",

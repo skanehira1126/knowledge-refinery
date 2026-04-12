@@ -40,16 +40,12 @@ confidence: medium
 ---
 ```
 
-### Required Files
+### Skills To Use
 
-- `.codex/skills/refinery-session/SKILL.md` or `.agent/skills/refinery-session/SKILL.md`
-- `.codex/skills/refinery-shared/SKILL.md` or `.agent/skills/refinery-shared/SKILL.md`
-- `.codex/skills/refinery-repair/SKILL.md` or `.agent/skills/refinery-repair/SKILL.md`
-- `.refinery/shared/review/AGENTS.md`
-- `.refinery/shared/review/rejected/AGENTS.md`
-- `.refinery/shared/stock/AGENTS.md`
-
-After updating the package, refresh distributed skills and shared template files with `knowledge-refinery update-template --target .`, then refresh the managed guide block with `knowledge-refinery update-agents-md --target . --lang jp|en`. Existing `shared/state.md` is preserved during `update-template`.
+- Use `refinery-session` for session start, updates to `raw/`, `flow/`, and `state.md`, and through `prepare-review`.
+- Before ending a session that updated `flow`, check the review queue and use `refinery-shared` to decide whether promotion candidates should be promoted or rejected.
+- Use `refinery-repair` when broken front matter or `meta.yaml` prevents the CLI from reading refinery files.
+- After updating the package, refresh distributed skills and shared template files with `knowledge-refinery update-template --target .`, then refresh the managed guide block with `knowledge-refinery update-agents-md --target . --lang jp|en`. Existing `shared/state.md` is preserved during `update-template`.
 
 ### meta.yaml Update Rules
 

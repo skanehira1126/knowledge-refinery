@@ -40,16 +40,12 @@ confidence: medium
 ---
 ```
 
-### skill 配置
+### 利用する skill
 
-- `.codex/skills/refinery-session/SKILL.md` または `.agent/skills/refinery-session/SKILL.md`
-- `.codex/skills/refinery-shared/SKILL.md` または `.agent/skills/refinery-shared/SKILL.md`
-- `.codex/skills/refinery-repair/SKILL.md` または `.agent/skills/refinery-repair/SKILL.md`
-- `.refinery/shared/review/AGENTS.md`
-- `.refinery/shared/review/rejected/AGENTS.md`
-- `.refinery/shared/stock/AGENTS.md`
-
-パッケージ更新後に配布済み skill や shared テンプレートを追従させる場合は、`knowledge-refinery update-template --target .` を使い、その後 `knowledge-refinery update-agents-md --target . --lang jp|en` で管理ブロックも更新する。既存の `shared/state.md` は update-template では上書きしない。
+- セッション開始、`raw/` / `flow/` / `state.md` の更新、`prepare-review` までは `refinery-session` を使う。
+- `flow` を更新したセッションの終了前に review キューを確認し、昇格候補の promote / reject 判断は `refinery-shared` を使う。
+- front matter や `meta.yaml` が壊れて CLI が読めないときの修復は `refinery-repair` を使う。
+- パッケージ更新後に配布済み skill や shared テンプレートを追従させる場合は、`knowledge-refinery update-template --target .` を使い、その後 `knowledge-refinery update-agents-md --target . --lang jp|en` で管理ブロックも更新する。既存の `shared/state.md` は update-template では上書きしない。
 
 ### meta.yaml 更新規約
 

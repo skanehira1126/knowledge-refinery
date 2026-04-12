@@ -7,6 +7,7 @@
 - `shared/stock` は安定知識のみを格納する。
 - `shared/review` は `flow` からコピーした review 用スナップショットを格納する。
 - `shared/review/rejected` は review キューから外した rejected ファイルを保管する。
+- `flow` を更新したセッションでは、作業終了前に `knowledge-refinery list-review` などで review キューを確認し、昇格候補があれば `refinery-shared` の手順で promote / reject を判断する。
 - 知識ファイルは原則 Markdown (`.md`) で管理し、検索性のため各ファイルの先頭に YAML front matter を付ける。
 - ディレクトリ単位のローカル運用ルールは各ディレクトリの `AGENTS.md` に置く。
 - shared 領域はルールを満たす更新であれば自律的に更新してよい。

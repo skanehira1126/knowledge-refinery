@@ -113,7 +113,7 @@ def build_parser() -> argparse.ArgumentParser:
     list_headers_parser.add_argument(
         "--session-id",
         default=None,
-        help="session ID filter for raw/flow scopes",
+        help="session ID filter for raw/flow scopes (implies raw+flow when --scope is omitted)",
     )
     list_headers_parser.set_defaults(handler=run_list_headers)
 
@@ -314,9 +314,12 @@ def run_list_sessions(args: argparse.Namespace) -> int:
 
 
 def run_list_headers(args: argparse.Namespace) -> int:
+    scopes = list(args.scope)
+    if args.session_id is not None and not scopes:
+        scopes = ["raw", "flow"]
     entries = list_headers_filtered(
         Path(args.root),
-        scopes=list(args.scope),
+        scopes=scopes,
         session_id=args.session_id,
     )
     if not entries:

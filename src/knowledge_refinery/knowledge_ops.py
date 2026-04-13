@@ -328,23 +328,61 @@ def list_review(
 
 
 def resolve_selected_review_file(root: Path, review_file: str) -> Path:
+    root = root.resolve()
+    repository_root = root.parent
+    review_root = (root / "shared" / "review").resolve()
+    rejected_root = (review_root / "rejected").resolve()
     path = Path(review_file)
-    resolved = path if path.is_absolute() else (root.parent / path)
+    resolved = (path if path.is_absolute() else (repository_root / path)).resolve()
+    if not resolved.is_relative_to(repository_root):
+        raise RefineryPathError(
+            summary="Selected review file is outside the repository.",
+            path=resolved,
+            detail="`--review-file` must resolve inside the current repository",
+            expected="A Markdown file in the active review queue under `.refinery/shared/review/`.",
+            suggested_action=(
+                "Select an active review queue Markdown file and rerun the command."
+            ),
+        )
     if not resolved.exists():
         raise RefineryPathError(
             summary="Selected review file was not found.",
             path=resolved,
             detail="`--review-file` points to a path that does not exist",
-            expected="An existing review Markdown file.",
-            suggested_action="Check the review file path and rerun the command.",
+            expected="A Markdown file in the active review queue under `.refinery/shared/review/`.",
+            suggested_action="Check the active review queue path and rerun the command.",
+        )
+    if not resolved.is_relative_to(review_root):
+        raise RefineryPathError(
+            summary="Selected review file is outside the active review queue.",
+            path=resolved,
+            detail="`--review-file` must point under `.refinery/shared/review/`",
+            expected="A Markdown file in the active review queue under `.refinery/shared/review/`.",
+            suggested_action="Select an active review queue Markdown file and rerun the command.",
+        )
+    if resolved.is_relative_to(rejected_root):
+        raise RefineryPathError(
+            summary="Selected review file is in the rejected review queue.",
+            path=resolved,
+            detail="`--review-file` cannot point under `.refinery/shared/review/rejected/`",
+            expected="A Markdown file in the active review queue under `.refinery/shared/review/`.",
+            suggested_action="Select an active review queue Markdown file and rerun the command.",
         )
     if not resolved.is_file():
         raise RefineryPathError(
             summary="Selected review path is not a file.",
             path=resolved,
             detail="`--review-file` must point to a Markdown file",
-            expected="An existing review Markdown file.",
+            expected="A Markdown file in the active review queue under `.refinery/shared/review/`.",
             suggested_action="Pass a file path to `--review-file` and rerun the command.",
+        )
+    if resolved.suffix != ".md":
+        raise RefineryPathError(
+            summary="Selected review file must be a Markdown file.",
+            path=resolved,
+            detail="`--review-file` must point to a `.md` file",
+            expected="A Markdown file in the active review queue under `.refinery/shared/review/`.",
+            suggested_action="Select a `.md` file in the active review queue and rerun the command.",
         )
     return resolved
 
@@ -525,21 +563,47 @@ def resolve_repository_relative_path(root: Path, rel_path: str) -> Path:
 
 
 def select_flow_source(root: Path, review_doc: KnowledgeDocument) -> Path:
+    root = root.resolve()
+    repository_root = root.parent.resolve()
     derived_from = ensure_string_list(
         review_doc.header.get("derived_from"), field="derived_from", path=review_doc.path
     )
+    invalid_candidates: list[str] = []
     for rel_path in derived_from:
+        rel_candidate = Path(rel_path)
+        if rel_candidate.is_absolute():
+            invalid_candidates.append(f"{rel_path} (absolute paths are not allowed)")
+            continue
         candidate = resolve_repository_relative_path(root, rel_path)
-        parts = candidate.parts
-        if "sessions" in parts and "flow" in parts and candidate.exists():
+        if not candidate.is_relative_to(repository_root):
+            invalid_candidates.append(f"{rel_path} (outside repository)")
+            continue
+        if not candidate.is_relative_to(root):
+            invalid_candidates.append(f"{rel_path} (outside .refinery root)")
+            continue
+        rel_parts = candidate.relative_to(root).parts
+        if (
+            len(rel_parts) < 4
+            or rel_parts[0] != "sessions"
+            or rel_parts[2] != "flow"
+            or candidate.suffix != ".md"
+        ):
+            invalid_candidates.append(f"{rel_path} (must be sessions/<session_id>/flow/**/*.md)")
+            continue
+        if candidate.is_file():
             return candidate
+        invalid_candidates.append(f"{rel_path} (file not found)")
+
+    detail = "no valid flow source found in `derived_from`"
+    if invalid_candidates:
+        detail = f"{detail}; rejected: {', '.join(invalid_candidates)}"
     raise RefineryFormatError(
         summary="Review file cannot be refreshed because its flow source is missing.",
         path=review_doc.path,
-        detail="no flow source found in `derived_from`",
-        expected="At least one existing flow file path in `derived_from`.",
+        detail=detail,
+        expected="At least one repository-relative `.refinery/sessions/<session_id>/flow/**/*.md` path in `derived_from`.",
         suggested_action=(
-            "Repair `derived_from` or restore the missing flow file, then rerun refresh."
+            "Repair `derived_from` to point to an existing flow Markdown file, then rerun refresh."
         ),
     )
 

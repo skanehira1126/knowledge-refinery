@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from knowledge_refinery.errors import RefineryFormatError
+from knowledge_refinery.errors import RefineryPathError
 from knowledge_refinery.errors import RefineryConflictError
 from knowledge_refinery.knowledge_ops import list_review
 from knowledge_refinery.knowledge_ops import prepare_review
@@ -232,3 +234,107 @@ Two
 
     with pytest.raises(RefineryConflictError):
         prepare_review(root)
+
+
+def test_review_file_selector_rejects_path_outside_active_review_queue(tmp_path: Path) -> None:
+    root = tmp_path / ".refinery"
+    outside = tmp_path / "outside.md"
+    write_markdown(
+        outside,
+        """---
+title: Outside
+description: Outside
+summary: Outside
+---
+""",
+    )
+
+    with pytest.raises(RefineryPathError):
+        promote_review(root, knowledge_ids=[], review_files=[str(outside)], all_files=False)
+
+
+def test_review_file_selector_rejects_rejected_review_file(tmp_path: Path) -> None:
+    root = tmp_path / ".refinery"
+    rejected = root / "shared" / "review" / "rejected" / "session-1--test.md"
+    write_markdown(
+        rejected,
+        """---
+title: Rejected
+description: Rejected
+summary: Rejected
+---
+""",
+    )
+
+    with pytest.raises(RefineryPathError):
+        reject_review(root, knowledge_ids=[], review_files=[str(rejected)], all_files=False)
+
+
+def test_review_file_selector_rejects_directory_and_non_markdown(tmp_path: Path) -> None:
+    root = tmp_path / ".refinery"
+    review_dir = root / "shared" / "review" / "dir-target"
+    review_dir.mkdir(parents=True, exist_ok=True)
+    non_markdown = root / "shared" / "review" / "session-1--test.txt"
+    non_markdown.write_text("plain text", encoding="utf-8")
+
+    with pytest.raises(RefineryPathError):
+        promote_review(root, knowledge_ids=[], review_files=[str(review_dir)], all_files=False)
+    with pytest.raises(RefineryPathError):
+        promote_review(root, knowledge_ids=[], review_files=[str(non_markdown)], all_files=False)
+
+
+def test_refresh_review_rejects_derived_from_outside_repository(tmp_path: Path) -> None:
+    root = tmp_path / ".refinery"
+    review_path = root / "shared" / "review" / "session-123--api-rate-limit.md"
+    write_markdown(
+        review_path,
+        """---
+title: API Rate Limit
+description: Old description
+summary: Old summary
+knowledge_id: api-rate-limit
+derived_from:
+  - ../../outside.md
+---
+
+Old body
+""",
+    )
+
+    with pytest.raises(RefineryFormatError):
+        refresh_review(root, knowledge_ids=[], review_files=[str(review_path)], all_files=False)
+
+
+def test_refresh_review_rejects_non_flow_derived_from(tmp_path: Path) -> None:
+    root = tmp_path / ".refinery"
+    stock_path = root / "shared" / "stock" / "api-rate-limit.md"
+    review_path = root / "shared" / "review" / "session-123--api-rate-limit.md"
+    write_markdown(
+        stock_path,
+        """---
+title: API Rate Limit
+description: Stock
+summary: Stock
+knowledge_id: api-rate-limit
+---
+
+Stock body
+""",
+    )
+    write_markdown(
+        review_path,
+        """---
+title: API Rate Limit
+description: Old description
+summary: Old summary
+knowledge_id: api-rate-limit
+derived_from:
+  - .refinery/shared/stock/api-rate-limit.md
+---
+
+Old body
+""",
+    )
+
+    with pytest.raises(RefineryFormatError):
+        refresh_review(root, knowledge_ids=[], review_files=[str(review_path)], all_files=False)

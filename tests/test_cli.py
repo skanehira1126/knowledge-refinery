@@ -13,7 +13,10 @@ import yaml
 from knowledge_refinery import __version__
 from knowledge_refinery import get_version
 import knowledge_refinery.cli as cli
+from knowledge_refinery.errors import RefineryPathError
 from knowledge_refinery.errors import RefineryConflictError
+from knowledge_refinery.front_matter import list_headers_filtered
+from knowledge_refinery.session_metadata import read_yaml_mapping
 from knowledge_refinery.template_ops import TEMPLATE_METADATA_RELATIVE_PATH
 from knowledge_refinery.template_ops import apply_template
 from knowledge_refinery.template_ops import copy_tree
@@ -314,3 +317,95 @@ def test_main_renders_structured_error_for_missing_review_file() -> None:
         )
         assert Path(rendered_path).resolve() == missing_review_path.resolve()
         assert "Traceback" not in rendered
+
+
+def test_run_list_headers_session_id_without_scope_implies_raw_and_flow() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        target_raw = root / "sessions" / "s1" / "raw" / "raw.md"
+        target_flow = root / "sessions" / "s1" / "flow" / "flow.md"
+        other_flow = root / "sessions" / "s2" / "flow" / "other.md"
+        review = root / "shared" / "review" / "s1--review.md"
+        for path in (target_raw, target_flow, other_flow, review):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                "---\n"
+                "title: T\n"
+                "description: D\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            exit_code = cli.run_list_headers(
+                Namespace(root=str(root), scope=[], session_id="s1")
+            )
+
+        assert exit_code == 0
+        output = stdout.getvalue()
+        assert target_raw.as_posix() in output
+        assert target_flow.as_posix() in output
+        assert other_flow.as_posix() not in output
+        assert review.as_posix() not in output
+
+
+def test_list_headers_filtered_with_flow_scope_and_session_id_filters_results() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        target_flow = root / "sessions" / "s1" / "flow" / "flow.md"
+        other_flow = root / "sessions" / "s2" / "flow" / "other.md"
+        for path in (target_flow, other_flow):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                "---\n"
+                "title: T\n"
+                "description: D\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+        entries = list_headers_filtered(root, scopes=["flow"], session_id="s1")
+
+        assert [path for path, _header in entries] == [target_flow]
+
+
+def test_list_headers_filtered_wraps_unreadable_file_as_structured_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        target = root / "sessions" / "s1" / "flow" / "flow.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("---\ntitle: T\ndescription: D\n---\n", encoding="utf-8")
+        original_read_text = Path.read_text
+
+        def fake_read_text(path: Path, *args: object, **kwargs: object) -> str:
+            if path == target:
+                raise PermissionError("denied")
+            return original_read_text(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", fake_read_text)
+
+        with pytest.raises(RefineryPathError):
+            list_headers_filtered(root, scopes=["flow"], session_id="s1")
+
+
+def test_read_yaml_mapping_wraps_unreadable_file_as_structured_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        meta_path = Path(root_dir) / ".refinery" / "sessions" / "s1" / "meta.yaml"
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        meta_path.write_text("session_id: s1\n", encoding="utf-8")
+        original_read_text = Path.read_text
+
+        def fake_read_text(path: Path, *args: object, **kwargs: object) -> str:
+            if path == meta_path:
+                raise FileNotFoundError("missing")
+            return original_read_text(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", fake_read_text)
+
+        with pytest.raises(RefineryPathError):
+            read_yaml_mapping(meta_path)

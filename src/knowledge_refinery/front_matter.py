@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from knowledge_refinery.errors import RefineryFormatError
+from knowledge_refinery.errors import RefineryPathError
 
 
 def require_yaml() -> Any:
@@ -116,7 +117,17 @@ def list_headers_filtered(
         if not matches_scope(normalized_root, path, scopes=scope_set, session_id=session_id):
             continue
         try:
-            header = parse_front_matter(path.read_text(encoding="utf-8"))
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise RefineryPathError(
+                summary="Markdown file could not be read.",
+                path=path,
+                detail=str(exc),
+                expected="A readable Markdown file with YAML front matter.",
+                suggested_action="Check file permissions and rerun the command.",
+            ) from exc
+        try:
+            header = parse_front_matter(text)
         except RefineryFormatError as exc:
             raise RefineryFormatError(
                 summary=exc.summary,

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from argparse import Namespace
 from contextlib import redirect_stderr
 from contextlib import redirect_stdout
@@ -19,6 +17,16 @@ from knowledge_refinery.template_ops import apply_template
 from knowledge_refinery.template_ops import copy_tree
 
 
+def write_markdown(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def write_meta(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
 def test_parser_accepts_update_template() -> None:
     args = cli.build_parser().parse_args(
         ["update-template", "--target", "/tmp/example", "--skill-destination", "agent"]
@@ -27,6 +35,64 @@ def test_parser_accepts_update_template() -> None:
     assert args.handler is cli.run_update_template
     assert args.target == "/tmp/example"
     assert args.skill_destination == "agent"
+
+
+def test_parser_accepts_skills_search_knowledge() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "skills",
+            "search",
+            "knowledge",
+            "api",
+            "rate",
+            "--scope",
+            "flow",
+            "--tag",
+            "domain/api",
+        ]
+    )
+
+    assert args.handler is cli.run_search_knowledge
+    assert args.command == "skills"
+    assert args.skills_command == "search"
+    assert args.terms == ["api", "rate"]
+    assert args.scope == ["flow"]
+    assert args.tag == ["domain/api"]
+
+
+def test_parser_accepts_skills_update_session() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "skills",
+            "update-session",
+            "--session-id",
+            "session-123",
+            "--status",
+            "paused",
+            "--clear-domain",
+        ]
+    )
+
+    assert args.handler is cli.run_update_session
+    assert args.command == "skills"
+    assert args.skills_command == "update-session"
+    assert args.session_id == "session-123"
+    assert args.status == "paused"
+    assert args.clear_domain is True
+
+
+def test_parser_rejects_legacy_top_level_update_session_alias() -> None:
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(
+            [
+                "update-session",
+                "--session-id",
+                "session-123",
+                "--status",
+                "paused",
+                "--clear-domain",
+            ]
+        )
 
 
 def test_get_version_returns_package_version() -> None:
@@ -137,6 +203,25 @@ def test_apply_template_writes_template_metadata() -> None:
         }
 
 
+def test_apply_template_distributes_core_skills() -> None:
+    with tempfile.TemporaryDirectory() as target_dir:
+        target_root = Path(target_dir)
+
+        _, copied = apply_template(target_root, force=False, skill_destination="codex")
+
+        expected = [
+            target_root / ".codex" / "skills" / "refinery-session" / "SKILL.md",
+            target_root / ".codex" / "skills" / "refinery-capture" / "SKILL.md",
+            target_root / ".codex" / "skills" / "refinery-curation" / "SKILL.md",
+            target_root / ".codex" / "skills" / "refinery-shared" / "SKILL.md",
+            target_root / ".codex" / "skills" / "refinery-repair" / "SKILL.md",
+        ]
+
+        for path in expected:
+            assert path.exists()
+            assert path in copied
+
+
 def test_apply_template_preserves_existing_metadata_without_force() -> None:
     with tempfile.TemporaryDirectory() as target_dir:
         target_root = Path(target_dir)
@@ -182,7 +267,7 @@ def test_main_warns_when_template_cli_version_differs() -> None:
         stdout = io.StringIO()
         stderr = io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
-            exit_code = cli.main(["list-sessions", "--root", str(root)])
+            exit_code = cli.main(["skills", "search", "sessions", "--root", str(root)])
 
         assert exit_code == 0
         assert "No sessions found." in stdout.getvalue()
@@ -199,7 +284,7 @@ def test_main_does_not_warn_when_template_cli_version_matches() -> None:
         stdout = io.StringIO()
         stderr = io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
-            exit_code = cli.main(["list-sessions", "--root", str(root)])
+            exit_code = cli.main(["skills", "search", "sessions", "--root", str(root)])
 
         assert exit_code == 0
         assert "No sessions found." in stdout.getvalue()
@@ -216,7 +301,9 @@ def test_main_renders_structured_error_for_invalid_front_matter() -> None:
         stdout = io.StringIO()
         stderr = io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
-            exit_code = cli.main(["list-headers", "--root", str(root)])
+            exit_code = cli.main(
+                ["skills", "search", "knowledge", "--root", str(root), "--scope", "flow"]
+            )
 
         assert exit_code == 2
         assert stdout.getvalue() == ""
@@ -242,7 +329,7 @@ def test_main_renders_structured_error_for_invalid_meta_yaml() -> None:
         stdout = io.StringIO()
         stderr = io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
-            exit_code = cli.main(["list-sessions", "--root", str(root)])
+            exit_code = cli.main(["skills", "search", "sessions", "--root", str(root)])
 
         assert exit_code == 2
         assert stdout.getvalue() == ""
@@ -268,15 +355,15 @@ def test_main_renders_structured_error_for_refinery_conflict(
         suggested_action="Fix the conflicting knowledge_id and rerun the command.",
     )
 
-    def fake_run_list_sessions(_args: Namespace) -> int:
+    def fake_run_search_sessions(_args: Namespace) -> int:
         raise conflict
 
-    monkeypatch.setattr(cli, "run_list_sessions", fake_run_list_sessions)
+    monkeypatch.setattr(cli, "run_search_sessions", fake_run_search_sessions)
 
     stdout = io.StringIO()
     stderr = io.StringIO()
     with redirect_stdout(stdout), redirect_stderr(stderr):
-        exit_code = cli.main(["list-sessions"])
+        exit_code = cli.main(["skills", "search", "sessions"])
 
     assert exit_code == 2
     assert stdout.getvalue() == ""
@@ -295,6 +382,7 @@ def test_main_renders_structured_error_for_missing_review_file() -> None:
         with redirect_stdout(stdout), redirect_stderr(stderr):
             exit_code = cli.main(
                 [
+                    "skills",
                     "promote-review",
                     "--root",
                     str(root),
@@ -314,3 +402,543 @@ def test_main_renders_structured_error_for_missing_review_file() -> None:
         )
         assert Path(rendered_path).resolve() == missing_review_path.resolve()
         assert "Traceback" not in rendered
+
+
+def test_search_knowledge_lists_default_flow_and_stock_only() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        write_markdown(
+            root / "sessions" / "session-123" / "raw" / "raw-note.md",
+            """---
+title: Raw Note
+description: Raw observation
+---
+
+Body
+""",
+        )
+        write_markdown(
+            root / "sessions" / "session-123" / "flow" / "api-rate-limit.md",
+            """---
+title: API Rate Limit
+description: Flow notes
+summary: Summary text
+tags:
+  - domain/api
+---
+
+Observed retries
+""",
+        )
+        write_markdown(
+            root / "shared" / "stock" / "api-rate-limit.md",
+            """---
+title: API Rate Limit Stock
+description: Stock notes
+summary: Stable summary
+knowledge_id: api-rate-limit
+source_sessions:
+  - session-123
+derived_from:
+  - .refinery/shared/review/session-123--api-rate-limit.md
+tags:
+  - domain/api
+---
+
+Stable body
+""",
+        )
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            exit_code = cli.main(["skills", "search", "knowledge", "--root", str(root)])
+
+        assert exit_code == 0
+        output = stdout.getvalue()
+        assert 'scope="flow"' in output
+        assert 'scope="stock"' in output
+        assert 'scope="raw"' not in output
+        assert stderr.getvalue() == ""
+
+
+def test_search_knowledge_supports_and_terms_and_exact_filters() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        write_markdown(
+            root / "sessions" / "session-123" / "flow" / "api-rate-limit.md",
+            """---
+title: API Rate Limit
+description: Flow notes
+summary: Burst rate limits
+knowledge_id: api-rate-limit
+tags:
+  - domain/api
+  - issue/rate-limit
+source_sessions:
+  - session-123
+---
+
+Rate limit behavior for API retries
+""",
+        )
+        write_markdown(
+            root / "sessions" / "session-999" / "flow" / "auth.md",
+            """---
+title: Auth
+description: Different topic
+summary: Login notes
+knowledge_id: auth-notes
+tags:
+  - domain/auth
+---
+
+No rate content
+""",
+        )
+
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            exit_code = cli.main(
+                [
+                    "skills",
+                    "search",
+                    "knowledge",
+                    "API",
+                    "rate",
+                    "--root",
+                    str(root),
+                    "--scope",
+                    "flow",
+                    "--tag",
+                    "domain/api",
+                    "--knowledge-id",
+                    "api-rate-limit",
+                ]
+            )
+
+        assert exit_code == 0
+        output = stdout.getvalue()
+        assert '"knowledge_id"="api-rate-limit"' not in output
+        assert 'knowledge_id="api-rate-limit"' in output
+        assert 'title="API Rate Limit"' in output
+        assert 'title="Auth"' not in output
+
+
+def test_search_knowledge_raw_scope_respects_session_filter() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        write_markdown(
+            root / "sessions" / "session-123" / "raw" / "first.md",
+            """---
+title: API Error
+description: Raw note
+---
+
+Observed command failure
+""",
+        )
+        write_markdown(
+            root / "sessions" / "session-999" / "raw" / "second.md",
+            """---
+title: API Error
+description: Other session
+---
+
+Observed elsewhere
+""",
+        )
+
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            exit_code = cli.main(
+                [
+                    "skills",
+                    "search",
+                    "knowledge",
+                    "--root",
+                    str(root),
+                    "--scope",
+                    "raw",
+                    "--session-id",
+                    "session-123",
+                ]
+            )
+
+        assert exit_code == 0
+        output = stdout.getvalue()
+        assert "session-123/raw/first.md" in output
+        assert "session-999/raw/second.md" not in output
+
+
+def test_search_review_can_include_rejected_files() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        write_markdown(
+            root / "shared" / "review" / "session-123--api-rate-limit.md",
+            """---
+title: API Rate Limit
+description: Review note
+summary: Active review
+knowledge_id: api-rate-limit
+source_sessions:
+  - session-123
+tags:
+  - domain/api
+---
+
+Active body
+""",
+        )
+        write_markdown(
+            root / "shared" / "review" / "rejected" / "session-999--auth.md",
+            """---
+title: Auth Review
+description: Rejected review note
+summary: Rejected review
+knowledge_id: auth-review
+source_sessions:
+  - session-999
+tags:
+  - domain/auth
+---
+
+Rejected body
+""",
+        )
+
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            exit_code = cli.main(
+                [
+                    "skills",
+                    "search",
+                    "review",
+                    "--root",
+                    str(root),
+                    "--include-rejected",
+                ]
+            )
+
+        assert exit_code == 0
+        output = stdout.getvalue()
+        assert 'knowledge_id="api-rate-limit"' in output
+        assert 'knowledge_id="auth-review"' in output
+
+
+def test_search_sessions_reads_meta_and_state_and_filters() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        session_root = root / "sessions" / "session-123"
+        write_meta(
+            session_root / "meta.yaml",
+            """session_id: session-123
+kind: task
+title: Investigate API rate limit
+task: Investigate retry strategy
+created_at: 2026-04-17T00:00:00Z
+created_by: user
+repository: null
+domain: backend
+status: active
+phase: capture
+current_step: collecting notes
+next_action: summarize findings
+last_updated_at: 2026-04-17T00:00:00Z
+closed_at: null
+blocked_reason: null
+resume_condition: null
+parent_session_id: null
+child_session_ids: []
+related_sessions: []
+depends_on: []
+supersedes: []
+superseded_by: null
+evidence_status: collecting
+flow_status: not_started
+synthesis_status: not_started
+coverage_status: unknown
+confidence: low
+raw_item_count: 0
+flow_item_count: 0
+last_flow_update_at: null
+""",
+        )
+        write_markdown(
+            session_root / "state.md",
+            """---
+title: Session State
+description: Current state
+---
+
+- 目的: investigate API retry
+- 進捗: captured evidence
+""",
+        )
+        write_meta(
+            root / "sessions" / "session-999" / "meta.yaml",
+            """session_id: session-999
+kind: task
+title: Other work
+task: Different task
+created_at: 2026-04-17T00:00:00Z
+created_by: user
+repository: null
+domain: frontend
+status: closed
+phase: done
+current_step: none
+next_action: none
+last_updated_at: 2026-04-17T00:00:00Z
+closed_at: null
+blocked_reason: null
+resume_condition: null
+parent_session_id: null
+child_session_ids: []
+related_sessions: []
+depends_on: []
+supersedes: []
+superseded_by: null
+evidence_status: collecting
+flow_status: done
+synthesis_status: done
+coverage_status: complete
+confidence: medium
+raw_item_count: 0
+flow_item_count: 0
+last_flow_update_at: null
+""",
+        )
+        write_markdown(
+            root / "sessions" / "session-999" / "state.md",
+            """---
+title: Session State
+description: Current state
+---
+
+- 目的: other
+""",
+        )
+
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            exit_code = cli.main(
+                [
+                    "skills",
+                    "search",
+                    "sessions",
+                    "captured",
+                    "--root",
+                    str(root),
+                    "--status",
+                    "active",
+                    "--phase",
+                    "capture",
+                    "--domain",
+                    "backend",
+                ]
+            )
+
+        assert exit_code == 0
+        output = stdout.getvalue()
+        assert 'session_id="session-123"' in output
+        assert 'title="Investigate API rate limit"' in output
+        assert 'session_id="session-999"' not in output
+
+
+def test_update_session_updates_selected_fields() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        session_root = root / "sessions" / "session-123"
+        write_meta(
+            session_root / "meta.yaml",
+            """session_id: session-123
+kind: task
+title: Initial title
+task: Initial task
+created_at: 2026-04-17T00:00:00Z
+created_by: user
+repository: repo-a
+domain: backend
+status: active
+phase: capture
+current_step: collecting notes
+next_action: summarize findings
+last_updated_at: 2026-04-17T00:00:00Z
+closed_at: null
+blocked_reason: null
+resume_condition: null
+parent_session_id: null
+child_session_ids: []
+related_sessions: []
+depends_on: []
+supersedes: []
+superseded_by: null
+evidence_status: collecting
+flow_status: not_started
+synthesis_status: not_started
+coverage_status: unknown
+confidence: low
+raw_item_count: 0
+flow_item_count: 0
+last_flow_update_at: null
+""",
+        )
+
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            exit_code = cli.main(
+                [
+                    "skills",
+                    "update-session",
+                    "--root",
+                    str(root),
+                    "--session-id",
+                    "session-123",
+                    "--status",
+                    "paused",
+                    "--phase",
+                    "analysis",
+                    "--next-action",
+                    "wait for input",
+                    "--flow-status",
+                    "in_progress",
+                ]
+            )
+
+        assert exit_code == 0
+        output = stdout.getvalue()
+        assert 'session_id="session-123"' in output
+        assert 'status="paused"' in output
+        assert 'phase="analysis"' in output
+        assert 'flow_status="in_progress"' in output
+
+        meta = yaml.safe_load((session_root / "meta.yaml").read_text(encoding="utf-8"))
+        assert meta["status"] == "paused"
+        assert meta["phase"] == "analysis"
+        assert meta["next_action"] == "wait for input"
+        assert meta["flow_status"] == "in_progress"
+        assert meta["title"] == "Initial title"
+        assert meta["last_flow_update_at"] is not None
+
+
+def test_update_session_can_clear_nullable_fields() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        session_root = root / "sessions" / "session-123"
+        write_meta(
+            session_root / "meta.yaml",
+            """session_id: session-123
+kind: task
+title: Initial title
+task: Initial task
+created_at: 2026-04-17T00:00:00Z
+created_by: user
+repository: repo-a
+domain: backend
+status: active
+phase: capture
+current_step: collecting notes
+next_action: summarize findings
+last_updated_at: 2026-04-17T00:00:00Z
+closed_at: null
+blocked_reason: blocked
+resume_condition: reply
+parent_session_id: null
+child_session_ids: []
+related_sessions: []
+depends_on: []
+supersedes: []
+superseded_by: null
+evidence_status: collecting
+flow_status: not_started
+synthesis_status: not_started
+coverage_status: unknown
+confidence: low
+raw_item_count: 0
+flow_item_count: 0
+last_flow_update_at: null
+""",
+        )
+
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            exit_code = cli.main(
+                [
+                    "skills",
+                    "update-session",
+                    "--root",
+                    str(root),
+                    "--session-id",
+                    "session-123",
+                    "--clear-blocked-reason",
+                    "--clear-resume-condition",
+                    "--clear-domain",
+                    "--clear-repository",
+                ]
+            )
+
+        assert exit_code == 0
+        meta = yaml.safe_load((session_root / "meta.yaml").read_text(encoding="utf-8"))
+        assert meta["blocked_reason"] is None
+        assert meta["resume_condition"] is None
+        assert meta["domain"] is None
+        assert meta["repository"] is None
+
+
+def test_update_session_requires_at_least_one_change() -> None:
+    with tempfile.TemporaryDirectory() as root_dir:
+        root = Path(root_dir) / ".refinery"
+        session_root = root / "sessions" / "session-123"
+        write_meta(
+            session_root / "meta.yaml",
+            """session_id: session-123
+kind: task
+title: Initial title
+task: Initial task
+created_at: 2026-04-17T00:00:00Z
+created_by: user
+repository: null
+domain: null
+status: active
+phase: capture
+current_step: collecting notes
+next_action: summarize findings
+last_updated_at: 2026-04-17T00:00:00Z
+closed_at: null
+blocked_reason: null
+resume_condition: null
+parent_session_id: null
+child_session_ids: []
+related_sessions: []
+depends_on: []
+supersedes: []
+superseded_by: null
+evidence_status: collecting
+flow_status: not_started
+synthesis_status: not_started
+coverage_status: unknown
+confidence: low
+raw_item_count: 0
+flow_item_count: 0
+last_flow_update_at: null
+""",
+        )
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            exit_code = cli.main(
+                [
+                    "skills",
+                    "update-session",
+                    "--root",
+                    str(root),
+                    "--session-id",
+                    "session-123",
+                ]
+            )
+
+        assert exit_code == 2
+        assert stdout.getvalue() == ""
+        assert "refinery_error: session_update_required" in stderr.getvalue()

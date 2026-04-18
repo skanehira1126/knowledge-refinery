@@ -10,4 +10,5 @@ layer: review
 - 採用と判断した候補は、追加のユーザー確認なしで `shared/stock` へコピーしてよい。
 - review ファイルは原則 Markdown (`.md`) で管理する。
 - 各ファイルの先頭に YAML front matter を付け、最低でも `title`, `description`, `summary`, `knowledge_id`, `source_sessions`, `derived_from` を記載する。
+- `tags` は `flow` から引き継ぎ、review 用に個別最適化しない。通常の検索対象ではないため、tag 調整より lineage 保持を優先する。
 - `review` から `stock` へ昇格するときもコピーで扱い、`flow` 側の作業物は残す。

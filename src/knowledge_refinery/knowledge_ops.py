@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -227,6 +225,19 @@ def iter_flow_files(root: Path, session_id: str | None = None) -> list[Path]:
     return [path for path in candidates if path.name not in GUIDE_FILENAMES]
 
 
+def iter_raw_files(root: Path, session_id: str | None = None) -> list[Path]:
+    root = root.resolve()
+    sessions_root = root / "sessions"
+    if session_id is not None:
+        raw_roots = [sessions_root / session_id / "raw"]
+    else:
+        raw_roots = sorted(sessions_root.glob("*/raw"))
+    candidates = sorted(
+        path for raw_root in raw_roots if raw_root.exists() for path in raw_root.rglob("*.md")
+    )
+    return [path for path in candidates if path.name not in GUIDE_FILENAMES]
+
+
 def iter_review_files(root: Path) -> list[Path]:
     root = root.resolve()
     review_root = root / "shared" / "review"
@@ -242,6 +253,14 @@ def iter_rejected_review_files(root: Path) -> list[Path]:
     rejected_root = root / "shared" / "review" / "rejected"
     return [
         path for path in sorted(rejected_root.rglob("*.md")) if path.name not in GUIDE_FILENAMES
+    ]
+
+
+def iter_stock_files(root: Path) -> list[Path]:
+    root = root.resolve()
+    stock_root = root / "shared" / "stock"
+    return [
+        path for path in sorted(stock_root.rglob("*.md")) if path.name not in GUIDE_FILENAMES
     ]
 
 
@@ -281,7 +300,7 @@ def prepare_review(
                     ),
                     suggested_action=(
                         "Set a distinct `knowledge_id` or rename one of the flow files, "
-                        "then rerun `knowledge-refinery prepare-review`."
+                        "then rerun `knowledge-refinery skills prepare-review`."
                     ),
                 )
             results.append(CopyResult(source=flow_path, target=target, copied=False))
@@ -375,7 +394,8 @@ def select_review_files_by_knowledge_id(root: Path, knowledge_ids: list[str]) ->
                     "An existing review file selected by `--knowledge-id` or `--review-file`."
                 ),
                 suggested_action=(
-                    "Check `knowledge-refinery list-review` and rerun with a valid selector."
+                    "Check `knowledge-refinery skills search review` and rerun with a "
+                    "valid selector."
                 ),
             )
         if len(matches) > 1:

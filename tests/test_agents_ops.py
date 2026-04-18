@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 
 from knowledge_refinery.agents_ops import END_MARKER

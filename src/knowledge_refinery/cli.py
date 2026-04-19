@@ -5,6 +5,8 @@ from collections.abc import Sequence
 import json
 from pathlib import Path
 import sys
+from typing import Any
+from typing import cast
 
 from knowledge_refinery import get_version
 from knowledge_refinery.agents_ops import GUIDE_FILENAME_CHOICES
@@ -41,12 +43,12 @@ flag_actions = (
 class _ZshCompletionAction(Action):
     def __init__(
         self,
-        option_strings,
-        dest=SUPPRESS,
-        default=SUPPRESS,
-        help=None,
-        deprecated=False,
-    ):
+        option_strings: Sequence[str],
+        dest: str = SUPPRESS,
+        default: str = SUPPRESS,
+        help: str | None = None,
+        deprecated: bool = False,
+    ) -> None:
         super().__init__(
             option_strings=option_strings,
             dest=dest,
@@ -57,17 +59,17 @@ class _ZshCompletionAction(Action):
 
     def __call__(
         self,
-        parser,
-        namespace,
-        values,
-        option_string=None,
-    ):
-        parser.print_completion_script()
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: str | Sequence[Any] | None,
+        option_string: str | None = None,
+    ) -> None:
+        cast("ZshCompletionArgParser", parser).print_completion_script()
         parser.exit()
 
 
 class _ZshCompletionArgumentGroup(argparse._ArgumentGroup):
-    def add_argument(self, *args, **kwargs):
+    def add_argument(self, *args: Any, **kwargs: Any) -> argparse.Action:
         completion = kwargs.pop("completion", None)
         action = super().add_argument(*args, **kwargs)
         if completion is not None:
@@ -76,7 +78,13 @@ class _ZshCompletionArgumentGroup(argparse._ArgumentGroup):
 
 
 class ZshCompletionArgParser(argparse.ArgumentParser):
-    def __init__(self, *args, func_name: str | None = None, completion_cmd: str = "zsh", **kwargs):
+    def __init__(
+        self,
+        *args: Any,
+        func_name: str | None = None,
+        completion_cmd: str = "zsh",
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
 
         # Ensure argument groups can accept completion metadata too.
@@ -97,13 +105,13 @@ class ZshCompletionArgParser(argparse.ArgumentParser):
                 help="print zsh completion scripts of this argparser.",
             )
 
-    def add_argument_group(self, *args, **kwargs):
+    def add_argument_group(self, *args: Any, **kwargs: Any) -> _ZshCompletionArgumentGroup:
         """Ensure groups also support completion metadata."""
         group = _ZshCompletionArgumentGroup(self, *args, **kwargs)
         self._action_groups.append(group)
         return group
 
-    def add_argument(self, *args, **kwargs):
+    def add_argument(self, *args: Any, **kwargs: Any) -> argparse.Action:
         """Add an argument and optionally attach zsh completion metadata.
 
         Parameters
@@ -147,13 +155,13 @@ class ZshCompletionArgParser(argparse.ArgumentParser):
     def has_version(self) -> bool:
         return self.check_in_action(argparse._VersionAction)
 
-    def check_in_action(self, target: type[argparse.Action]):
+    def check_in_action(self, target: type[argparse.Action]) -> bool:
         return any(isinstance(action, target) for action in self._actions)
 
-    def print_completion_script(self):
+    def print_completion_script(self) -> None:
         print(self.build_completion_script())
 
-    def build_completion_script(self):
+    def build_completion_script(self) -> str:
         """
         make zsh completion scripts
         """
@@ -167,7 +175,7 @@ class ZshCompletionArgParser(argparse.ArgumentParser):
 
         return script_header + script_main + script_footer
 
-    def make_function_header(self):
+    def make_function_header(self) -> str:
         """
         When this parser has sub command, define subcmds array as local variable.
         """
@@ -206,7 +214,7 @@ class ZshCompletionArgParser(argparse.ArgumentParser):
                 return action
         return None
 
-    def generate_completion_function(self, cmd_index=1):  # noqa: C901
+    def generate_completion_function(self, cmd_index: int = 1) -> str:  # noqa: C901
         """
         zshの補完用スクリプトを作成する
 
@@ -445,33 +453,23 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
         "update-session",
         help="Update selected fields in a refinery session meta.yaml",
     )
-    update_session_parser.add_argument(
-        "--session-id", required=True, help="Session ID to update"
-    )
+    update_session_parser.add_argument("--session-id", required=True, help="Session ID to update")
     update_session_parser.add_argument("--title", default=None, help="Session title")
     update_session_parser.add_argument("--task", default=None, help="Task summary")
     update_session_parser.add_argument("--status", default=None, help="Session status")
     update_session_parser.add_argument("--phase", default=None, help="Session phase")
     update_session_parser.add_argument("--current-step", default=None, help="Current step")
     update_session_parser.add_argument("--next-action", default=None, help="Next action")
-    update_session_parser.add_argument(
-        "--blocked-reason", default=None, help="Blocked reason"
-    )
-    update_session_parser.add_argument(
-        "--resume-condition", default=None, help="Resume condition"
-    )
+    update_session_parser.add_argument("--blocked-reason", default=None, help="Blocked reason")
+    update_session_parser.add_argument("--resume-condition", default=None, help="Resume condition")
     update_session_parser.add_argument("--domain", default=None, help="Session domain")
     update_session_parser.add_argument("--repository", default=None, help="Repository name")
     update_session_parser.add_argument(
         "--evidence-status", default=None, help="Evidence collection status"
     )
     update_session_parser.add_argument("--flow-status", default=None, help="Flow status")
-    update_session_parser.add_argument(
-        "--synthesis-status", default=None, help="Synthesis status"
-    )
-    update_session_parser.add_argument(
-        "--coverage-status", default=None, help="Coverage status"
-    )
+    update_session_parser.add_argument("--synthesis-status", default=None, help="Synthesis status")
+    update_session_parser.add_argument("--coverage-status", default=None, help="Coverage status")
     update_session_parser.add_argument("--confidence", default=None, help="Confidence level")
     update_session_parser.add_argument(
         "--clear-blocked-reason", action="store_true", help="Clear blocked_reason"
@@ -515,8 +513,7 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
         action="append",
         default=[],
         help=(
-            "session ID filter; path-based for raw/flow and "
-            "source_sessions-based for review/stock"
+            "session ID filter; path-based for raw/flow and source_sessions-based for review/stock"
         ),
     )
     search_knowledge_parser.add_argument(

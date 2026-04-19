@@ -70,12 +70,7 @@ def build_directory_agents(title: str, description: str, layer: str, body_lines:
             "layer": layer,
         }
     ).strip()
-    return (
-        "---\n"
-        f"{header}\n"
-        "---\n\n"
-        f"{body}\n"
-    )
+    return f"---\n{header}\n---\n\n{body}\n"
 
 
 def read_yaml_mapping(path: Path) -> dict[str, object]:
@@ -122,8 +117,7 @@ def resolve_session_meta_path(root: Path, session_id: str) -> Path:
             detail="no session matched the selected session_id",
             expected="An existing `.refinery/sessions/<session_id>/meta.yaml` file.",
             suggested_action=(
-                "Check the session ID with `knowledge-refinery skills search sessions` "
-                "and retry."
+                "Check the session ID with `knowledge-refinery skills search sessions` and retry."
             ),
         )
     return meta_path
@@ -186,8 +180,7 @@ def update_session(
             detail="provide at least one update option or `--clear-*` option",
             expected="At least one session metadata field selected for update.",
             suggested_action=(
-                "Pass one or more `knowledge-refinery skills update-session` options "
-                "and retry."
+                "Pass one or more `knowledge-refinery skills update-session` options and retry."
             ),
         )
 

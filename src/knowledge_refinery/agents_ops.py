@@ -41,6 +41,14 @@ def render_managed_block(lang: str) -> str:
     return f"{START_MARKER_PREFIX} lang={lang} -->\n{snippet}\n{END_MARKER}\n"
 
 
+def _split_suffix_after_truncated_block(current: str, start_match: re.Match[str]) -> str:
+    tail = current[start_match.end() :]
+    boundary = tail.find("\n\n")
+    if boundary == -1:
+        return ""
+    return tail[boundary:].lstrip("\n")
+
+
 def replace_managed_block(current: str, block: str) -> str:
     managed_match = MANAGED_BLOCK_RE.search(current)
     if managed_match is not None:
@@ -57,6 +65,9 @@ def replace_managed_block(current: str, block: str) -> str:
     if prefix and not prefix.endswith("\n"):
         prefix = f"{prefix}\n"
     separator = "\n" if prefix.strip() else ""
+    suffix = _split_suffix_after_truncated_block(current, start_match)
+    if suffix:
+        return f"{prefix}{separator}{block}\n{suffix}"
     return f"{prefix}{separator}{block}"
 
 

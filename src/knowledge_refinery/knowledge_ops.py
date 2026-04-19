@@ -259,9 +259,7 @@ def iter_rejected_review_files(root: Path) -> list[Path]:
 def iter_stock_files(root: Path) -> list[Path]:
     root = root.resolve()
     stock_root = root / "shared" / "stock"
-    return [
-        path for path in sorted(stock_root.rglob("*.md")) if path.name not in GUIDE_FILENAMES
-    ]
+    return [path for path in sorted(stock_root.rglob("*.md")) if path.name not in GUIDE_FILENAMES]
 
 
 def prepare_review(
@@ -284,7 +282,7 @@ def prepare_review(
 
         knowledge_id = ensure_knowledge_id(header["knowledge_id"], path=flow_path)
         target = review_root / f"{current_session_id}--{knowledge_id}.md"
-        if target.exists() and not force:
+        if target.exists():
             existing_doc = parse_knowledge_document(target)
             existing_lineage = ensure_string_list(
                 existing_doc.header.get("derived_from"), field="derived_from", path=target
@@ -303,8 +301,9 @@ def prepare_review(
                         "then rerun `knowledge-refinery skills prepare-review`."
                     ),
                 )
-            results.append(CopyResult(source=flow_path, target=target, copied=False))
-            continue
+            if not force:
+                results.append(CopyResult(source=flow_path, target=target, copied=False))
+                continue
 
         target.write_text(render_knowledge_document(header, doc.body), encoding="utf-8")
         results.append(CopyResult(source=flow_path, target=target, copied=True))
@@ -349,6 +348,7 @@ def list_review(
 def resolve_selected_review_file(root: Path, review_file: str) -> Path:
     path = Path(review_file)
     resolved = path if path.is_absolute() else (root.parent / path)
+    review_root = (root / "shared" / "review").resolve()
     if not resolved.exists():
         raise RefineryPathError(
             summary="Selected review file was not found.",
@@ -364,6 +364,28 @@ def resolve_selected_review_file(root: Path, review_file: str) -> Path:
             detail="`--review-file` must point to a Markdown file",
             expected="An existing review Markdown file.",
             suggested_action="Pass a file path to `--review-file` and rerun the command.",
+        )
+    try:
+        relative = resolved.resolve().relative_to(review_root)
+    except ValueError as exc:
+        raise RefineryPathError(
+            summary="Selected review file is outside the active review queue.",
+            path=resolved,
+            detail="`--review-file` must point to a file under `.refinery/shared/review/`",
+            expected="An active review Markdown file inside `.refinery/shared/review/`.",
+            suggested_action=(
+                "Select a file from `.refinery/shared/review/` and rerun the command."
+            ),
+        ) from exc
+    if relative.parts[:1] == ("rejected",):
+        raise RefineryPathError(
+            summary="Selected review file is not in the active review queue.",
+            path=resolved,
+            detail="`--review-file` cannot point to `.refinery/shared/review/rejected/`",
+            expected="An active review Markdown file inside `.refinery/shared/review/`.",
+            suggested_action=(
+                "Move or recreate the review under `.refinery/shared/review/`, then retry."
+            ),
         )
     return resolved
 

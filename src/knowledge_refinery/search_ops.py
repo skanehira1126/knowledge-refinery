@@ -214,8 +214,7 @@ def _parse_state_markdown(path: Path) -> tuple[dict[str, object], str]:
             summary=exc.summary,
             path=path,
             detail=exc.detail or "invalid state.md file",
-            expected=exc.expected
-            or "A valid YAML front matter mapping at the top of state.md.",
+            expected=exc.expected or "A valid YAML front matter mapping at the top of state.md.",
             suggested_action=exc.suggested_action
             or "Repair state.md, then rerun the same knowledge-refinery command.",
         ) from exc

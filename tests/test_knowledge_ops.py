@@ -1,36 +1,30 @@
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
 from knowledge_refinery.errors import RefineryConflictError
+from knowledge_refinery.errors import RefineryPathError
 from knowledge_refinery.knowledge_ops import list_review
 from knowledge_refinery.knowledge_ops import prepare_review
 from knowledge_refinery.knowledge_ops import promote_review
 from knowledge_refinery.knowledge_ops import refresh_review
 from knowledge_refinery.knowledge_ops import reject_review
-
-
-def write_markdown(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+from tests._support import write_markdown_document
 
 
 def test_prepare_review_normalizes_header_and_sets_lineage(tmp_path: Path) -> None:
     root = tmp_path / ".refinery"
     flow_path = root / "sessions" / "session-123" / "flow" / "API Rate Limit.md"
-    write_markdown(
+    write_markdown_document(
         flow_path,
-        """---
-title: API Rate Limit
-description: Observation notes
-summary: Summary text
-tags:
-  - api
-  - limits
----
-
-Body
-""",
+        {
+            "title": "API Rate Limit",
+            "description": "Observation notes",
+            "summary": "Summary text",
+            "tags": ["api", "limits"],
+        },
+        "Body",
     )
 
     results = prepare_review(root)
@@ -47,16 +41,14 @@ Body
 def test_prepare_review_collects_nested_flow_files(tmp_path: Path) -> None:
     root = tmp_path / ".refinery"
     flow_path = root / "sessions" / "session-123" / "flow" / "topic" / "example.md"
-    write_markdown(
+    write_markdown_document(
         flow_path,
-        """---
-title: Example
-description: Observation notes
-summary: Summary text
----
-
-Body
-""",
+        {
+            "title": "Example",
+            "description": "Observation notes",
+            "summary": "Summary text",
+        },
+        "Body",
     )
 
     results = prepare_review(root)
@@ -73,37 +65,29 @@ def test_promote_review_merges_existing_stock_lineage_and_sessions(tmp_path: Pat
     root = tmp_path / ".refinery"
     review_path = root / "shared" / "review" / "session-123--api-rate-limit.md"
     stock_path = root / "shared" / "stock" / "api-rate-limit.md"
-    write_markdown(
+    write_markdown_document(
         review_path,
-        """---
-title: API Rate Limit
-description: Observation notes
-summary: Summary text
-knowledge_id: api-rate-limit
-source_sessions:
-  - session-123
-derived_from:
-  - .refinery/sessions/session-123/flow/api-rate-limit.md
----
-
-New body
-""",
+        {
+            "title": "API Rate Limit",
+            "description": "Observation notes",
+            "summary": "Summary text",
+            "knowledge_id": "api-rate-limit",
+            "source_sessions": ["session-123"],
+            "derived_from": [".refinery/sessions/session-123/flow/api-rate-limit.md"],
+        },
+        "New body",
     )
-    write_markdown(
+    write_markdown_document(
         stock_path,
-        """---
-title: API Rate Limit
-description: Observation notes
-summary: Summary text
-knowledge_id: api-rate-limit
-source_sessions:
-  - session-000
-derived_from:
-  - .refinery/shared/review/session-000--api-rate-limit.md
----
-
-Old body
-""",
+        {
+            "title": "API Rate Limit",
+            "description": "Observation notes",
+            "summary": "Summary text",
+            "knowledge_id": "api-rate-limit",
+            "source_sessions": ["session-000"],
+            "derived_from": [".refinery/shared/review/session-000--api-rate-limit.md"],
+        },
+        "Old body",
     )
 
     results = promote_review(
@@ -127,33 +111,27 @@ def test_refresh_review_rebuilds_review_from_flow_source(tmp_path: Path) -> None
     root = tmp_path / ".refinery"
     flow_path = root / "sessions" / "session-123" / "flow" / "api-rate-limit.md"
     review_path = root / "shared" / "review" / "session-123--api-rate-limit.md"
-    write_markdown(
+    write_markdown_document(
         flow_path,
-        """---
-title: API Rate Limit
-description: Updated observation notes
-summary: Updated summary
-knowledge_id: api-rate-limit
----
-
-Fresh body
-""",
+        {
+            "title": "API Rate Limit",
+            "description": "Updated observation notes",
+            "summary": "Updated summary",
+            "knowledge_id": "api-rate-limit",
+        },
+        "Fresh body",
     )
-    write_markdown(
+    write_markdown_document(
         review_path,
-        """---
-title: API Rate Limit
-description: Old description
-summary: Old summary
-knowledge_id: api-rate-limit
-source_sessions:
-  - session-123
-derived_from:
-  - .refinery/sessions/session-123/flow/api-rate-limit.md
----
-
-Old body
-""",
+        {
+            "title": "API Rate Limit",
+            "description": "Old description",
+            "summary": "Old summary",
+            "knowledge_id": "api-rate-limit",
+            "source_sessions": ["session-123"],
+            "derived_from": [".refinery/sessions/session-123/flow/api-rate-limit.md"],
+        },
+        "Old body",
     )
 
     results = refresh_review(
@@ -172,19 +150,16 @@ Old body
 def test_reject_review_moves_file_out_of_active_review_queue(tmp_path: Path) -> None:
     root = tmp_path / ".refinery"
     review_path = root / "shared" / "review" / "session-123--api-rate-limit.md"
-    write_markdown(
+    write_markdown_document(
         review_path,
-        """---
-title: API Rate Limit
-description: Observation notes
-summary: Summary text
-knowledge_id: api-rate-limit
-source_sessions:
-  - session-123
----
-
-Body
-""",
+        {
+            "title": "API Rate Limit",
+            "description": "Observation notes",
+            "summary": "Summary text",
+            "knowledge_id": "api-rate-limit",
+            "source_sessions": ["session-123"],
+        },
+        "Body",
     )
 
     results = reject_review(
@@ -205,28 +180,90 @@ def test_prepare_review_raises_conflict_for_duplicate_knowledge_id_in_same_sessi
     root = tmp_path / ".refinery"
     first_flow_path = root / "sessions" / "session-123" / "flow" / "API Rate Limit.md"
     second_flow_path = root / "sessions" / "session-123" / "flow" / "api_rate_limit.md"
-    write_markdown(
+    write_markdown_document(
         first_flow_path,
-        """---
-title: API Rate Limit
-description: Observation notes
-summary: Summary text
----
-
-One
-""",
+        {
+            "title": "API Rate Limit",
+            "description": "Observation notes",
+            "summary": "Summary text",
+        },
+        "One",
     )
-    write_markdown(
+    write_markdown_document(
         second_flow_path,
-        """---
-title: API Rate Limit Duplicate
-description: Observation notes
-summary: Summary text
----
-
-Two
-""",
+        {
+            "title": "API Rate Limit Duplicate",
+            "description": "Observation notes",
+            "summary": "Summary text",
+        },
+        "Two",
     )
 
     with pytest.raises(RefineryConflictError):
         prepare_review(root)
+
+
+def test_prepare_review_force_still_raises_conflict_for_duplicate_knowledge_id_in_same_session(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / ".refinery"
+    first_flow_path = root / "sessions" / "session-123" / "flow" / "API Rate Limit.md"
+    second_flow_path = root / "sessions" / "session-123" / "flow" / "api_rate_limit.md"
+    write_markdown_document(
+        first_flow_path,
+        {
+            "title": "API Rate Limit",
+            "description": "Observation notes",
+            "summary": "Summary text",
+        },
+        "One",
+    )
+    write_markdown_document(
+        second_flow_path,
+        {
+            "title": "API Rate Limit Duplicate",
+            "description": "Observation notes",
+            "summary": "Summary text",
+        },
+        "Two",
+    )
+
+    with pytest.raises(RefineryConflictError):
+        prepare_review(root, force=True)
+
+
+@pytest.mark.parametrize(
+    ("operation", "kwargs"),
+    [
+        (promote_review, {"force": False}),
+        (refresh_review, {}),
+        (reject_review, {"force": False}),
+    ],
+)
+def test_review_operations_reject_non_review_files(
+    tmp_path: Path,
+    operation: Callable[..., object],
+    kwargs: dict[str, object],
+) -> None:
+    root = tmp_path / ".refinery"
+    stock_path = root / "shared" / "stock" / "api-rate-limit.md"
+    write_markdown_document(
+        stock_path,
+        {
+            "title": "API Rate Limit",
+            "description": "Observation notes",
+            "summary": "Summary text",
+            "knowledge_id": "api-rate-limit",
+            "source_sessions": ["session-123"],
+        },
+        "Body",
+    )
+
+    with pytest.raises(RefineryPathError):
+        operation(
+            root,
+            knowledge_ids=[],
+            review_files=[str(stock_path)],
+            all_files=False,
+            **kwargs,
+        )

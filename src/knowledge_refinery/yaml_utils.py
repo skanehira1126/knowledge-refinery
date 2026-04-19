@@ -51,8 +51,9 @@ def sanitize_yaml_data(value: object) -> object:
 
 def dump_yaml(data: Mapping[str, object]) -> str:
     yaml = require_yaml()
+    safe_dumper_base: Any = yaml.SafeDumper
 
-    class _QuotedStringDumper(yaml.SafeDumper):
+    class _QuotedStringDumper(safe_dumper_base):
         pass
 
     def _represent_double_quoted_string(

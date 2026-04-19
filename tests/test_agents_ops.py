@@ -38,7 +38,12 @@ def test_apply_agents_md_replaces_existing_managed_block_in_place(tmp_path: Path
 def test_apply_agents_md_repairs_truncated_managed_block(tmp_path: Path) -> None:
     agents_path = tmp_path / "AGENTS.md"
     agents_path.write_text(
-        f"# Guide\n\n{START_MARKER_PREFIX} lang=jp -->\nbroken content without end marker\n",
+        (
+            f"# Guide\n\n{START_MARKER_PREFIX} lang=jp -->\n"
+            "broken content without end marker\n\n"
+            "## Tail\n\n"
+            "Keep this section.\n"
+        ),
         encoding="utf-8",
     )
 
@@ -50,4 +55,4 @@ def test_apply_agents_md_repairs_truncated_managed_block(tmp_path: Path) -> None
     assert content.startswith("# Guide\n\n")
     assert content.count(START_MARKER_PREFIX) == 1
     assert f"{START_MARKER_PREFIX} lang=en -->" in content
-    assert content.rstrip().endswith(END_MARKER)
+    assert "## Tail\n\nKeep this section.\n" in content

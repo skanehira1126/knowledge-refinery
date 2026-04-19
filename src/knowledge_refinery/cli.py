@@ -2,7 +2,6 @@ import argparse
 from argparse import SUPPRESS
 from argparse import Action
 from collections.abc import Sequence
-import json
 from pathlib import Path
 import sys
 from typing import Any
@@ -12,6 +11,14 @@ from knowledge_refinery import get_version
 from knowledge_refinery.agents_ops import GUIDE_FILENAME_CHOICES
 from knowledge_refinery.agents_ops import LANG_CHOICES
 from knowledge_refinery.agents_ops import apply_agents_md
+from knowledge_refinery.cli_output import render_apply_template_output
+from knowledge_refinery.cli_output import render_copy_results_output
+from knowledge_refinery.cli_output import render_knowledge_search_output
+from knowledge_refinery.cli_output import render_refresh_review_output
+from knowledge_refinery.cli_output import render_review_search_output
+from knowledge_refinery.cli_output import render_session_search_output
+from knowledge_refinery.cli_output import render_session_update_output
+from knowledge_refinery.cli_output import render_update_template_output
 from knowledge_refinery.errors import RefineryCliError
 from knowledge_refinery.knowledge_ops import prepare_review
 from knowledge_refinery.knowledge_ops import promote_review
@@ -684,29 +691,13 @@ def run_apply_template(args: argparse.Namespace) -> int:
         skill_destination=args.skill_destination,
     )
 
-    print(f"Applied template from: {template_root}")
-    print(f"Target repository: {target_root}")
-    print(f"Skill destination: .{args.skill_destination}/skills")
-    print(f"Copied files: {len(copied)}")
-    print("\nNext steps:")
-    print(
-        "1) Install `knowledge-refinery` with `uv tool install ...` "
-        "in the environment that will run the CLI."
-    )
-    print(
-        "2) Update the managed AGENTS.md or CLAUDE.md section with "
-        "`knowledge-refinery update-agents-md --target ... --lang jp|en`."
-    )
-    print(
-        f"3) Confirm .{args.skill_destination}/skills/, .refinery/shared/, and "
-        "`.refinery/template-meta.yaml` were copied."
-    )
-    print(
-        "4) Later template updates can be applied with "
-        "`knowledge-refinery update-template --target ...`."
-    )
-    print("5) Use `knowledge-refinery skills ...` for session, search, and review operations.")
-    print("6) Use sessions/*/meta.yaml as the single session metadata format.")
+    for line in render_apply_template_output(
+        template_root=template_root,
+        target_root=target_root,
+        skill_destination=args.skill_destination,
+        copied_count=len(copied),
+    ):
+        print(line)
     return 0
 
 
@@ -718,30 +709,13 @@ def run_update_template(args: argparse.Namespace) -> int:
         skill_destination=args.skill_destination,
     )
 
-    print(f"Updated template from: {template_root}")
-    print(f"Target repository: {target_root}")
-    print(f"Skill destination: .{args.skill_destination}/skills")
-    print(f"Updated files: {len(copied)}")
-    print("\nNext steps:")
-    print(
-        "1) Reinstall `knowledge-refinery` in the environment that runs "
-        "the CLI if the package source was updated."
-    )
-    print(
-        "2) Refresh the managed AGENTS.md or CLAUDE.md section with "
-        "`knowledge-refinery update-agents-md --target ... --lang jp|en`."
-    )
-    print(
-        f"3) Review the updated diffs under "
-        f".{args.skill_destination}/skills/ and .refinery/shared/."
-    )
-    print(
-        "4) `.refinery/template-meta.yaml` is refreshed to match the CLI version used "
-        "for this update."
-    )
-    print("5) Existing .refinery/shared/state.md is preserved during template refreshes.")
-    print("6) Use `knowledge-refinery skills ...` for session, search, and review operations.")
-    print("7) Keep sessions/*/meta.yaml as the single session metadata format.")
+    for line in render_update_template_output(
+        template_root=template_root,
+        target_root=target_root,
+        skill_destination=args.skill_destination,
+        copied_count=len(copied),
+    ):
+        print(line)
     return 0
 
 
@@ -803,29 +777,8 @@ def run_update_session(args: argparse.Namespace) -> int:
         updates=updates,
         clear_fields=clear_fields,
     )
-    print(
-        render_key_value_line(
-            [
-                ("path", path.parent.as_posix()),
-                ("session_id", str(meta.get("session_id", ""))),
-                ("title", str(meta.get("title", ""))),
-                ("task", str(meta.get("task", ""))),
-                ("status", str(meta.get("status", ""))),
-                ("phase", str(meta.get("phase", ""))),
-                ("flow_status", str(meta.get("flow_status", ""))),
-                ("next_action", str(meta.get("next_action", ""))),
-            ]
-        )
-    )
+    print(render_session_update_output(path, meta))
     return 0
-
-
-def render_search_value(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-
-
-def render_key_value_line(pairs: list[tuple[str, object]]) -> str:
-    return " ".join(f"{key}={render_search_value(value)}" for key, value in pairs)
 
 
 def run_search_sessions(args: argparse.Namespace) -> int:
@@ -837,25 +790,8 @@ def run_search_sessions(args: argparse.Namespace) -> int:
         phases=list(args.phase),
         domains=list(args.domain),
     )
-    if not entries:
-        print("No sessions found.")
-        return 0
-
-    for entry in entries:
-        print(
-            render_key_value_line(
-                [
-                    ("path", entry.path.as_posix()),
-                    ("session_id", entry.session_id),
-                    ("title", entry.title),
-                    ("task", entry.task),
-                    ("status", entry.status),
-                    ("phase", entry.phase),
-                    ("flow_status", entry.flow_status),
-                    ("next_action", entry.next_action),
-                ]
-            )
-        )
+    for line in render_session_search_output(entries):
+        print(line)
     return 0
 
 
@@ -869,46 +805,21 @@ def run_search_knowledge(args: argparse.Namespace) -> int:
         knowledge_ids=list(args.knowledge_id),
         include_rejected=bool(args.include_rejected),
     )
-    if not entries:
-        print("No knowledge files found.")
-        return 0
-
-    for entry in entries:
-        print(
-            render_key_value_line(
-                [
-                    ("path", entry.path.as_posix()),
-                    ("scope", entry.scope),
-                    ("knowledge_id", entry.knowledge_id),
-                    ("title", entry.title),
-                    ("summary", entry.summary),
-                    ("tags", entry.tags),
-                    ("source_sessions", entry.source_sessions),
-                ]
-            )
-        )
+    for line in render_knowledge_search_output(entries):
+        print(line)
     return 0
 
 
 def run_prepare_review(args: argparse.Namespace) -> int:
     results = prepare_review(Path(args.root), session_id=args.session_id, force=args.force)
-    if not results:
-        print("No flow knowledge files found.")
-        return 0
-
-    copied = 0
-    skipped = 0
-    for result in results:
-        status = "copied" if result.copied else "skipped"
-        rel_source = result.source.as_posix()
-        rel_target = result.target.as_posix()
-        print(f"{status}\t{rel_target}\tfrom={rel_source}")
-        if result.copied:
-            copied += 1
-        else:
-            skipped += 1
-
-    print(f"Prepared review files: copied={copied} skipped={skipped}")
+    for line in render_copy_results_output(
+        results,
+        empty_message="No flow knowledge files found.",
+        copied_label="copied",
+        skipped_label="skipped",
+        summary_prefix="Prepared review files",
+    ):
+        print(line)
     return 0
 
 
@@ -921,19 +832,14 @@ def run_promote_review(args: argparse.Namespace) -> int:
         force=args.force,
     )
 
-    copied = 0
-    skipped = 0
-    for result in results:
-        status = "copied" if result.copied else "skipped"
-        rel_source = result.source.as_posix()
-        rel_target = result.target.as_posix()
-        print(f"{status}\t{rel_target}\tfrom={rel_source}")
-        if result.copied:
-            copied += 1
-        else:
-            skipped += 1
-
-    print(f"Promoted review files: copied={copied} skipped={skipped}")
+    for line in render_copy_results_output(
+        results,
+        empty_message="No review files found.",
+        copied_label="copied",
+        skipped_label="skipped",
+        summary_prefix="Promoted review files",
+    ):
+        print(line)
     return 0
 
 
@@ -946,23 +852,8 @@ def run_search_review(args: argparse.Namespace) -> int:
         knowledge_ids=list(args.knowledge_id),
         include_rejected=bool(args.include_rejected),
     )
-    if not entries:
-        print("No review files found.")
-        return 0
-
-    for entry in entries:
-        print(
-            render_key_value_line(
-                [
-                    ("path", entry.path.as_posix()),
-                    ("knowledge_id", entry.knowledge_id),
-                    ("title", entry.title),
-                    ("summary", entry.summary),
-                    ("tags", entry.tags),
-                    ("source_sessions", entry.source_sessions),
-                ]
-            )
-        )
+    for line in render_review_search_output(entries):
+        print(line)
     return 0
 
 
@@ -973,11 +864,8 @@ def run_refresh_review(args: argparse.Namespace) -> int:
         review_files=list(args.review_file),
         all_files=bool(args.all),
     )
-    refreshed = 0
-    for result in results:
-        print(f"refreshed\t{result.target.as_posix()}\tfrom={result.source.as_posix()}")
-        refreshed += 1
-    print(f"Refreshed review files: {refreshed}")
+    for line in render_refresh_review_output(results):
+        print(line)
     return 0
 
 
@@ -989,16 +877,14 @@ def run_reject_review(args: argparse.Namespace) -> int:
         all_files=bool(args.all),
         force=args.force,
     )
-    moved = 0
-    skipped = 0
-    for result in results:
-        status = "moved" if result.copied else "skipped"
-        print(f"{status}\t{result.target.as_posix()}\tfrom={result.source.as_posix()}")
-        if result.copied:
-            moved += 1
-        else:
-            skipped += 1
-    print(f"Rejected review files: moved={moved} skipped={skipped}")
+    for line in render_copy_results_output(
+        results,
+        empty_message="No review files found.",
+        copied_label="moved",
+        skipped_label="skipped",
+        summary_prefix="Rejected review files",
+    ):
+        print(line)
     return 0
 
 

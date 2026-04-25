@@ -221,9 +221,7 @@ def test_reject_review_moves_file_out_of_active_review_queue(tmp_path: Path) -> 
 def test_promote_review_filters_knowledge_id_by_knowledge_type(tmp_path: Path) -> None:
     root = tmp_path / ".refinery"
     reference_path = root / "shared" / "review" / "session-123--reference--api-rate-limit.md"
-    constructive_path = (
-        root / "shared" / "review" / "session-123--constructive--api-rate-limit.md"
-    )
+    constructive_path = root / "shared" / "review" / "session-123--constructive--api-rate-limit.md"
     for review_path, knowledge_type in [
         (reference_path, "reference"),
         (constructive_path, "constructive"),

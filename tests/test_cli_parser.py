@@ -30,6 +30,8 @@ def test_parser_accepts_skills_search_knowledge() -> None:
             "flow",
             "--tag",
             "domain/api",
+            "--knowledge-type",
+            "reference",
         ]
     )
 
@@ -39,6 +41,24 @@ def test_parser_accepts_skills_search_knowledge() -> None:
     assert args.terms == ["api", "rate"]
     assert args.scope == ["flow"]
     assert args.tag == ["domain/api"]
+    assert args.knowledge_type == ["reference"]
+
+
+def test_parser_accepts_review_operation_knowledge_type_selector() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "skills",
+            "promote-review",
+            "--knowledge-id",
+            "api-rate-limit",
+            "--knowledge-type",
+            "constructive",
+        ]
+    )
+
+    assert args.handler is cli.run_promote_review
+    assert args.knowledge_id == ["api-rate-limit"]
+    assert args.knowledge_type == ["constructive"]
 
 
 def test_parser_accepts_skills_update_session() -> None:

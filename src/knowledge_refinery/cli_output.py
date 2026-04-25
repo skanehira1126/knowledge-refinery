@@ -113,6 +113,7 @@ def render_knowledge_search_output(entries: list[KnowledgeSearchEntry]) -> list[
                 ("path", entry.path.as_posix()),
                 ("scope", entry.scope),
                 ("knowledge_id", entry.knowledge_id),
+                ("knowledge_type", entry.knowledge_type),
                 ("title", entry.title),
                 ("summary", entry.summary),
                 ("tags", entry.tags),
@@ -131,6 +132,7 @@ def render_review_search_output(entries: list[KnowledgeSearchEntry]) -> list[str
             [
                 ("path", entry.path.as_posix()),
                 ("knowledge_id", entry.knowledge_id),
+                ("knowledge_type", entry.knowledge_type),
                 ("title", entry.title),
                 ("summary", entry.summary),
                 ("tags", entry.tags),

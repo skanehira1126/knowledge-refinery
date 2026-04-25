@@ -7,7 +7,7 @@
 
 - `meta.yaml` の型崩れや不正 YAML を修復する
 - knowledge file の front matter を CLI が読める形へ戻す
-- `derived_from`, `source_sessions`, `knowledge_id` などの必須項目を整える
+- `derived_from`, `source_sessions`, `knowledge_id`, `knowledge_type` などの項目を整える
 
 ## 向いている場面
 

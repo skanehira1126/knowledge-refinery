@@ -20,7 +20,7 @@ description: raw レイヤーの証拠を flow レイヤーの暫定知識へ整
 
 1. 更新対象の `session_id` を確認し、`knowledge-refinery skills search knowledge --session-id "<session_id>" --scope raw` と `--scope flow` で関連 topic を把握する。
 2. 対象 topic の raw ファイルを読み、観測事実を論点ごとに整理する。
-3. `flow/` に Markdown 知識ファイルを追加または更新し、少なくとも `title`, `description`, `summary` を埋める。
+3. `flow/` に Markdown 知識ファイルを追加または更新し、少なくとも `title`, `description`, `summary` を埋める。`reference` / `constructive` を区別できる場合は `knowledge_type` も付ける。
 4. 同じ topic の flow ファイルが既にある場合は、raw の断片を追記するのではなく、最新の統合結果として再構成してよい。
 5. 不確実性、反証、未解決の論点は消さずに残し、必要なら `confidence` や本文で明示する。
 6. `flow/` の更新により次アクションや review 準備状況が変わる場合は、`refinery-session` に戻って `state.md` や review 手順を更新する。
@@ -40,7 +40,11 @@ description: raw レイヤーの証拠を flow レイヤーの暫定知識へ整
 ## Flow file format
 
 - `flow` の知識ファイルは最低でも `title`, `description`, `summary` を持たせる。
+- `knowledge_type` を付ける場合は `reference` または `constructive` のどちらかを使う。
+- `reference` は定義、ルール、固有名詞、固定的な対応関係など lookup 前提の知識に使う。
+- `constructive` は手順、判断基準、因果理解、適用条件、反例など reasoning ごと残したい知識に使う。
 - `knowledge_id` は任意だが、後続 review で安定運用したい topic では早めに付けてよい。
 - `source_sessions`, `tags`, `confidence` は必要に応じて追加してよい。
 - `tags` は重複防止と再利用検索のため、原則 2-4 個付ける。少なくとも `domain/...` または `artifact/...` を 1 つ含め、必要なら `task/...`, `tech/...`, `issue/...` を追加する。
+- `constructive` の本文は、結論だけでなく「なぜそう考えるか」「どこで有効か」「破綻条件」を短く残す。
 - 本文には要点、根拠となる観測、未解決点を短く整理する。

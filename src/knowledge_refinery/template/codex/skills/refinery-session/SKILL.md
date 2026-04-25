@@ -35,7 +35,7 @@ description: セッション運用全体を標準化する orchestrator skill。
 1. 個別タスクを完了した後など、整理が必要なタイミングで `raw/` を横断的に確認する。
 2. 整理が必要なら `refinery-curation` の手順で `raw/` を `flow/` の暫定知識へ統合する。
 3. `flow/` を更新したら、必要に応じて `state.md` を更新する。
-4. `flow` や `stock` に似た topic がないかを `title`, `summary`, `knowledge_id`, `tags` で確認し、重複記録を避ける。
+4. `flow` や `stock` に似た topic がないかを `title`, `summary`, `knowledge_id`, `knowledge_type`, `tags` で確認し、重複記録を避ける。
 5. `raw/` から `flow/` への知識整理が重い場合は、ユーザが明示的に求めたときに限りサブエージェントへ委譲してよい。
 
 ### Before closing the request

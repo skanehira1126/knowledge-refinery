@@ -7,6 +7,7 @@
 
 - 関連する raw を横断して topic ごとに整理する
 - `flow` に `title`, `description`, `summary` を持つ知識を作る
+- 必要に応じて `knowledge_type: reference|constructive` を付ける
 - 不確実性や反証を落とさずに暫定知識として保つ
 
 ## 向いている場面

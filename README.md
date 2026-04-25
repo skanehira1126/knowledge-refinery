@@ -151,6 +151,7 @@ refinery で扱う知識ファイルは、`raw/`, `flow/`, `shared/review/`, `sh
 | `description` | string | 必須 | 何を記録しているかの短い説明。 |
 | `summary` | string | `flow` 以降で必須 | 要点の要約。`raw` では任意。 |
 | `knowledge_id` | string | `review` / `stock` で必須 | 知識の識別子。`^[a-z0-9][a-z0-9-]*$` に一致する lowercase slug。`flow` では省略時にファイル名から導出。 |
+| `knowledge_type` | string | 任意 | 知識の性質。`reference` または `constructive`。`tags` とは別の検索・運用軸として使う。 |
 | `source_sessions` | list[string] | `review` / `stock` で必須 | この知識の根拠になった session ID 群。`flow` では省略可能だが review 生成時に session ID が補完される。 |
 | `derived_from` | list[string] | `review` / `stock` で必須 | 元ファイルへの repository-relative path 群。`flow -> review -> stock` の系譜を辿るために使う。 |
 | `tags` | list[string] | 任意 | 検索・分類用タグ。非空文字列の list で記載する。`domain/...`, `artifact/...`, `task/...` など prefix 付きの taxonomy を推奨する。 |
@@ -168,6 +169,7 @@ refinery で扱う知識ファイルは、`raw/`, `flow/`, `shared/review/`, `sh
 補足:
 
 - `prepare-review` は `flow` から `review` を生成する際に `knowledge_id`, `source_sessions`, `derived_from` を正規化する
+- `knowledge_type` を付けた知識は、review / stock のファイル名にも type を織り込み、`reference` と `constructive` の衝突を避ける
 - `promote-review` は `review` から `stock` へコピーし、`source_sessions` と `derived_from` を保持・統合する
 - `tags` は string 1 個でも CLI では受理するが、canonical format は YAML list
 - `source_sessions` と `derived_from` も canonical format は YAML list
@@ -177,14 +179,23 @@ refinery で扱う知識ファイルは、`raw/`, `flow/`, `shared/review/`, `sh
 
 | シチュエーション | 主な検索対象 | 最低限ほしい metadata | 補足 |
 | --- | --- | --- | --- |
-| 初回入力時 | `shared/stock` | `title`, `summary`, `knowledge_id`, `tags` | 既知の安定知識を先に探す。`source_sessions`, `derived_from` は根拠確認に使う。 |
-| 初回入力時 | `flow/` | `title`, `summary`, `knowledge_id`, `tags`, `source_sessions` | まだ stock 化されていない進行中知識や関連 session を探す。review 済み・stock 昇格済み knowledge は主対象から外す。 |
+| 初回入力時 | `shared/stock` | `title`, `summary`, `knowledge_id`, `knowledge_type`, `tags` | 既知の安定知識を先に探す。`source_sessions`, `derived_from` は根拠確認に使う。 |
+| 初回入力時 | `flow/` | `title`, `summary`, `knowledge_id`, `knowledge_type`, `tags`, `source_sessions` | まだ stock 化されていない進行中知識や関連 session を探す。review 済み・stock 昇格済み knowledge は主対象から外す。 |
 | 作業中 | 同一 session の `raw/` | `title`, `description` | 基本は重い検索をしない。必要なときだけ局所確認する。 |
 | 個別タスク完了時 | 同一 session の `raw/` | `title`, `description`, `tags` | 証拠の取りこぼしや同 topic の raw を確認する。 |
-| 個別タスク完了時 | `flow/` | `title`, `summary`, `knowledge_id`, `tags` | 重複した暫定知識を作らないために確認する。 |
-| 個別タスク完了時 | `shared/stock` | `title`, `summary`, `knowledge_id`, `tags` | 似た stock があるなら、新しい flow を作る価値があるかを判断する。 |
-| 作業終了時 | `shared/review` | `knowledge_id`, `source_sessions`, `derived_from` | review キュー管理用。通常の knowledge 再利用検索には使わない。 |
-| review から stock へ昇格するとき | `shared/stock` | `title`, `summary`, `knowledge_id`, `tags`, `derived_from` | 既存 stock を更新するか、新規 stock を作るかを判断する。 |
+| 個別タスク完了時 | `flow/` | `title`, `summary`, `knowledge_id`, `knowledge_type`, `tags` | 重複した暫定知識を作らないために確認する。 |
+| 個別タスク完了時 | `shared/stock` | `title`, `summary`, `knowledge_id`, `knowledge_type`, `tags` | 似た stock があるなら、新しい flow を作る価値があるかを判断する。 |
+| 作業終了時 | `shared/review` | `knowledge_id`, `knowledge_type`, `source_sessions`, `derived_from` | review キュー管理用。通常の knowledge 再利用検索には使わない。 |
+| review から stock へ昇格するとき | `shared/stock` | `title`, `summary`, `knowledge_id`, `knowledge_type`, `tags`, `derived_from` | 既存 stock を更新するか、新規 stock を作るかを判断する。 |
+
+### `knowledge_type` の運用方針
+
+- `knowledge_type` は layer ではなく知識の性質を表す別軸で、`tags` とは分けて扱う。
+- canonical values は `reference` と `constructive` の 2 つに限定する。
+- `reference` は固有名詞、ルール、定義、固定的な対応関係など、lookup 前提で短く正規化したい知識に使う。
+- `constructive` は手順、判断基準、因果理解、適用条件、反例など、考え方の過程ごと残したい知識に使う。
+- `flow` で付けた `knowledge_type` は review / stock にそのまま引き継ぐ。
+- `knowledge_type` を付けた knowledge は、review では `<session_id>--<knowledge_type>--<knowledge_id>.md`、stock では `<knowledge_type>--<knowledge_id>.md` を既定のファイル名とする。
 
 ### `tags` の運用方針
 
@@ -215,6 +226,7 @@ title: API Rate Limit Notes
 description: 429 応答条件の観測メモ
 summary: 429 応答条件の要約
 knowledge_id: api-rate-limit-notes
+knowledge_type: reference
 source_sessions:
   - 20260411T041820Z-l5al2u
 derived_from:
@@ -347,14 +359,17 @@ knowledge-refinery skills update-session --session-id 20260411T041820Z-l5al2u --
 knowledge-refinery skills search sessions
 knowledge-refinery skills search knowledge
 knowledge-refinery skills search knowledge --scope flow --session-id 20260411T041820Z-l5al2u
+knowledge-refinery skills search knowledge --scope stock --knowledge-type reference
 knowledge-refinery skills search knowledge --scope review
 knowledge-refinery skills search knowledge --scope stock
 knowledge-refinery skills search review
+knowledge-refinery skills search review --knowledge-type constructive
 knowledge-refinery skills search review --session-id 20260411T041820Z-l5al2u
 knowledge-refinery skills prepare-review --session-id 20260411T041820Z-l5al2u
-knowledge-refinery skills refresh-review --review-file .refinery/shared/review/20260411T041820Z-l5al2u--api-rate-limit-notes.md
-knowledge-refinery skills promote-review --review-file .refinery/shared/review/20260411T041820Z-l5al2u--api-rate-limit-notes.md
-knowledge-refinery skills reject-review --review-file .refinery/shared/review/20260411T041820Z-l5al2u--api-rate-limit-notes.md
+knowledge-refinery skills promote-review --knowledge-id api-rate-limit-notes --knowledge-type reference
+knowledge-refinery skills refresh-review --review-file .refinery/shared/review/20260411T041820Z-l5al2u--reference--api-rate-limit-notes.md
+knowledge-refinery skills promote-review --review-file .refinery/shared/review/20260411T041820Z-l5al2u--reference--api-rate-limit-notes.md
+knowledge-refinery skills reject-review --review-file .refinery/shared/review/20260411T041820Z-l5al2u--reference--api-rate-limit-notes.md
 ```
 
 runtime 系コマンドは `skills` 配下のみをサポートします。
@@ -367,12 +382,12 @@ runtime 系コマンドは `skills` 配下のみをサポートします。
 - `skills init-session`: `sessions/<session_id>/` 配下の `raw/`, `flow/`, それぞれのローカルルール `AGENTS.md`, `state.md`, `meta.yaml` を作る
 - `skills update-session`: 指定した `sessions/<session_id>/meta.yaml` の主要フィールドを安全に更新する。`--clear-*` で nullable 項目を消せる
 - `skills search sessions`: `sessions/*/meta.yaml` と `state.md` を検索・一覧する。`--session-id`, `--status`, `--phase`, `--domain` で絞り込める
-- `skills search knowledge`: `.refinery` 配下の knowledge Markdown を検索・一覧する。既定では `flow|stock` を対象にし、`--scope raw|flow|review|stock`, `--session-id`, `--tag`, `--knowledge-id` で絞り込める
-- `skills search review`: `shared/review/` の review ファイルを検索・一覧する。`--session-id`, `--tag`, `--knowledge-id`, `--include-rejected` で絞り込める
+- `skills search knowledge`: `.refinery` 配下の knowledge Markdown を検索・一覧する。既定では `flow|stock` を対象にし、`--scope raw|flow|review|stock`, `--session-id`, `--tag`, `--knowledge-id`, `--knowledge-type` で絞り込める
+- `skills search review`: `shared/review/` の review ファイルを検索・一覧する。`--session-id`, `--tag`, `--knowledge-id`, `--knowledge-type`, `--include-rejected` で絞り込める
 - `skills prepare-review`: `flow` 配下の知識ファイルを `shared/review/` へコピーし、`knowledge_id`, `source_sessions`, `derived_from` を正規化する
-- `skills refresh-review`: 既存 review ファイルを元の `flow` から再生成する
-- `skills promote-review`: 指定した `shared/review/` の知識ファイルを `shared/stock/` へコピーする
-- `skills reject-review`: 指定した review ファイルを `shared/review/rejected/` へ移動する
+- `skills refresh-review`: 既存 review ファイルを元の `flow` から再生成する。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
+- `skills promote-review`: 指定した `shared/review/` の知識ファイルを `shared/stock/` へコピーする。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
+- `skills reject-review`: 指定した review ファイルを `shared/review/rejected/` へ移動する。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
 
 `skills init-session` はリポジトリ全体の初期化ではなく、セッション単位の作業フォルダ初期化です。
 

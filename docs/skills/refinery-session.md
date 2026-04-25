@@ -7,7 +7,7 @@
 
 - `session_id` の新規作成または再利用を判断する
 - `state.md` の更新タイミングを管理する
-- review 作成前に未整理の `raw` や `flow` を点検する
+- review 作成前に未整理の `raw` や `flow` を点検し、必要なら `knowledge_type` も揃える
 - `knowledge-refinery skills prepare-review` / `knowledge-refinery skills refresh-review` を実行して `refinery-shared` に引き渡す
 
 ## 向いている場面

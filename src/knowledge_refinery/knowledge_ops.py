@@ -14,6 +14,7 @@ from knowledge_refinery.front_matter import split_front_matter
 GUIDE_FILENAMES = {"AGENTS.md", "README.md"}
 REQUIRED_FIELDS = ("title", "description", "summary")
 KNOWLEDGE_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+KNOWLEDGE_TYPE_VALUES = ("reference", "constructive")
 
 
 @dataclass
@@ -34,6 +35,7 @@ class KnowledgeDocument:
 class ReviewEntry:
     path: Path
     knowledge_id: str
+    knowledge_type: str
     title: str
     description: str
     source_sessions: list[str]
@@ -93,6 +95,19 @@ def ensure_knowledge_id(value: object, *, path: Path) -> str:
             path=path,
             detail=f"`knowledge_id` must match `{KNOWLEDGE_ID_PATTERN.pattern}`",
             expected="A lowercase slug using letters, digits, and hyphens.",
+        )
+    return text
+
+
+def ensure_knowledge_type(value: object, *, path: Path) -> str:
+    text = ensure_string(value, field="knowledge_type", path=path)
+    if text not in KNOWLEDGE_TYPE_VALUES:
+        allowed = ", ".join(KNOWLEDGE_TYPE_VALUES)
+        raise RefineryFormatError(
+            summary="Knowledge file has an invalid knowledge_type.",
+            path=path,
+            detail=f"`knowledge_type` must be one of: {allowed}",
+            expected=f"A string equal to one of: {allowed}.",
         )
     return text
 
@@ -199,6 +214,12 @@ def normalize_knowledge_header(
     if confidence is not None:
         header["confidence"] = ensure_string(confidence, field="confidence", path=doc.path)
 
+    knowledge_type = header.get("knowledge_type")
+    if knowledge_type is not None:
+        header["knowledge_type"] = ensure_knowledge_type(knowledge_type, path=doc.path)
+    else:
+        header.pop("knowledge_type", None)
+
     lineage = ensure_string_list(header.get("derived_from"), field="derived_from", path=doc.path)
     if derived_from:
         lineage = unique_strings([*lineage, *derived_from])
@@ -210,6 +231,20 @@ def normalize_knowledge_header(
     # Keep only repository-relative strings in lineage fields.
     header["source_sessions"] = unique_strings(source_sessions)
     return header
+
+
+def knowledge_target_filename(knowledge_id: str, knowledge_type: str | None = None) -> str:
+    if knowledge_type:
+        return f"{knowledge_type}--{knowledge_id}.md"
+    return f"{knowledge_id}.md"
+
+
+def review_target_filename(
+    session_id: str, knowledge_id: str, knowledge_type: str | None = None
+) -> str:
+    if knowledge_type:
+        return f"{session_id}--{knowledge_type}--{knowledge_id}.md"
+    return f"{session_id}--{knowledge_id}.md"
 
 
 def iter_flow_files(root: Path, session_id: str | None = None) -> list[Path]:
@@ -281,7 +316,12 @@ def prepare_review(
         )
 
         knowledge_id = ensure_knowledge_id(header["knowledge_id"], path=flow_path)
-        target = review_root / f"{current_session_id}--{knowledge_id}.md"
+        knowledge_type = header.get("knowledge_type")
+        target = review_root / review_target_filename(
+            current_session_id,
+            knowledge_id,
+            knowledge_type if isinstance(knowledge_type, str) else None,
+        )
         if target.exists():
             existing_doc = parse_knowledge_document(target)
             existing_lineage = ensure_string_list(
@@ -327,6 +367,11 @@ def list_review(
             ReviewEntry(
                 path=review_path,
                 knowledge_id=ensure_knowledge_id(header["knowledge_id"], path=review_path),
+                knowledge_type=(
+                    ensure_knowledge_type(header["knowledge_type"], path=review_path)
+                    if header.get("knowledge_type") is not None
+                    else ""
+                ),
                 title=ensure_string(header["title"], field="title", path=review_path),
                 description=ensure_string(
                     header["description"], field="description", path=review_path
@@ -390,28 +435,45 @@ def resolve_selected_review_file(root: Path, review_file: str) -> Path:
     return resolved
 
 
-def build_review_index(root: Path) -> dict[str, list[Path]]:
-    by_knowledge_id: dict[str, list[Path]] = {}
+def build_review_index(root: Path) -> dict[str, list[tuple[str, Path]]]:
+    by_knowledge_id: dict[str, list[tuple[str, Path]]] = {}
     for review_path in iter_review_files(root):
         doc = parse_knowledge_document(review_path)
-        knowledge_id = ensure_string(
-            doc.header.get("knowledge_id"), field="knowledge_id", path=review_path
-        )
-        by_knowledge_id.setdefault(knowledge_id, []).append(review_path)
+        knowledge_id = ensure_knowledge_id(doc.header.get("knowledge_id"), path=review_path)
+        knowledge_type = ""
+        if doc.header.get("knowledge_type") is not None:
+            knowledge_type = ensure_knowledge_type(
+                doc.header.get("knowledge_type"), path=review_path
+            )
+        by_knowledge_id.setdefault(knowledge_id, []).append((knowledge_type, review_path))
     return by_knowledge_id
 
 
-def select_review_files_by_knowledge_id(root: Path, knowledge_ids: list[str]) -> list[Path]:
+def select_review_files_by_knowledge_id(
+    root: Path, knowledge_ids: list[str], knowledge_types: list[str] | None = None
+) -> list[Path]:
+    knowledge_types = knowledge_types or []
     by_knowledge_id = build_review_index(root)
     selected: list[Path] = []
     for knowledge_id in knowledge_ids:
-        matches = by_knowledge_id.get(knowledge_id, [])
+        matches = [
+            review_path
+            for knowledge_type, review_path in by_knowledge_id.get(knowledge_id, [])
+            if not knowledge_types or knowledge_type in knowledge_types
+        ]
         if not matches:
             raise RefineryCliError(
                 code="review_not_found",
                 summary="No review file matched the requested knowledge_id.",
                 path=root / "shared" / "review",
-                detail=f"No review file found for knowledge_id={knowledge_id}",
+                detail=(
+                    f"No review file found for knowledge_id={knowledge_id}"
+                    + (
+                        f" and knowledge_type in {', '.join(knowledge_types)}"
+                        if knowledge_types
+                        else ""
+                    )
+                ),
                 expected=(
                     "An existing review file selected by `--knowledge-id` or `--review-file`."
                 ),
@@ -426,17 +488,25 @@ def select_review_files_by_knowledge_id(root: Path, knowledge_ids: list[str]) ->
                 path=root / "shared" / "review",
                 detail=(
                     f"Multiple review files found for knowledge_id={knowledge_id}; "
-                    "use `--review-file` to select one explicitly"
+                    "use `--knowledge-type` or `--review-file` to select one explicitly"
                 ),
                 expected="A single unambiguous review file for the selected knowledge_id.",
-                suggested_action="Rerun with `--review-file` and pick the exact review file.",
+                suggested_action=(
+                    "Rerun with `--knowledge-type` when the type disambiguates the match, "
+                    "or use `--review-file` and pick the exact review file."
+                ),
             )
         selected.append(matches[0])
     return selected
 
 
 def select_review_files(
-    root: Path, *, knowledge_ids: list[str], review_files: list[str], all_files: bool
+    root: Path,
+    *,
+    knowledge_ids: list[str],
+    review_files: list[str],
+    all_files: bool,
+    knowledge_types: list[str] | None = None,
 ) -> list[Path]:
     root = root.resolve()
     selected: list[Path] = []
@@ -448,7 +518,7 @@ def select_review_files(
         selected.append(resolve_selected_review_file(root, review_file))
 
     if knowledge_ids:
-        selected.extend(select_review_files_by_knowledge_id(root, knowledge_ids))
+        selected.extend(select_review_files_by_knowledge_id(root, knowledge_ids, knowledge_types))
 
     unique_paths: list[Path] = []
     for path in selected:
@@ -464,6 +534,7 @@ def promote_review(
     knowledge_ids: list[str],
     review_files: list[str],
     all_files: bool,
+    knowledge_types: list[str] | None = None,
     force: bool = False,
 ) -> list[CopyResult]:
     root = root.resolve()
@@ -471,7 +542,11 @@ def promote_review(
     stock_root.mkdir(parents=True, exist_ok=True)
 
     selected = select_review_files(
-        root, knowledge_ids=knowledge_ids, review_files=review_files, all_files=all_files
+        root,
+        knowledge_ids=knowledge_ids,
+        review_files=review_files,
+        all_files=all_files,
+        knowledge_types=knowledge_types,
     )
     if not selected:
         raise RefineryCliError(
@@ -490,7 +565,11 @@ def promote_review(
             derived_from=[relative_to_repository(root, review_path)],
         )
         knowledge_id = ensure_knowledge_id(header["knowledge_id"], path=review_path)
-        target = stock_root / f"{knowledge_id}.md"
+        knowledge_type = header.get("knowledge_type")
+        target = stock_root / knowledge_target_filename(
+            knowledge_id,
+            knowledge_type if isinstance(knowledge_type, str) else None,
+        )
 
         if target.exists() and not force:
             results.append(CopyResult(source=review_path, target=target, copied=False))
@@ -528,6 +607,7 @@ def reject_review(
     knowledge_ids: list[str],
     review_files: list[str],
     all_files: bool,
+    knowledge_types: list[str] | None = None,
     force: bool = False,
 ) -> list[CopyResult]:
     root = root.resolve()
@@ -535,7 +615,11 @@ def reject_review(
     rejected_root.mkdir(parents=True, exist_ok=True)
 
     selected = select_review_files(
-        root, knowledge_ids=knowledge_ids, review_files=review_files, all_files=all_files
+        root,
+        knowledge_ids=knowledge_ids,
+        review_files=review_files,
+        all_files=all_files,
+        knowledge_types=knowledge_types,
     )
     if not selected:
         raise RefineryCliError(
@@ -592,10 +676,15 @@ def refresh_review(
     knowledge_ids: list[str],
     review_files: list[str],
     all_files: bool,
+    knowledge_types: list[str] | None = None,
 ) -> list[CopyResult]:
     root = root.resolve()
     selected = select_review_files(
-        root, knowledge_ids=knowledge_ids, review_files=review_files, all_files=all_files
+        root,
+        knowledge_ids=knowledge_ids,
+        review_files=review_files,
+        all_files=all_files,
+        knowledge_types=knowledge_types,
     )
     if not selected:
         raise RefineryCliError(

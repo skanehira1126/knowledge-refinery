@@ -536,6 +536,13 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
         help="knowledge_id exact match; may be specified multiple times",
     )
     search_knowledge_parser.add_argument(
+        "--knowledge-type",
+        action="append",
+        choices=["reference", "constructive"],
+        default=[],
+        help="knowledge_type exact match; may be specified multiple times",
+    )
+    search_knowledge_parser.add_argument(
         "--include-rejected", action="store_true", help="include rejected review files"
     )
     search_knowledge_parser.set_defaults(handler=run_search_knowledge)
@@ -566,6 +573,13 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
         action="append",
         default=[],
         help="knowledge_id exact match; may be specified multiple times",
+    )
+    search_review_parser.add_argument(
+        "--knowledge-type",
+        action="append",
+        choices=["reference", "constructive"],
+        default=[],
+        help="knowledge_type exact match; may be specified multiple times",
     )
     search_review_parser.add_argument(
         "--include-rejected", action="store_true", help="include rejected review files"
@@ -631,6 +645,13 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
         help="knowledge_id to promote; may be specified multiple times",
     )
     promote_parser.add_argument(
+        "--knowledge-type",
+        action="append",
+        choices=["reference", "constructive"],
+        default=[],
+        help="knowledge_type to disambiguate --knowledge-id; may be specified multiple times",
+    )
+    promote_parser.add_argument(
         "--review-file",
         action="append",
         default=[],
@@ -653,6 +674,13 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
         help="knowledge_id to refresh; may be specified multiple times",
     )
     refresh_parser.add_argument(
+        "--knowledge-type",
+        action="append",
+        choices=["reference", "constructive"],
+        default=[],
+        help="knowledge_type to disambiguate --knowledge-id; may be specified multiple times",
+    )
+    refresh_parser.add_argument(
         "--review-file",
         action="append",
         default=[],
@@ -670,6 +698,13 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
         action="append",
         default=[],
         help="knowledge_id to reject; may be specified multiple times",
+    )
+    reject_parser.add_argument(
+        "--knowledge-type",
+        action="append",
+        choices=["reference", "constructive"],
+        default=[],
+        help="knowledge_type to disambiguate --knowledge-id; may be specified multiple times",
     )
     reject_parser.add_argument(
         "--review-file",
@@ -803,6 +838,7 @@ def run_search_knowledge(args: argparse.Namespace) -> int:
         session_ids=list(args.session_id),
         tags=list(args.tag),
         knowledge_ids=list(args.knowledge_id),
+        knowledge_types=list(args.knowledge_type),
         include_rejected=bool(args.include_rejected),
     )
     for line in render_knowledge_search_output(entries):
@@ -829,6 +865,7 @@ def run_promote_review(args: argparse.Namespace) -> int:
         knowledge_ids=list(args.knowledge_id),
         review_files=list(args.review_file),
         all_files=bool(args.all),
+        knowledge_types=list(args.knowledge_type),
         force=args.force,
     )
 
@@ -850,6 +887,7 @@ def run_search_review(args: argparse.Namespace) -> int:
         session_ids=list(args.session_id),
         tags=list(args.tag),
         knowledge_ids=list(args.knowledge_id),
+        knowledge_types=list(args.knowledge_type),
         include_rejected=bool(args.include_rejected),
     )
     for line in render_review_search_output(entries):
@@ -863,6 +901,7 @@ def run_refresh_review(args: argparse.Namespace) -> int:
         knowledge_ids=list(args.knowledge_id),
         review_files=list(args.review_file),
         all_files=bool(args.all),
+        knowledge_types=list(args.knowledge_type),
     )
     for line in render_refresh_review_output(results):
         print(line)
@@ -875,6 +914,7 @@ def run_reject_review(args: argparse.Namespace) -> int:
         knowledge_ids=list(args.knowledge_id),
         review_files=list(args.review_file),
         all_files=bool(args.all),
+        knowledge_types=list(args.knowledge_type),
         force=args.force,
     )
     for line in render_copy_results_output(

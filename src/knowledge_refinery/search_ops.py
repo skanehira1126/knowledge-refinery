@@ -4,6 +4,7 @@ from pathlib import Path
 from knowledge_refinery.errors import RefineryFormatError
 from knowledge_refinery.front_matter import split_front_matter
 from knowledge_refinery.knowledge_ops import ensure_knowledge_id
+from knowledge_refinery.knowledge_ops import ensure_knowledge_type
 from knowledge_refinery.knowledge_ops import ensure_string
 from knowledge_refinery.knowledge_ops import ensure_string_list
 from knowledge_refinery.knowledge_ops import extract_session_id
@@ -26,6 +27,7 @@ class KnowledgeSearchEntry:
     path: Path
     scope: str
     knowledge_id: str
+    knowledge_type: str
     title: str
     summary: str
     tags: list[str]
@@ -100,6 +102,9 @@ def _build_knowledge_entry(root: Path, path: Path, scope: str) -> KnowledgeSearc
         knowledge_id = slugify(path.stem)
     else:
         knowledge_id = ""
+    knowledge_type = ""
+    if header.get("knowledge_type") is not None:
+        knowledge_type = ensure_knowledge_type(header.get("knowledge_type"), path=path)
 
     tags = _ensure_optional_string_list(header.get("tags"), field="tags", path=path)
     confidence = _ensure_optional_string(header.get("confidence"), field="confidence", path=path)
@@ -122,6 +127,7 @@ def _build_knowledge_entry(root: Path, path: Path, scope: str) -> KnowledgeSearc
             description,
             summary,
             knowledge_id,
+            knowledge_type,
             confidence,
             "\n".join(tags),
             "\n".join(source_sessions),
@@ -133,12 +139,42 @@ def _build_knowledge_entry(root: Path, path: Path, scope: str) -> KnowledgeSearc
         path=path,
         scope=scope_label,
         knowledge_id=knowledge_id,
+        knowledge_type=knowledge_type,
         title=title,
         summary=summary,
         tags=tags,
         source_sessions=source_sessions,
         search_text=search_text,
     )
+
+
+def _matches_knowledge_filters(
+    entry: KnowledgeSearchEntry,
+    *,
+    root: Path,
+    path: Path,
+    scope: str,
+    terms: list[str],
+    session_ids: list[str],
+    tags: list[str],
+    knowledge_ids: list[str],
+    knowledge_types: list[str],
+) -> bool:
+    if session_ids:
+        if scope in {"raw", "flow"}:
+            if extract_session_id(root, path) not in session_ids:
+                return False
+        elif not set(session_ids).intersection(entry.source_sessions):
+            return False
+    if tags and not set(tags).issubset(set(entry.tags)):
+        return False
+    if knowledge_ids and entry.knowledge_id not in knowledge_ids:
+        return False
+    if knowledge_types and entry.knowledge_type not in knowledge_types:
+        return False
+    if not _matches_terms(entry.search_text, terms):
+        return False
+    return True
 
 
 def search_knowledge(
@@ -149,6 +185,7 @@ def search_knowledge(
     session_ids: list[str],
     tags: list[str],
     knowledge_ids: list[str],
+    knowledge_types: list[str],
     include_rejected: bool = False,
 ) -> list[KnowledgeSearchEntry]:
     root = root.resolve()
@@ -157,17 +194,17 @@ def search_knowledge(
     for scope in selected_scopes:
         for path in _scope_candidates(root, scope, include_rejected=include_rejected):
             entry = _build_knowledge_entry(root, path, scope)
-            if session_ids:
-                if scope in {"raw", "flow"}:
-                    if extract_session_id(root, path) not in session_ids:
-                        continue
-                elif not set(session_ids).intersection(entry.source_sessions):
-                    continue
-            if tags and not set(tags).issubset(set(entry.tags)):
-                continue
-            if knowledge_ids and entry.knowledge_id not in knowledge_ids:
-                continue
-            if not _matches_terms(entry.search_text, terms):
+            if not _matches_knowledge_filters(
+                entry,
+                root=root,
+                path=path,
+                scope=scope,
+                terms=terms,
+                session_ids=session_ids,
+                tags=tags,
+                knowledge_ids=knowledge_ids,
+                knowledge_types=knowledge_types,
+            ):
                 continue
             entries.append(entry)
     return entries
@@ -180,6 +217,7 @@ def search_review(
     session_ids: list[str],
     tags: list[str],
     knowledge_ids: list[str],
+    knowledge_types: list[str],
     include_rejected: bool = False,
 ) -> list[KnowledgeSearchEntry]:
     return search_knowledge(
@@ -189,6 +227,7 @@ def search_review(
         session_ids=session_ids,
         tags=tags,
         knowledge_ids=knowledge_ids,
+        knowledge_types=knowledge_types,
         include_rejected=include_rejected,
     )
 

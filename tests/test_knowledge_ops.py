@@ -98,7 +98,7 @@ def test_prepare_review_allows_same_knowledge_id_when_knowledge_type_differs(
     ]
 
 
-def test_promote_review_merges_existing_stock_lineage_and_sessions(tmp_path: Path) -> None:
+def test_promote_review_skips_existing_stock_without_overwriting(tmp_path: Path) -> None:
     root = tmp_path / ".refinery"
     review_path = root / "shared" / "review" / "session-123--reference--api-rate-limit.md"
     stock_path = root / "shared" / "stock" / "reference--api-rate-limit.md"
@@ -134,17 +134,17 @@ def test_promote_review_merges_existing_stock_lineage_and_sessions(tmp_path: Pat
         knowledge_ids=[],
         review_files=[str(review_path)],
         all_files=False,
-        force=True,
     )
 
     assert results[0].target == stock_path
+    assert results[0].copied is False
     content = stock_path.read_text(encoding="utf-8")
-    assert "source_sessions:\n- session-000\n- session-123" in content
+    assert "source_sessions:\n- session-000" in content
+    assert "session-123" not in content
     assert "knowledge_type: reference" in content
     assert "derived_from:\n- .refinery/shared/review/session-000--api-rate-limit.md" in content
-    assert "- .refinery/sessions/session-123/flow/api-rate-limit.md" in content
-    assert "- .refinery/shared/review/session-123--reference--api-rate-limit.md" in content
-    assert content.endswith("New body\n")
+    assert "New body" not in content
+    assert content.endswith("Old body\n")
 
 
 def test_refresh_review_rebuilds_review_from_flow_source(tmp_path: Path) -> None:
@@ -342,7 +342,7 @@ def test_prepare_review_force_still_raises_conflict_for_duplicate_knowledge_id_i
 @pytest.mark.parametrize(
     ("operation", "kwargs"),
     [
-        (promote_review, {"force": False}),
+        (promote_review, {}),
         (refresh_review, {}),
         (reject_review, {"force": False}),
     ],

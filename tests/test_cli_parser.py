@@ -61,6 +61,11 @@ def test_parser_accepts_review_operation_knowledge_type_selector() -> None:
     assert args.knowledge_type == ["constructive"]
 
 
+def test_parser_rejects_promote_review_force() -> None:
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["skills", "promote-review", "--force", "--all"])
+
+
 def test_parser_accepts_skills_update_session() -> None:
     args = cli.build_parser().parse_args(
         [

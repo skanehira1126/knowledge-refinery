@@ -170,7 +170,7 @@ refinery で扱う知識ファイルは、`raw/`, `flow/`, `shared/review/`, `sh
 
 - `prepare-review` は `flow` から `review` を生成する際に `knowledge_id`, `source_sessions`, `derived_from` を正規化する
 - `knowledge_type` を付けた知識は、review / stock のファイル名にも type を織り込み、`reference` と `constructive` の衝突を避ける
-- `promote-review` は `review` から `stock` へコピーし、`source_sessions` と `derived_from` を保持・統合する
+- `promote-review` は `review` から新規 `stock` へコピーする。既存 `stock` がある場合は、安定知識の本文を暗黙に置換しないためスキップする
 - `tags` は string 1 個でも CLI では受理するが、canonical format は YAML list
 - `source_sessions` と `derived_from` も canonical format は YAML list
 - `review` / `stock` では `summary` を空にしない
@@ -386,7 +386,7 @@ runtime 系コマンドは `skills` 配下のみをサポートします。
 - `skills search review`: `shared/review/` の review ファイルを検索・一覧する。`--session-id`, `--tag`, `--knowledge-id`, `--knowledge-type`, `--include-rejected` で絞り込める
 - `skills prepare-review`: `flow` 配下の知識ファイルを `shared/review/` へコピーし、`knowledge_id`, `source_sessions`, `derived_from` を正規化する
 - `skills refresh-review`: 既存 review ファイルを元の `flow` から再生成する。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
-- `skills promote-review`: 指定した `shared/review/` の知識ファイルを `shared/stock/` へコピーする。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
+- `skills promote-review`: 指定した `shared/review/` の知識ファイルを `shared/stock/` へコピーする。既存 stock は上書きせずスキップする。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
 - `skills reject-review`: 指定した review ファイルを `shared/review/rejected/` へ移動する。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
 
 `skills init-session` はリポジトリ全体の初期化ではなく、セッション単位の作業フォルダ初期化です。

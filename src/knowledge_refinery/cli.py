@@ -657,9 +657,6 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
         default=[],
         help="review file path to promote; may be specified multiple times",
     )
-    promote_parser.add_argument(
-        "--force", action="store_true", help="overwrite existing stock files"
-    )
     promote_parser.set_defaults(handler=run_promote_review)
 
     refresh_parser = subparsers.add_parser(
@@ -866,7 +863,6 @@ def run_promote_review(args: argparse.Namespace) -> int:
         review_files=list(args.review_file),
         all_files=bool(args.all),
         knowledge_types=list(args.knowledge_type),
-        force=args.force,
     )
 
     for line in render_copy_results_output(

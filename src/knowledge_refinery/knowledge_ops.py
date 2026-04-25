@@ -535,7 +535,6 @@ def promote_review(
     review_files: list[str],
     all_files: bool,
     knowledge_types: list[str] | None = None,
-    force: bool = False,
 ) -> list[CopyResult]:
     root = root.resolve()
     stock_root = root / "shared" / "stock"
@@ -571,29 +570,9 @@ def promote_review(
             knowledge_type if isinstance(knowledge_type, str) else None,
         )
 
-        if target.exists() and not force:
+        if target.exists():
             results.append(CopyResult(source=review_path, target=target, copied=False))
             continue
-
-        if target.exists():
-            existing_doc = parse_knowledge_document(target)
-            existing_header = normalize_knowledge_header(existing_doc)
-            header["source_sessions"] = unique_strings(
-                ensure_string_list(
-                    existing_header.get("source_sessions"), field="source_sessions", path=target
-                )
-                + ensure_string_list(
-                    header.get("source_sessions"), field="source_sessions", path=review_path
-                )
-            )
-            header["derived_from"] = unique_strings(
-                ensure_string_list(
-                    existing_header.get("derived_from"), field="derived_from", path=target
-                )
-                + ensure_string_list(
-                    header.get("derived_from"), field="derived_from", path=review_path
-                )
-            )
 
         target.write_text(render_knowledge_document(header, doc.body), encoding="utf-8")
         results.append(CopyResult(source=review_path, target=target, copied=True))

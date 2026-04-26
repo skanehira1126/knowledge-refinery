@@ -362,6 +362,7 @@ knowledge-refinery skills search knowledge --scope flow --session-id 20260411T04
 knowledge-refinery skills search knowledge --scope stock --knowledge-type reference
 knowledge-refinery skills search knowledge --scope review
 knowledge-refinery skills search knowledge --scope stock
+knowledge-refinery skills upsert-knowledge --scope flow --session-id 20260411T041820Z-l5al2u --file api-rate-limit-notes.md --title "API rate limit notes" --description "Observed API rate limit behavior" --summary "`429` response handling notes" --knowledge-type constructive --tag tech/api --body-file /tmp/body.md
 knowledge-refinery skills search review
 knowledge-refinery skills search review --knowledge-type constructive
 knowledge-refinery skills search review --session-id 20260411T041820Z-l5al2u
@@ -383,6 +384,7 @@ runtime 系コマンドは `skills` 配下のみをサポートします。
 - `skills update-session`: 指定した `sessions/<session_id>/meta.yaml` の主要フィールドを安全に更新する。`--clear-*` で nullable 項目を消せる
 - `skills search sessions`: `sessions/*/meta.yaml` と `state.md` を検索・一覧する。`--session-id`, `--status`, `--phase`, `--domain` で絞り込める
 - `skills search knowledge`: `.refinery` 配下の knowledge Markdown を検索・一覧する。既定では `flow|stock` を対象にし、`--scope raw|flow|review|stock`, `--session-id`, `--tag`, `--knowledge-id`, `--knowledge-type` で絞り込める
+- `skills upsert-knowledge`: `raw|flow|stock` の Markdown knowledge file を型付き引数から作成・更新し、YAML front matter を安全に出力して読み取り検証する
 - `skills search review`: `shared/review/` の review ファイルを検索・一覧する。`--session-id`, `--tag`, `--knowledge-id`, `--knowledge-type`, `--include-rejected` で絞り込める
 - `skills prepare-review`: `flow` 配下の知識ファイルを `shared/review/` へコピーし、`knowledge_id`, `source_sessions`, `derived_from` を正規化する
 - `skills refresh-review`: 既存 review ファイルを元の `flow` から再生成する。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める

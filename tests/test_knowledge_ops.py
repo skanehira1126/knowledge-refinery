@@ -4,13 +4,108 @@ from pathlib import Path
 import pytest
 
 from knowledge_refinery.errors import RefineryConflictError
+from knowledge_refinery.errors import RefineryFormatError
 from knowledge_refinery.errors import RefineryPathError
 from knowledge_refinery.knowledge_ops import list_review
 from knowledge_refinery.knowledge_ops import prepare_review
 from knowledge_refinery.knowledge_ops import promote_review
 from knowledge_refinery.knowledge_ops import refresh_review
 from knowledge_refinery.knowledge_ops import reject_review
+from knowledge_refinery.knowledge_ops import upsert_knowledge
 from tests._support import write_markdown_document
+
+
+def test_upsert_knowledge_creates_flow_with_quoted_yaml_strings(tmp_path: Path) -> None:
+    root = tmp_path / ".refinery"
+
+    result = upsert_knowledge(
+        root,
+        scope="flow",
+        session_id="session-123",
+        file="yaml-frontmatter.md",
+        title="YAML: front matter",
+        description="CLI writes `summary` safely",
+        summary="`summary`: must stay a string",
+        knowledge_id="yaml-frontmatter",
+        knowledge_type="constructive",
+        tags=["tech/yaml", "tech/yaml"],
+        source_sessions=[],
+        derived_from=[],
+        confidence=None,
+        body="Body",
+    )
+
+    assert result.created is True
+    assert result.path == root / "sessions" / "session-123" / "flow" / "yaml-frontmatter.md"
+    content = result.path.read_text(encoding="utf-8")
+    assert 'title: "YAML: front matter"' in content
+    assert 'description: "CLI writes `summary` safely"' in content
+    assert 'summary: "`summary`: must stay a string"' in content
+    assert 'knowledge_id: "yaml-frontmatter"' in content
+    assert 'knowledge_type: "constructive"' in content
+    assert '  - "tech/yaml"' in content or '- "tech/yaml"' in content
+    assert content.endswith("Body\n")
+
+
+def test_upsert_knowledge_updates_header_and_preserves_existing_body(tmp_path: Path) -> None:
+    root = tmp_path / ".refinery"
+    flow_path = root / "sessions" / "session-123" / "flow" / "api.md"
+    write_markdown_document(
+        flow_path,
+        {
+            "title": "Old title",
+            "description": "Old description",
+            "summary": "Old summary",
+        },
+        "Existing body",
+    )
+
+    result = upsert_knowledge(
+        root,
+        scope="flow",
+        session_id="session-123",
+        file="api.md",
+        title=None,
+        description=None,
+        summary="New `summary`",
+        knowledge_id=None,
+        knowledge_type=None,
+        tags=[],
+        source_sessions=[],
+        derived_from=[],
+        confidence=None,
+        body=None,
+    )
+
+    assert result.created is False
+    content = flow_path.read_text(encoding="utf-8")
+    assert 'title: "Old title"' in content
+    assert 'summary: "New `summary`"' in content
+    assert content.endswith("Existing body\n")
+
+
+def test_upsert_knowledge_requires_stock_lineage(tmp_path: Path) -> None:
+    root = tmp_path / ".refinery"
+
+    with pytest.raises(RefineryFormatError) as exc_info:
+        upsert_knowledge(
+            root,
+            scope="stock",
+            session_id=None,
+            file=None,
+            title="Stock title",
+            description="Description",
+            summary="Summary",
+            knowledge_id="stock-title",
+            knowledge_type="reference",
+            tags=[],
+            source_sessions=[],
+            derived_from=[],
+            confidence=None,
+            body="Body",
+        )
+
+    assert "source_sessions" in (exc_info.value.detail or "")
 
 
 def test_prepare_review_normalizes_header_and_sets_lineage(tmp_path: Path) -> None:

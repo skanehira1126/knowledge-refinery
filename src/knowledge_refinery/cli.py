@@ -19,11 +19,14 @@ from knowledge_refinery.cli_output import render_review_search_output
 from knowledge_refinery.cli_output import render_session_search_output
 from knowledge_refinery.cli_output import render_session_update_output
 from knowledge_refinery.cli_output import render_update_template_output
+from knowledge_refinery.cli_output import render_upsert_knowledge_output
 from knowledge_refinery.errors import RefineryCliError
+from knowledge_refinery.errors import RefineryPathError
 from knowledge_refinery.knowledge_ops import prepare_review
 from knowledge_refinery.knowledge_ops import promote_review
 from knowledge_refinery.knowledge_ops import refresh_review
 from knowledge_refinery.knowledge_ops import reject_review
+from knowledge_refinery.knowledge_ops import upsert_knowledge
 from knowledge_refinery.search_ops import search_knowledge
 from knowledge_refinery.search_ops import search_review
 from knowledge_refinery.search_ops import search_sessions
@@ -621,6 +624,66 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
     )
     search_sessions_parser.set_defaults(handler=run_search_sessions)
 
+    upsert_parser = subparsers.add_parser(
+        "upsert-knowledge",
+        help="Create or update a Markdown knowledge file with typed YAML front matter",
+    )
+    upsert_parser.add_argument(
+        "--scope",
+        required=True,
+        choices=["raw", "flow", "stock"],
+        help="knowledge layer to update",
+    )
+    upsert_parser.add_argument(
+        "--session-id",
+        default=None,
+        help="session ID for raw or flow knowledge",
+    )
+    upsert_parser.add_argument(
+        "--file",
+        default=None,
+        completion="file",
+        help="Markdown file path relative to the selected scope",
+    )
+    upsert_parser.add_argument("--title", default=None, help="knowledge title")
+    upsert_parser.add_argument("--description", default=None, help="knowledge description")
+    upsert_parser.add_argument("--summary", default=None, help="knowledge summary")
+    upsert_parser.add_argument("--knowledge-id", default=None, help="stable knowledge slug")
+    upsert_parser.add_argument(
+        "--knowledge-type",
+        default=None,
+        choices=["reference", "constructive"],
+        help="knowledge type",
+    )
+    upsert_parser.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        help="tag to set; may be specified multiple times",
+    )
+    upsert_parser.add_argument(
+        "--source-session",
+        action="append",
+        default=[],
+        help="source session ID to set; may be specified multiple times",
+    )
+    upsert_parser.add_argument(
+        "--derived-from",
+        action="append",
+        default=[],
+        help="repository-relative lineage path to set; may be specified multiple times",
+    )
+    upsert_parser.add_argument("--confidence", default=None, help="confidence label")
+    body_group = upsert_parser.add_mutually_exclusive_group()
+    body_group.add_argument("--body", default=None, help="replace body with this text")
+    body_group.add_argument(
+        "--body-file",
+        default=None,
+        help="replace body with the contents of this UTF-8 file",
+    )
+    upsert_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
+    upsert_parser.set_defaults(handler=run_upsert_knowledge)
+
     review_parser = subparsers.add_parser(
         "prepare-review", help="Copy flow knowledge files into shared/review"
     )
@@ -840,6 +903,41 @@ def run_search_knowledge(args: argparse.Namespace) -> int:
     )
     for line in render_knowledge_search_output(entries):
         print(line)
+    return 0
+
+
+def run_upsert_knowledge(args: argparse.Namespace) -> int:
+    body = args.body
+    if args.body_file is not None:
+        body_path = Path(args.body_file)
+        try:
+            body = body_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise RefineryPathError(
+                summary="Knowledge body file could not be read.",
+                path=body_path,
+                detail=str(exc),
+                expected="A readable UTF-8 text file passed with `--body-file`.",
+                suggested_action="Check the body file path and permissions, then rerun.",
+            ) from exc
+
+    result = upsert_knowledge(
+        Path(args.root),
+        scope=args.scope,
+        session_id=args.session_id,
+        file=args.file,
+        title=args.title,
+        description=args.description,
+        summary=args.summary,
+        knowledge_id=args.knowledge_id,
+        knowledge_type=args.knowledge_type,
+        tags=list(args.tag),
+        source_sessions=list(args.source_session),
+        derived_from=list(args.derived_from),
+        confidence=args.confidence,
+        body=body,
+    )
+    print(render_upsert_knowledge_output(result))
     return 0
 
 

@@ -9,6 +9,7 @@ from knowledge_refinery.errors import RefineryFormatError
 from knowledge_refinery.errors import RefineryPathError
 from knowledge_refinery.front_matter import render_front_matter
 from knowledge_refinery.front_matter import split_front_matter
+from knowledge_refinery.yaml_utils import dump_yaml
 
 
 GUIDE_FILENAMES = {"AGENTS.md", "README.md"}
@@ -40,6 +41,13 @@ class ReviewEntry:
     description: str
     source_sessions: list[str]
     derived_from: list[str]
+
+
+@dataclass
+class UpsertKnowledgeResult:
+    path: Path
+    created: bool
+    header: dict[str, object]
 
 
 def slugify(value: str) -> str:
@@ -161,6 +169,272 @@ def render_knowledge_document(header: dict[str, object], body: str) -> str:
     if stripped_body:
         return f"{front_matter}\n{stripped_body}\n"
     return f"{front_matter}\n"
+
+
+def render_quoted_knowledge_document(header: dict[str, object], body: str) -> str:
+    front_matter = f"---\n{dump_yaml(header).strip()}\n---\n"
+    stripped_body = body.rstrip()
+    if stripped_body:
+        return f"{front_matter}\n{stripped_body}\n"
+    return f"{front_matter}\n"
+
+
+def ensure_markdown_filename(value: str, *, path: Path) -> str:
+    text = ensure_string(value, field="file", path=path)
+    if ".." in Path(text).parts:
+        raise RefineryPathError(
+            summary="Knowledge file path is outside the target scope.",
+            path=path,
+            detail="`--file` cannot contain parent directory traversal",
+            expected="A relative Markdown path under the selected knowledge scope.",
+            suggested_action="Pass a relative path such as `api-rate-limit.md`.",
+        )
+    if Path(text).suffix != ".md":
+        text = f"{text}.md"
+    return text
+
+
+def resolve_upsert_knowledge_path(
+    root: Path,
+    *,
+    scope: str,
+    session_id: str | None,
+    file: str | None,
+    title: str | None,
+    knowledge_id: str | None,
+    knowledge_type: str | None,
+) -> Path:
+    root = root.resolve()
+    scope_root = resolve_upsert_scope_root(root, scope=scope, session_id=session_id)
+    target = infer_upsert_target(
+        scope_root,
+        scope=scope,
+        file=file,
+        title=title,
+        knowledge_id=knowledge_id,
+        knowledge_type=knowledge_type,
+    )
+    return validate_upsert_target(target, scope_root)
+
+
+def resolve_upsert_scope_root(root: Path, *, scope: str, session_id: str | None) -> Path:
+    if scope in {"raw", "flow"}:
+        if session_id is None:
+            raise RefineryCliError(
+                code="session_id_required",
+                summary="Knowledge upsert requires a session_id.",
+                detail=f"`--session-id` is required when `--scope {scope}` is used.",
+                expected="A session ID for raw or flow knowledge.",
+                suggested_action="Rerun with `--session-id <session_id>`.",
+            )
+        return root / "sessions" / session_id / scope
+    if scope == "stock":
+        return root / "shared" / "stock"
+    raise RefineryCliError(
+        code="unsupported_knowledge_scope",
+        summary="Knowledge upsert received an unsupported scope.",
+        detail=f"`--scope` must be raw, flow, or stock; got {scope}",
+        expected="One of: raw, flow, stock.",
+    )
+
+
+def infer_upsert_target(
+    scope_root: Path,
+    *,
+    scope: str,
+    file: str | None,
+    title: str | None,
+    knowledge_id: str | None,
+    knowledge_type: str | None,
+) -> Path:
+    if file is not None:
+        target = Path(file)
+        if target.is_absolute():
+            return target
+        return scope_root / ensure_markdown_filename(file, path=scope_root)
+    if scope == "stock" and knowledge_id is not None:
+        return scope_root / knowledge_target_filename(knowledge_id, knowledge_type)
+    if title is not None:
+        return scope_root / f"{slugify(title)}.md"
+    raise RefineryCliError(
+        code="knowledge_target_required",
+        summary="Knowledge upsert could not infer a target file.",
+        detail="Pass `--file`, `--knowledge-id`, or `--title`.",
+        expected="A target Markdown file for the knowledge document.",
+    )
+
+
+def validate_upsert_target(target: Path, scope_root: Path) -> Path:
+    target = target.resolve()
+    scope_root = scope_root.resolve()
+    try:
+        target.relative_to(scope_root)
+    except ValueError as exc:
+        raise RefineryPathError(
+            summary="Knowledge file path is outside the target scope.",
+            path=target,
+            detail="the resolved target path is not under the selected knowledge scope",
+            expected=f"A Markdown path under {scope_root.as_posix()}.",
+            suggested_action="Pass a relative `--file` path under the selected scope.",
+        ) from exc
+    if target.name in GUIDE_FILENAMES:
+        raise RefineryPathError(
+            summary="Knowledge file path points to a guide file.",
+            path=target,
+            detail="AGENTS.md and README.md are not knowledge documents",
+            expected="A Markdown knowledge file path.",
+            suggested_action="Choose a different Markdown file name for the knowledge document.",
+        )
+    if target.suffix != ".md":
+        raise RefineryPathError(
+            summary="Knowledge file path is not a Markdown file.",
+            path=target,
+            detail="knowledge files must use the .md extension",
+            expected="A Markdown knowledge file path.",
+            suggested_action="Pass a file ending in `.md`.",
+        )
+    return target
+
+
+def apply_optional_string(
+    header: dict[str, object],
+    field: str,
+    value: str | None,
+    *,
+    path: Path,
+) -> None:
+    if value is not None:
+        header[field] = ensure_string(value, field=field, path=path)
+
+
+def validate_required_upsert_fields(
+    header: dict[str, object], *, scope: str, path: Path
+) -> dict[str, object]:
+    required_fields = ["title", "description"]
+    if scope in {"flow", "stock"}:
+        required_fields.append("summary")
+    if scope == "stock":
+        required_fields.extend(["knowledge_id", "source_sessions", "derived_from"])
+
+    normalized = dict(header)
+    for field in required_fields:
+        if field in {"source_sessions", "derived_from"}:
+            values = ensure_string_list(normalized.get(field), field=field, path=path)
+            if not values:
+                raise RefineryFormatError(
+                    summary="Knowledge file has an invalid field value.",
+                    path=path,
+                    detail=f"`{field}` must contain at least one value",
+                    expected=f"A non-empty YAML list for `{field}`.",
+                )
+            normalized[field] = unique_strings(values)
+        else:
+            normalized[field] = ensure_string(normalized.get(field), field=field, path=path)
+    return normalized
+
+
+def validate_upsert_header(
+    header: dict[str, object], *, scope: str, path: Path
+) -> dict[str, object]:
+    normalized = validate_required_upsert_fields(header, scope=scope, path=path)
+    if normalized.get("summary") is not None:
+        normalized["summary"] = ensure_string(
+            normalized.get("summary"), field="summary", path=path
+        )
+
+    if normalized.get("knowledge_id") is not None:
+        normalized["knowledge_id"] = ensure_knowledge_id(normalized.get("knowledge_id"), path=path)
+
+    if normalized.get("knowledge_type") is not None:
+        normalized["knowledge_type"] = ensure_knowledge_type(
+            normalized.get("knowledge_type"), path=path
+        )
+
+    for field in ("tags", "source_sessions", "derived_from"):
+        values = ensure_string_list(normalized.get(field), field=field, path=path)
+        if values:
+            normalized[field] = unique_strings(values)
+        else:
+            normalized.pop(field, None)
+
+    if normalized.get("confidence") is not None:
+        normalized["confidence"] = ensure_string(
+            normalized.get("confidence"), field="confidence", path=path
+        )
+
+    return normalized
+
+
+def upsert_knowledge(
+    root: Path,
+    *,
+    scope: str,
+    session_id: str | None,
+    file: str | None,
+    title: str | None,
+    description: str | None,
+    summary: str | None,
+    knowledge_id: str | None,
+    knowledge_type: str | None,
+    tags: list[str],
+    source_sessions: list[str],
+    derived_from: list[str],
+    confidence: str | None,
+    body: str | None,
+) -> UpsertKnowledgeResult:
+    target = resolve_upsert_knowledge_path(
+        root,
+        scope=scope,
+        session_id=session_id,
+        file=file,
+        title=title,
+        knowledge_id=knowledge_id,
+        knowledge_type=knowledge_type,
+    )
+    created = not target.exists()
+
+    if created:
+        header: dict[str, object] = {}
+        current_body = ""
+    else:
+        doc = parse_knowledge_document(target)
+        header = dict(doc.header)
+        current_body = doc.body
+
+    apply_optional_string(header, "title", title, path=target)
+    apply_optional_string(header, "description", description, path=target)
+    apply_optional_string(header, "summary", summary, path=target)
+    apply_optional_string(header, "knowledge_id", knowledge_id, path=target)
+    apply_optional_string(header, "knowledge_type", knowledge_type, path=target)
+    apply_optional_string(header, "confidence", confidence, path=target)
+
+    if tags:
+        header["tags"] = unique_strings(ensure_string_list(tags, field="tags", path=target))
+    if source_sessions:
+        header["source_sessions"] = unique_strings(
+            ensure_string_list(source_sessions, field="source_sessions", path=target)
+        )
+    if derived_from:
+        header["derived_from"] = unique_strings(
+            ensure_string_list(derived_from, field="derived_from", path=target)
+        )
+
+    if scope in {"raw", "flow"} and session_id is not None:
+        existing_sessions = ensure_string_list(
+            header.get("source_sessions"), field="source_sessions", path=target
+        )
+        if existing_sessions:
+            header["source_sessions"] = unique_strings(existing_sessions)
+
+    header = validate_upsert_header(header, scope=scope, path=target)
+    next_body = current_body if body is None else body
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_quoted_knowledge_document(header, next_body), encoding="utf-8")
+
+    verified = parse_knowledge_document(target)
+    validate_upsert_header(verified.header, scope=scope, path=target)
+    return UpsertKnowledgeResult(path=target, created=created, header=dict(verified.header))
 
 
 def extract_session_id(root: Path, path: Path) -> str:

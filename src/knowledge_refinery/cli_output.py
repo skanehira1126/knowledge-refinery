@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from knowledge_refinery.knowledge_ops import CopyResult
+from knowledge_refinery.knowledge_ops import UpsertKnowledgeResult
 from knowledge_refinery.search_ops import KnowledgeSearchEntry
 from knowledge_refinery.search_ops import SessionSearchEntry
 
@@ -80,6 +81,20 @@ def render_session_update_output(path: Path, meta: Mapping[str, object]) -> str:
             ("phase", str(meta.get("phase", ""))),
             ("flow_status", str(meta.get("flow_status", ""))),
             ("next_action", str(meta.get("next_action", ""))),
+        ]
+    )
+
+
+def render_upsert_knowledge_output(result: UpsertKnowledgeResult) -> str:
+    status = "created" if result.created else "updated"
+    return render_key_value_line(
+        [
+            ("status", status),
+            ("path", result.path.as_posix()),
+            ("knowledge_id", str(result.header.get("knowledge_id", ""))),
+            ("knowledge_type", str(result.header.get("knowledge_type", ""))),
+            ("title", str(result.header.get("title", ""))),
+            ("summary", str(result.header.get("summary", ""))),
         ]
     )
 

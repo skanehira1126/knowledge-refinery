@@ -61,6 +61,40 @@ def test_parser_accepts_review_operation_knowledge_type_selector() -> None:
     assert args.knowledge_type == ["constructive"]
 
 
+def test_parser_accepts_skills_upsert_knowledge() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "skills",
+            "upsert-knowledge",
+            "--scope",
+            "flow",
+            "--session-id",
+            "session-123",
+            "--file",
+            "api.md",
+            "--title",
+            "API",
+            "--description",
+            "Notes",
+            "--summary",
+            "`summary` stays YAML-safe",
+            "--knowledge-type",
+            "constructive",
+            "--tag",
+            "tech/yaml",
+            "--body",
+            "Body",
+        ]
+    )
+
+    assert args.handler is cli.run_upsert_knowledge
+    assert args.scope == "flow"
+    assert args.session_id == "session-123"
+    assert args.file == "api.md"
+    assert args.summary == "`summary` stays YAML-safe"
+    assert args.tag == ["tech/yaml"]
+
+
 def test_parser_rejects_promote_review_force() -> None:
     with pytest.raises(SystemExit):
         cli.build_parser().parse_args(["skills", "promote-review", "--force", "--all"])

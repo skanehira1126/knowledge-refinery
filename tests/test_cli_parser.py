@@ -18,12 +18,11 @@ def test_parser_accepts_update_template() -> None:
     assert args.skill_destination == "agent"
 
 
-def test_parser_accepts_skills_search_knowledge() -> None:
+def test_parser_accepts_knowledge_search() -> None:
     args = cli.build_parser().parse_args(
         [
-            "skills",
-            "search",
             "knowledge",
+            "search",
             "api",
             "rate",
             "--scope",
@@ -36,8 +35,8 @@ def test_parser_accepts_skills_search_knowledge() -> None:
     )
 
     assert args.handler is cli.run_search_knowledge
-    assert args.command == "skills"
-    assert args.skills_command == "search"
+    assert args.command == "knowledge"
+    assert args.knowledge_command == "search"
     assert args.terms == ["api", "rate"]
     assert args.scope == ["flow"]
     assert args.tag == ["domain/api"]
@@ -47,8 +46,8 @@ def test_parser_accepts_skills_search_knowledge() -> None:
 def test_parser_accepts_review_operation_knowledge_type_selector() -> None:
     args = cli.build_parser().parse_args(
         [
-            "skills",
-            "promote-review",
+            "review",
+            "promote",
             "--knowledge-id",
             "api-rate-limit",
             "--knowledge-type",
@@ -61,11 +60,11 @@ def test_parser_accepts_review_operation_knowledge_type_selector() -> None:
     assert args.knowledge_type == ["constructive"]
 
 
-def test_parser_accepts_skills_upsert_knowledge() -> None:
+def test_parser_accepts_knowledge_upsert() -> None:
     args = cli.build_parser().parse_args(
         [
-            "skills",
-            "upsert-knowledge",
+            "knowledge",
+            "upsert",
             "--scope",
             "flow",
             "--session-id",
@@ -97,14 +96,14 @@ def test_parser_accepts_skills_upsert_knowledge() -> None:
 
 def test_parser_rejects_promote_review_force() -> None:
     with pytest.raises(SystemExit):
-        cli.build_parser().parse_args(["skills", "promote-review", "--force", "--all"])
+        cli.build_parser().parse_args(["review", "promote", "--force", "--all"])
 
 
-def test_parser_accepts_skills_update_session() -> None:
+def test_parser_accepts_session_update() -> None:
     args = cli.build_parser().parse_args(
         [
-            "skills",
-            "update-session",
+            "session",
+            "update",
             "--session-id",
             "session-123",
             "--status",
@@ -114,8 +113,8 @@ def test_parser_accepts_skills_update_session() -> None:
     )
 
     assert args.handler is cli.run_update_session
-    assert args.command == "skills"
-    assert args.skills_command == "update-session"
+    assert args.command == "session"
+    assert args.session_command == "update"
     assert args.session_id == "session-123"
     assert args.status == "paused"
     assert args.clear_domain is True

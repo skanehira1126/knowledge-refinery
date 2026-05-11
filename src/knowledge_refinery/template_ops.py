@@ -15,6 +15,7 @@ STATIC_TEMPLATE_COPY_PATHS = (("refinery", ".refinery"),)
 TEMPLATE_METADATA_RELATIVE_PATH = Path(".refinery") / "template-meta.yaml"
 PRESERVE_ON_FORCE_COPY = {
     ("refinery", "shared/state.md"),
+    ("refinery", "shared/experiences/EXPERIENCES.md"),
 }
 
 

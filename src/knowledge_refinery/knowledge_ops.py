@@ -612,7 +612,7 @@ def prepare_review(
                     ),
                     suggested_action=(
                         "Set a distinct `knowledge_id` or rename one of the flow files, "
-                        "then rerun `knowledge-refinery skills prepare-review`."
+                        "then rerun `knowledge-refinery review prepare`."
                     ),
                 )
             if not force:
@@ -752,8 +752,7 @@ def select_review_files_by_knowledge_id(
                     "An existing review file selected by `--knowledge-id` or `--review-file`."
                 ),
                 suggested_action=(
-                    "Check `knowledge-refinery skills search review` and rerun with a "
-                    "valid selector."
+                    "Check `knowledge-refinery review search` and rerun with a valid selector."
                 ),
             )
         if len(matches) > 1:

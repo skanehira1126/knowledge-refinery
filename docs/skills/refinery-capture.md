@@ -8,7 +8,7 @@
 - 作業中に得られた事実を失わず `raw/` に残す
 - 同じ topic の raw を追記ベースで育てる
 - 解釈と観測を混同しないようにする
-- front matter の新規作成・更新は `knowledge-refinery skills upsert-knowledge --scope raw` を優先し、更新後に `knowledge-refinery skills search knowledge --scope raw` で読み取り確認する
+- front matter の新規作成・更新は `knowledge-refinery knowledge upsert --scope raw` を優先し、更新後に `knowledge-refinery knowledge search --scope raw` で読み取り確認する
 
 ## 向いている場面
 

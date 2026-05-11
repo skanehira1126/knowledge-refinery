@@ -18,20 +18,20 @@ description: shared/stock の陳腐化候補を棚卸しし、ユーザと相談
 
 ## Workflow
 
-1. `knowledge-refinery skills search knowledge --scope stock` で stock 一覧を確認し、`title`, `summary`, `knowledge_id`, `knowledge_type`, `tags` を手掛かりに候補を洗い出す。
+1. `knowledge-refinery knowledge search --scope stock` で stock 一覧を確認し、`title`, `summary`, `knowledge_id`, `knowledge_type`, `tags` を手掛かりに候補を洗い出す。
 2. 候補ごとに実ファイルを開き、本文、`derived_from`, `source_sessions` を確認して、何が obsolete なのかを具体化する。
 3. 必要に応じて現行の template / AGENTS / skill / 実装を確認し、stock が今の運用と矛盾していないかを見る。
 4. 候補を「削除推奨」「更新推奨」「維持」のいずれかで整理し、理由を短く添えてユーザへ提示する。
 5. ユーザ合意を得た候補だけを削除または更新する。削除は一括ではなく、理由ごとにまとめて確認してよい。
 6. stock を整理した結果、同じ知識が `flow` にも残っており、しかも session 固有で再利用価値が低い場合は、その `flow` も削除候補としてユーザに確認する。
-7. 変更後は `knowledge-refinery skills search knowledge --scope stock` や `--scope flow` で再確認し、検索ノイズが下がっているかを確認する。
+7. 変更後は `knowledge-refinery knowledge search --scope stock` や `--scope flow` で再確認し、検索ノイズが下がっているかを確認する。
 
 ## Preferred commands
 
-- `knowledge-refinery skills search knowledge --scope stock`
-- `knowledge-refinery skills search knowledge --scope stock --knowledge-type reference`
-- `knowledge-refinery skills search knowledge --scope stock --knowledge-type constructive`
-- `knowledge-refinery skills search knowledge --scope flow`
+- `knowledge-refinery knowledge search --scope stock`
+- `knowledge-refinery knowledge search --scope stock --knowledge-type reference`
+- `knowledge-refinery knowledge search --scope stock --knowledge-type constructive`
+- `knowledge-refinery knowledge search --scope flow`
 
 ## Obsolete signals
 

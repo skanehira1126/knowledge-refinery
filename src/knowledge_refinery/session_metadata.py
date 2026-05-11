@@ -117,7 +117,7 @@ def resolve_session_meta_path(root: Path, session_id: str) -> Path:
             detail="no session matched the selected session_id",
             expected="An existing `.refinery/sessions/<session_id>/meta.yaml` file.",
             suggested_action=(
-                "Check the session ID with `knowledge-refinery skills search sessions` and retry."
+                "Check the session ID with `knowledge-refinery session search` and retry."
             ),
         )
     return meta_path
@@ -143,8 +143,7 @@ def update_session(
             detail=f"unsupported update fields: {joined}",
             expected=f"Supported fields: {', '.join(SESSION_UPDATE_FIELDS)}",
             suggested_action=(
-                "Use one of the supported `knowledge-refinery skills update-session` "
-                "options and retry."
+                "Use one of the supported `knowledge-refinery session update` options and retry."
             ),
         )
 
@@ -180,7 +179,7 @@ def update_session(
             detail="provide at least one update option or `--clear-*` option",
             expected="At least one session metadata field selected for update.",
             suggested_action=(
-                "Pass one or more `knowledge-refinery skills update-session` options and retry."
+                "Pass one or more `knowledge-refinery session update` options and retry."
             ),
         )
 

@@ -21,6 +21,8 @@ src/
             SKILL.md
           refinery-curation/
             SKILL.md
+          refinery-experiences/
+            SKILL.md
           refinery-repair/
             SKILL.md
           refinery-session/
@@ -34,19 +36,23 @@ src/
             rejected/
               AGENTS.md
           state.md
+          experiences/
+            AGENTS.md
+            EXPERIENCES.md
           stock/
             AGENTS.md
 ```
 
 ## メタデータとヘッダ仕様
 
-refinery では、構造化メタデータを以下の 3 系統で管理します。
+refinery では、構造化メタデータを以下の 4 系統で管理します。
 
 1. YAML ファイルとしての `meta.yaml`
 2. `state.md` の YAML front matter
 3. 知識 Markdown (`raw/`, `flow/`, `shared/review/`, `shared/stock/`) の YAML front matter
+4. experiences Markdown (`shared/experiences/EXPERIENCES.md`, `shared/experiences/**/*.md`) の YAML front matter
 
-CLI が読むメタデータは YAML として正しく保ってください。文字列置換で壊さず、session metadata は `knowledge-refinery skills update-session` などの CLI 経由で更新する前提です。
+CLI が読むメタデータは YAML として正しく保ってください。文字列置換で壊さず、session metadata は `knowledge-refinery session update` などの CLI 経由で更新する前提です。
 
 ### `.refinery/template-meta.yaml`
 
@@ -64,7 +70,7 @@ cli_version: 0.1.0
 
 ### `.refinery/sessions/<session_id>/meta.yaml`
 
-セッション単位の状態を管理する canonical な YAML です。`init-session` は初期状態として次のキーを生成します。
+セッション単位の状態を管理する canonical な YAML です。`session init` は初期状態として次のキーを生成します。
 
 | キー | 型 | 必須 | 説明 |
 | --- | --- | --- | --- |
@@ -104,7 +110,7 @@ cli_version: 0.1.0
 - `meta.yaml` はトップレベル mapping として保つ
 - 既存キーは意味と型を維持する
 - `null`, list, scalar を文字列化しない
-- 更新後は `knowledge-refinery skills search sessions` で読み取り確認する
+- 更新後は `knowledge-refinery session search` で読み取り確認する
 
 ### `state.md`
 
@@ -139,6 +145,48 @@ description: プロジェクト全体の現在地（要点のみ）
 - shared `state.md` はプロジェクト全体の現在地だけを要点で保つ
 - `state.md` は知識ファイルではなく現在地メモなので、`knowledge_id` や `source_sessions` は不要
 
+### `shared/experiences`
+
+`shared/experiences` は、`shared/stock` に蓄積した安定知識から手動で抽出した短い経験則を置く場所です。
+これは LLM の重みを更新する学習システムではなく、後続セッションで必要な範囲だけ読み込むための圧縮された外部知識です。
+
+`shared/experiences/EXPERIENCES.md` は、どの作業でどの experience ファイルを読むかを管理する index として扱います。本文に経験則を詰め込みすぎず、個別の経験則はサブディレクトリ配下の Markdown に分けます。
+
+推奨構成:
+
+```text
+.refinery/shared/experiences/
+  AGENTS.md
+  EXPERIENCES.md
+  repository/
+    maintenance.md
+  coding/
+    python-cli.md
+  review/
+    knowledge-promotion.md
+```
+
+experience ファイルの header 例:
+
+```yaml
+---
+title: Repository Maintenance Experiences
+description: knowledge-refinery リポジトリ保守時に再利用する経験則
+source_stock:
+  - constructive--template-update-policy
+  - reference--knowledge-file-schema
+confidence: medium
+---
+```
+
+運用ルール:
+
+- 通常作業時はまず `EXPERIENCES.md` を読み、関連する experience ファイルだけを読む
+- 詳細な根拠、反例、更新判断が必要な場合だけ `source_stock` の stock を読む
+- experience は stock の全文要約ではなく、繰り返し使う判断原則、適用条件、確認観点に絞る
+- 新しい事実は直接 experience に入れず、先に `flow` / `review` / `stock` の通常経路で安定化する
+- `update-template` では既存の `shared/experiences/EXPERIENCES.md` を保持する
+
 ### 知識 Markdown の YAML front matter
 
 refinery で扱う知識ファイルは、`raw/`, `flow/`, `shared/review/`, `shared/stock/` を問わず、原則 Markdown (`.md`) で管理します。1 ファイル 1 トピックを基本とし、各ファイルの先頭に YAML front matter を付けます。
@@ -168,9 +216,9 @@ refinery で扱う知識ファイルは、`raw/`, `flow/`, `shared/review/`, `sh
 
 補足:
 
-- `prepare-review` は `flow` から `review` を生成する際に `knowledge_id`, `source_sessions`, `derived_from` を正規化する
+- `review prepare` は `flow` から `review` を生成する際に `knowledge_id`, `source_sessions`, `derived_from` を正規化する
 - `knowledge_type` を付けた知識は、review / stock のファイル名にも type を織り込み、`reference` と `constructive` の衝突を避ける
-- `promote-review` は `review` から新規 `stock` へコピーする。既存 `stock` がある場合は、安定知識の本文を暗黙に置換しないためスキップする
+- `review promote` は `review` から新規 `stock` へコピーする。既存 `stock` がある場合は、安定知識の本文を暗黙に置換しないためスキップする
 - `tags` は string 1 個でも CLI では受理するが、canonical format は YAML list
 - `source_sessions` と `derived_from` も canonical format は YAML list
 - `review` / `stock` では `summary` を空にしない
@@ -276,7 +324,9 @@ uv run tox -e py313
 
 ## 導入手順
 
-### 1) テンプレートを対象リポジトリへコピー
+### 新規導入
+
+#### 1) テンプレートを対象リポジトリへコピー
 
 ```bash
 uv run knowledge-refinery apply-template --target /path/to/your-repo
@@ -289,7 +339,7 @@ uv run knowledge-refinery apply-template --target /path/to/your-repo --skill-des
 - `.refinery/shared/` の初期配置
 - `.refinery/template-meta.yaml` への `cli_version` 記録
 
-### 2) 対象リポジトリで CLI を使えるようにする
+#### 2) 対象リポジトリで CLI を使えるようにする
 
 展開先では `knowledge-refinery` CLI を別途インストールして使う前提です。`uv tool install` でこのパッケージを入れてください。
 
@@ -299,11 +349,9 @@ uv tool install /path/to/knowledge-refinery
 
 `PyYAML` は CLI の依存に含まれているため、追加で `uv add PyYAML` する必要はありません。
 
-パッケージ更新後にインストール済み CLI を追従させたい場合も、同じ `uv tool install /path/to/knowledge-refinery` を再実行すればよいです。
+#### 3) 対象リポジトリの `AGENTS.md` または `CLAUDE.md` に追記
 
-### 3) 対象リポジトリの `AGENTS.md` または `CLAUDE.md` に追記
-
-対象のガイドファイルには別コマンドで管理ブロックを追記または更新します。
+対象のガイドファイルには別コマンドで管理ブロックを追記します。
 
 ```bash
 knowledge-refinery update-agents-md --target /path/to/your-repo --lang jp
@@ -311,32 +359,21 @@ knowledge-refinery update-agents-md --target /path/to/your-repo --lang en
 knowledge-refinery update-agents-md --target /path/to/your-repo --filename CLAUDE.md --lang jp
 ```
 
-このコマンドは、展開先の `AGENTS.md` または `CLAUDE.md` に managed block を追加し、既存ブロックがある場合は選んだ言語で更新します。`--target` にファイルパスを直接渡した場合は、そのファイル名を優先します。
+このコマンドは、展開先の `AGENTS.md` または `CLAUDE.md` に managed block を追加します。`--target` にファイルパスを直接渡した場合は、そのファイル名を優先します。
 
-### 4) パッケージ更新後に配布物を追従更新
-
-埋め込み template を更新したあとに配布先の skill や shared 配下を追従させたい場合は、更新専用コマンドを使います。
-
-```bash
-knowledge-refinery update-template --target /path/to/your-repo
-knowledge-refinery update-template --target /path/to/your-repo --skill-destination agent
-knowledge-refinery update-agents-md --target /path/to/your-repo --lang jp
-```
-
-`update-template` は `apply-template --force` 相当で、既存の `.codex/skills/` または `.agent/skills/` と `.refinery/shared/` を上書き更新します。あわせて `.refinery/template-meta.yaml` も更新し、その時点で使った CLI バージョンを `cli_version` として記録します。
-
-ただし、運用で育てる前提の `.refinery/shared/state.md` は既存ファイルがある場合に保持し、上書きしません。
-
-### 5) skills 配置確認
+#### 4) 配置確認
 
 以下が存在することを確認してください。
 
 - `.codex/skills/refinery-capture/SKILL.md` または `.agent/skills/refinery-capture/SKILL.md`
 - `.codex/skills/refinery-curation/SKILL.md` または `.agent/skills/refinery-curation/SKILL.md`
+- `.codex/skills/refinery-experiences/SKILL.md` または `.agent/skills/refinery-experiences/SKILL.md`
 - `.codex/skills/refinery-session/SKILL.md` または `.agent/skills/refinery-session/SKILL.md`
 - `.codex/skills/refinery-shared/SKILL.md` または `.agent/skills/refinery-shared/SKILL.md`
 - `.codex/skills/refinery-repair/SKILL.md` または `.agent/skills/refinery-repair/SKILL.md`
 - `.refinery/template-meta.yaml`
+- `.refinery/shared/experiences/AGENTS.md`
+- `.refinery/shared/experiences/EXPERIENCES.md`
 - `.refinery/shared/review/AGENTS.md`
 - `.refinery/shared/stock/AGENTS.md`
 
@@ -346,51 +383,87 @@ knowledge-refinery update-agents-md --target /path/to/your-repo --lang jp
 - `refinery-capture`: 作業中の証拠や観測事実を `raw/` へ軽量記録
 - `refinery-curation`: `raw/` の証拠を `flow/` の暫定知識へ整理
 - `refinery-shared`: review 候補の promote / reject と shared 更新
+- `refinery-experiences`: `shared/stock` から短い経験則を手動抽出し、`EXPERIENCES.md` の参照範囲を管理
 - `refinery-repair`: front matter や `meta.yaml` の修復
 
-### 6) skills runtime CLI
+### 既存導入先の更新
+
+#### 1) CLI を更新する
+
+パッケージ更新後にインストール済み CLI を追従させたい場合は、`uv tool install` を再実行します。
+
+```bash
+uv tool install /path/to/knowledge-refinery
+```
+
+#### 2) 配布済みテンプレートを更新する
+
+埋め込み template を更新したあとに配布先の skill や shared 配下を追従させたい場合は、更新専用コマンドを使います。
+
+```bash
+knowledge-refinery update-template --target /path/to/your-repo
+knowledge-refinery update-template --target /path/to/your-repo --skill-destination agent
+```
+
+`update-template` は `apply-template --force` 相当で、既存の `.codex/skills/` または `.agent/skills/` と `.refinery/shared/` を上書き更新します。あわせて `.refinery/template-meta.yaml` も更新し、その時点で使った CLI バージョンを `cli_version` として記録します。
+
+ただし、運用で育てる前提の `.refinery/shared/state.md` と `.refinery/shared/experiences/EXPERIENCES.md` は既存ファイルがある場合に保持し、上書きしません。
+
+#### 3) ガイドファイルの managed block を更新する
+
+`AGENTS.md` または `CLAUDE.md` の managed block も、必要な言語で更新します。
+
+```bash
+knowledge-refinery update-agents-md --target /path/to/your-repo --lang jp
+knowledge-refinery update-agents-md --target /path/to/your-repo --lang en
+knowledge-refinery update-agents-md --target /path/to/your-repo --filename CLAUDE.md --lang jp
+```
+
+既存ブロックがある場合は、選んだ言語で置き換えます。
+
+### runtime CLI
 
 展開先では、インストール済みの `knowledge-refinery` CLI をそのまま使えます。
 
 ```bash
-knowledge-refinery skills init-session --task "調査を始める"
-knowledge-refinery skills update-session --session-id 20260411T041820Z-l5al2u --status paused --phase analysis
-knowledge-refinery skills update-session --session-id 20260411T041820Z-l5al2u --clear-blocked-reason
-knowledge-refinery skills search sessions
-knowledge-refinery skills search knowledge
-knowledge-refinery skills search knowledge --scope flow --session-id 20260411T041820Z-l5al2u
-knowledge-refinery skills search knowledge --scope stock --knowledge-type reference
-knowledge-refinery skills search knowledge --scope review
-knowledge-refinery skills search knowledge --scope stock
-knowledge-refinery skills upsert-knowledge --scope flow --session-id 20260411T041820Z-l5al2u --file api-rate-limit-notes.md --title "API rate limit notes" --description "Observed API rate limit behavior" --summary "`429` response handling notes" --knowledge-type constructive --tag tech/api --body-file /tmp/body.md
-knowledge-refinery skills search review
-knowledge-refinery skills search review --knowledge-type constructive
-knowledge-refinery skills search review --session-id 20260411T041820Z-l5al2u
-knowledge-refinery skills prepare-review --session-id 20260411T041820Z-l5al2u
-knowledge-refinery skills promote-review --knowledge-id api-rate-limit-notes --knowledge-type reference
-knowledge-refinery skills refresh-review --review-file .refinery/shared/review/20260411T041820Z-l5al2u--reference--api-rate-limit-notes.md
-knowledge-refinery skills promote-review --review-file .refinery/shared/review/20260411T041820Z-l5al2u--reference--api-rate-limit-notes.md
-knowledge-refinery skills reject-review --review-file .refinery/shared/review/20260411T041820Z-l5al2u--reference--api-rate-limit-notes.md
+knowledge-refinery session init --task "調査を始める"
+knowledge-refinery session update --session-id 20260411T041820Z-l5al2u --status paused --phase analysis
+knowledge-refinery session update --session-id 20260411T041820Z-l5al2u --clear-blocked-reason
+knowledge-refinery session search
+knowledge-refinery knowledge search
+knowledge-refinery knowledge search --scope flow --session-id 20260411T041820Z-l5al2u
+knowledge-refinery knowledge search --scope stock --knowledge-type reference
+knowledge-refinery knowledge search --scope review
+knowledge-refinery knowledge search --scope stock
+knowledge-refinery knowledge upsert --scope flow --session-id 20260411T041820Z-l5al2u --file api-rate-limit-notes.md --title "API rate limit notes" --description "Observed API rate limit behavior" --summary "`429` response handling notes" --knowledge-type constructive --tag tech/api --body-file /tmp/body.md
+knowledge-refinery review search
+knowledge-refinery review search --knowledge-type constructive
+knowledge-refinery review search --session-id 20260411T041820Z-l5al2u
+knowledge-refinery review prepare --session-id 20260411T041820Z-l5al2u
+knowledge-refinery review promote --knowledge-id api-rate-limit-notes --knowledge-type reference
+knowledge-refinery review refresh --review-file .refinery/shared/review/20260411T041820Z-l5al2u--reference--api-rate-limit-notes.md
+knowledge-refinery review promote --review-file .refinery/shared/review/20260411T041820Z-l5al2u--reference--api-rate-limit-notes.md
+knowledge-refinery review reject --review-file .refinery/shared/review/20260411T041820Z-l5al2u--reference--api-rate-limit-notes.md
 ```
 
-runtime 系コマンドは `skills` 配下のみをサポートします。
+runtime 系コマンドは `session`, `knowledge`, `review` 配下で提供します。
 
 各 CLI の役割は以下です。
 
 - `apply-template`: リポジトリへ refinery テンプレートを配布し、skills を `.codex` または `.agent` に配置しつつ shared フォルダを初期化する
 - `update-template`: 既存の配布先に対して template を再適用し、skills と shared フォルダを上書き更新する
 - `update-agents-md`: `AGENTS.md` または `CLAUDE.md` の managed block を `jp` または `en` で追加・更新する
-- `skills init-session`: `sessions/<session_id>/` 配下の `raw/`, `flow/`, それぞれのローカルルール `AGENTS.md`, `state.md`, `meta.yaml` を作る
-- `skills update-session`: 指定した `sessions/<session_id>/meta.yaml` の主要フィールドを安全に更新する。`--clear-*` で nullable 項目を消せる
-- `skills search sessions`: `sessions/*/meta.yaml` と `state.md` を検索・一覧する。`--session-id`, `--status`, `--phase`, `--domain` で絞り込める
-- `skills search knowledge`: `.refinery` 配下の knowledge Markdown を検索・一覧する。既定では `flow|stock` を対象にし、`--scope raw|flow|review|stock`, `--session-id`, `--tag`, `--knowledge-id`, `--knowledge-type` で絞り込める
-- `skills upsert-knowledge`: `raw|flow|stock` の Markdown knowledge file を型付き引数から作成・更新し、YAML front matter を安全に出力して読み取り検証する
-- `skills search review`: `shared/review/` の review ファイルを検索・一覧する。`--session-id`, `--tag`, `--knowledge-id`, `--knowledge-type`, `--include-rejected` で絞り込める
-- `skills prepare-review`: `flow` 配下の知識ファイルを `shared/review/` へコピーし、`knowledge_id`, `source_sessions`, `derived_from` を正規化する
-- `skills refresh-review`: 既存 review ファイルを元の `flow` から再生成する。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
-- `skills promote-review`: 指定した `shared/review/` の知識ファイルを `shared/stock/` へコピーする。既存 stock は上書きせずスキップする。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
-- `skills reject-review`: 指定した review ファイルを `shared/review/rejected/` へ移動する。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
+- `session init`: `sessions/<session_id>/` 配下の `raw/`, `flow/`, それぞれのローカルルール `AGENTS.md`, `state.md`, `meta.yaml` を作る
+- `session update`: 指定した `sessions/<session_id>/meta.yaml` の主要フィールドを安全に更新する。`--clear-*` で nullable 項目を消せる
+- `session search`: `sessions/*/meta.yaml` と `state.md` を検索・一覧する。`--session-id`, `--status`, `--phase`, `--domain` で絞り込める
+- `knowledge search`: `.refinery` 配下の knowledge Markdown を検索・一覧する。既定では `flow|stock` を対象にし、`--scope raw|flow|review|stock`, `--session-id`, `--tag`, `--knowledge-id`, `--knowledge-type` で絞り込める
+- `knowledge upsert`: `raw|flow|stock` の Markdown knowledge file を型付き引数から作成・更新し、YAML front matter を安全に出力して読み取り検証する
+- `review search`: `shared/review/` の review ファイルを検索・一覧する。`--session-id`, `--tag`, `--knowledge-id`, `--knowledge-type`, `--include-rejected` で絞り込める
+- `review prepare`: `flow` 配下の知識ファイルを `shared/review/` へコピーし、`knowledge_id`, `source_sessions`, `derived_from` を正規化する
+- `review refresh`: 既存 review ファイルを元の `flow` から再生成する。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
+- `review promote`: 指定した `shared/review/` の知識ファイルを `shared/stock/` へコピーする。既存 stock は上書きせずスキップする。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
+- `review reject`: 指定した review ファイルを `shared/review/rejected/` へ移動する。`--knowledge-id` が type 違いで曖昧な場合は `--knowledge-type` で絞り込める
 
-`skills init-session` はリポジトリ全体の初期化ではなく、セッション単位の作業フォルダ初期化です。
+`session init` はリポジトリ全体の初期化ではなく、セッション単位の作業フォルダ初期化です。
 
 配布される skill / AGENTS では、shared 更新ルールを満たす場合に `shared/stock` や `shared/state.md` を追加のユーザー確認なしで更新してよい運用を前提とします。CLI 自体は引き続き明示コマンドですが、利用者が毎回「promote してよい」と手動指示する前提ではありません。

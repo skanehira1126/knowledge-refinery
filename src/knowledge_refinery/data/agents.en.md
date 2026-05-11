@@ -2,16 +2,17 @@
 
 This repository uses refinery to manage working notes.
 
-- Start each session with `knowledge-refinery skills init-session --task "..."`.
+- Start each session with `knowledge-refinery session init --task "..."`.
 - Record evidence in `raw/`, tentative knowledge in `flow/`, and current status in `state.md`.
 - Keep only stable knowledge in `shared/stock`.
+- Store short, manually distilled experience rules from `shared/stock` in `shared/experiences`, and manage their routing in `shared/experiences/EXPERIENCES.md`.
 - Store review snapshots copied from `flow` in `shared/review`.
 - Store removed review candidates in `shared/review/rejected`.
-- For any session that updates `flow`, prepare or refresh the review snapshot before ending the task, then check the review queue with `knowledge-refinery skills search review` or an equivalent command, and if there are promotion candidates, use `refinery-shared` to decide whether to promote or reject them.
+- For any session that updates `flow`, prepare or refresh the review snapshot before ending the task, then check the review queue with `knowledge-refinery review search` or an equivalent command, and if there are promotion candidates, use `refinery-shared` to decide whether to promote or reject them.
 - Knowledge files should generally be Markdown (`.md`) with YAML front matter at the top for searchability.
 - Put directory-specific operating rules in each directory's `AGENTS.md`.
 - You may update shared content autonomously when the change satisfies the shared-layer rules.
-- Prefer `knowledge-refinery skills update-session` when updating `sessions/*/meta.yaml`, and preserve YAML types if manual editing is unavoidable.
+- Prefer `knowledge-refinery session update` when updating `sessions/*/meta.yaml`, and preserve YAML types if manual editing is unavoidable.
 
 ### Knowledge File Format
 
@@ -49,15 +50,16 @@ confidence: medium
 - Use `refinery-capture` when recording lightweight evidence into `raw/` during active work.
 - Use `refinery-curation` when reorganizing `raw/` evidence into provisional `flow/` knowledge at task milestones.
 - Before ending a session that updated `flow`, check the review queue and use `refinery-shared` to decide whether promotion candidates should be promoted or rejected.
+- Use `refinery-experiences` when manually distilling short experience rules from `shared/stock` into `shared/experiences` or updating `EXPERIENCES.md`.
 - Use `refinery-repair` when broken front matter or `meta.yaml` prevents the CLI from reading refinery files.
-- After updating the package, refresh distributed skills and shared template files with `knowledge-refinery update-template --target .`, then refresh the managed guide block with `knowledge-refinery update-agents-md --target . --lang jp|en`. Existing `shared/state.md` is preserved during `update-template`.
+- After updating the package, refresh distributed skills and shared template files with `knowledge-refinery update-template --target .`, then refresh the managed guide block with `knowledge-refinery update-agents-md --target . --lang jp|en`. Existing `shared/state.md` and `shared/experiences/EXPERIENCES.md` are preserved during `update-template`.
 
 ### meta.yaml Update Rules
 
 - Keep `sessions/*/meta.yaml` valid YAML.
 - Preserve existing keys and avoid unintended deletions or type changes.
 - Keep `null`, `[]`, and scalar types intact.
-- After updates, validate with search CLI commands such as `knowledge-refinery skills search sessions` and `knowledge-refinery skills search knowledge`.
+- After updates, validate with search CLI commands such as `knowledge-refinery session search` and `knowledge-refinery knowledge search`.
 
 ### meta.yaml Format
 

@@ -11,5 +11,5 @@
 
 ## 向いている場面
 
-- `knowledge-refinery skills search knowledge`, `knowledge-refinery skills search review`, `knowledge-refinery skills search sessions` が壊れたファイルのせいで失敗するとき
+- `knowledge-refinery knowledge search`, `knowledge-refinery review search`, `knowledge-refinery session search` が壊れたファイルのせいで失敗するとき
 - review / stock 操作の前に形式修復が必要なとき

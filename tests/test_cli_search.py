@@ -46,7 +46,7 @@ def test_search_knowledge_lists_default_flow_and_stock_only(
         "Stable body",
     )
 
-    exit_code = cli.main(["skills", "search", "knowledge", "--root", str(refinery_root)])
+    exit_code = cli.main(["knowledge", "search", "--root", str(refinery_root)])
     captured = capsys.readouterr()
 
     assert exit_code == 0
@@ -89,9 +89,8 @@ def test_search_knowledge_supports_and_terms_and_exact_filters(
 
     exit_code = cli.main(
         [
-            "skills",
-            "search",
             "knowledge",
+            "search",
             "API",
             "rate",
             "--root",
@@ -139,9 +138,8 @@ def test_search_knowledge_raw_scope_respects_session_filter(
 
     exit_code = cli.main(
         [
-            "skills",
-            "search",
             "knowledge",
+            "search",
             "--root",
             str(refinery_root),
             "--scope",
@@ -186,9 +184,8 @@ def test_search_knowledge_can_filter_by_knowledge_type_only(
 
     exit_code = cli.main(
         [
-            "skills",
-            "search",
             "knowledge",
+            "search",
             "--root",
             str(refinery_root),
             "--scope",
@@ -237,9 +234,8 @@ def test_search_review_can_include_rejected_files(
 
     exit_code = cli.main(
         [
-            "skills",
-            "search",
             "review",
+            "search",
             "--root",
             str(refinery_root),
             "--include-rejected",
@@ -305,9 +301,8 @@ def test_search_sessions_reads_meta_and_state_and_filters(
 
     exit_code = cli.main(
         [
-            "skills",
+            "session",
             "search",
-            "sessions",
             "captured",
             "--root",
             str(refinery_root),

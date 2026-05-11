@@ -17,8 +17,8 @@ def test_update_session_updates_selected_fields(
 
     exit_code = cli.main(
         [
-            "skills",
-            "update-session",
+            "session",
+            "update",
             "--root",
             str(refinery_root),
             "--session-id",
@@ -61,8 +61,8 @@ def test_update_session_can_clear_nullable_fields(
 
     exit_code = cli.main(
         [
-            "skills",
-            "update-session",
+            "session",
+            "update",
             "--root",
             str(refinery_root),
             "--session-id",
@@ -95,8 +95,8 @@ def test_update_session_requires_at_least_one_change(
 
     exit_code = cli.main(
         [
-            "skills",
-            "update-session",
+            "session",
+            "update",
             "--root",
             str(refinery_root),
             "--session-id",

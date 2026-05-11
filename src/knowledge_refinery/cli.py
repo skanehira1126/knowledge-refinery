@@ -429,18 +429,30 @@ def build_parser() -> ZshCompletionArgParser:
     )
     agents_parser.set_defaults(handler=run_apply_agents_md)
 
-    skills_parser = subparsers.add_parser(
-        "skills", help="Run refinery runtime commands used by distributed skills"
+    session_parser = subparsers.add_parser(
+        "session", help="Manage refinery sessions and session metadata"
     )
-    skills_subparsers = skills_parser.add_subparsers(dest="skills_command", required=True)
-    add_runtime_subcommands(skills_subparsers)
+    session_subparsers = session_parser.add_subparsers(dest="session_command", required=True)
+    add_session_subcommands(session_subparsers)
+
+    knowledge_parser = subparsers.add_parser(
+        "knowledge", help="Search and edit refinery knowledge files"
+    )
+    knowledge_subparsers = knowledge_parser.add_subparsers(dest="knowledge_command", required=True)
+    add_knowledge_subcommands(knowledge_subparsers)
+
+    review_parser = subparsers.add_parser(
+        "review", help="Manage review snapshots and stock promotion"
+    )
+    review_subparsers = review_parser.add_subparsers(dest="review_command", required=True)
+    add_review_subcommands(review_subparsers)
 
     return parser
 
 
-def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
+def add_session_subcommands(subparsers: argparse._SubParsersAction) -> None:
     init_parser = subparsers.add_parser(
-        "init-session",
+        "init",
         help="Initialize a refinery session",
     )
     init_parser.add_argument("--task", required=True, help="Task summary")
@@ -460,7 +472,7 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
     init_parser.set_defaults(handler=run_init_session)
 
     update_session_parser = subparsers.add_parser(
-        "update-session",
+        "update",
         help="Update selected fields in a refinery session meta.yaml",
     )
     update_session_parser.add_argument("--session-id", required=True, help="Session ID to update")
@@ -496,14 +508,45 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
     )
     update_session_parser.set_defaults(handler=run_update_session)
 
-    search_parser = subparsers.add_parser(
-        "search",
-        help="Search refinery knowledge, review, or session metadata",
+    search_sessions_parser = subparsers.add_parser(
+        "search", help="Search refinery session metadata and state"
     )
-    search_subparsers = search_parser.add_subparsers(dest="search_command", required=True)
+    search_sessions_parser.add_argument(
+        "terms", nargs="*", default=[], help="search terms combined with AND matching"
+    )
+    search_sessions_parser.add_argument(
+        "--root", default=".refinery", help="Refinery root directory"
+    )
+    search_sessions_parser.add_argument(
+        "--session-id",
+        action="append",
+        default=[],
+        help="session ID exact match; may be specified multiple times",
+    )
+    search_sessions_parser.add_argument(
+        "--status",
+        action="append",
+        default=[],
+        help="session status exact match; may be specified multiple times",
+    )
+    search_sessions_parser.add_argument(
+        "--phase",
+        action="append",
+        default=[],
+        help="session phase exact match; may be specified multiple times",
+    )
+    search_sessions_parser.add_argument(
+        "--domain",
+        action="append",
+        default=[],
+        help="session domain exact match; may be specified multiple times",
+    )
+    search_sessions_parser.set_defaults(handler=run_search_sessions)
 
-    search_knowledge_parser = search_subparsers.add_parser(
-        "knowledge", help="Search refinery knowledge files"
+
+def add_knowledge_subcommands(subparsers: argparse._SubParsersAction) -> None:
+    search_knowledge_parser = subparsers.add_parser(
+        "search", help="Search refinery knowledge files"
     )
     search_knowledge_parser.add_argument(
         "terms", nargs="*", default=[], help="search terms combined with AND matching"
@@ -550,82 +593,8 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
     )
     search_knowledge_parser.set_defaults(handler=run_search_knowledge)
 
-    search_review_parser = search_subparsers.add_parser(
-        "review", help="Search review knowledge files in shared/review"
-    )
-    search_review_parser.add_argument(
-        "terms", nargs="*", default=[], help="search terms combined with AND matching"
-    )
-    search_review_parser.add_argument(
-        "--root", default=".refinery", help="Refinery root directory"
-    )
-    search_review_parser.add_argument(
-        "--session-id",
-        action="append",
-        default=[],
-        help="source session ID filter; may be specified multiple times",
-    )
-    search_review_parser.add_argument(
-        "--tag",
-        action="append",
-        default=[],
-        help="require a tag exact match; may be specified multiple times",
-    )
-    search_review_parser.add_argument(
-        "--knowledge-id",
-        action="append",
-        default=[],
-        help="knowledge_id exact match; may be specified multiple times",
-    )
-    search_review_parser.add_argument(
-        "--knowledge-type",
-        action="append",
-        choices=["reference", "constructive"],
-        default=[],
-        help="knowledge_type exact match; may be specified multiple times",
-    )
-    search_review_parser.add_argument(
-        "--include-rejected", action="store_true", help="include rejected review files"
-    )
-    search_review_parser.set_defaults(handler=run_search_review)
-
-    search_sessions_parser = search_subparsers.add_parser(
-        "sessions", help="Search refinery session metadata and state"
-    )
-    search_sessions_parser.add_argument(
-        "terms", nargs="*", default=[], help="search terms combined with AND matching"
-    )
-    search_sessions_parser.add_argument(
-        "--root", default=".refinery", help="Refinery root directory"
-    )
-    search_sessions_parser.add_argument(
-        "--session-id",
-        action="append",
-        default=[],
-        help="session ID exact match; may be specified multiple times",
-    )
-    search_sessions_parser.add_argument(
-        "--status",
-        action="append",
-        default=[],
-        help="session status exact match; may be specified multiple times",
-    )
-    search_sessions_parser.add_argument(
-        "--phase",
-        action="append",
-        default=[],
-        help="session phase exact match; may be specified multiple times",
-    )
-    search_sessions_parser.add_argument(
-        "--domain",
-        action="append",
-        default=[],
-        help="session domain exact match; may be specified multiple times",
-    )
-    search_sessions_parser.set_defaults(handler=run_search_sessions)
-
     upsert_parser = subparsers.add_parser(
-        "upsert-knowledge",
+        "upsert",
         help="Create or update a Markdown knowledge file with typed YAML front matter",
     )
     upsert_parser.add_argument(
@@ -684,8 +653,49 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
     upsert_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
     upsert_parser.set_defaults(handler=run_upsert_knowledge)
 
+
+def add_review_subcommands(subparsers: argparse._SubParsersAction) -> None:
+    search_review_parser = subparsers.add_parser(
+        "search", help="Search review knowledge files in shared/review"
+    )
+    search_review_parser.add_argument(
+        "terms", nargs="*", default=[], help="search terms combined with AND matching"
+    )
+    search_review_parser.add_argument(
+        "--root", default=".refinery", help="Refinery root directory"
+    )
+    search_review_parser.add_argument(
+        "--session-id",
+        action="append",
+        default=[],
+        help="source session ID filter; may be specified multiple times",
+    )
+    search_review_parser.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        help="require a tag exact match; may be specified multiple times",
+    )
+    search_review_parser.add_argument(
+        "--knowledge-id",
+        action="append",
+        default=[],
+        help="knowledge_id exact match; may be specified multiple times",
+    )
+    search_review_parser.add_argument(
+        "--knowledge-type",
+        action="append",
+        choices=["reference", "constructive"],
+        default=[],
+        help="knowledge_type exact match; may be specified multiple times",
+    )
+    search_review_parser.add_argument(
+        "--include-rejected", action="store_true", help="include rejected review files"
+    )
+    search_review_parser.set_defaults(handler=run_search_review)
+
     review_parser = subparsers.add_parser(
-        "prepare-review", help="Copy flow knowledge files into shared/review"
+        "prepare", help="Copy flow knowledge files into shared/review"
     )
     review_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
     review_parser.add_argument(
@@ -697,7 +707,7 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
     review_parser.set_defaults(handler=run_prepare_review)
 
     promote_parser = subparsers.add_parser(
-        "promote-review", help="Copy review knowledge files into shared/stock"
+        "promote", help="Copy review knowledge files into shared/stock"
     )
     promote_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
     promote_parser.add_argument("--all", action="store_true", help="promote all review files")
@@ -723,7 +733,7 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
     promote_parser.set_defaults(handler=run_promote_review)
 
     refresh_parser = subparsers.add_parser(
-        "refresh-review", help="Refresh review files from their flow sources"
+        "refresh", help="Refresh review files from their flow sources"
     )
     refresh_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
     refresh_parser.add_argument("--all", action="store_true", help="refresh all review files")
@@ -749,7 +759,7 @@ def add_runtime_subcommands(subparsers: argparse._SubParsersAction) -> None:
     refresh_parser.set_defaults(handler=run_refresh_review)
 
     reject_parser = subparsers.add_parser(
-        "reject-review", help="Move review files out of the active review queue"
+        "reject", help="Move review files out of the active review queue"
     )
     reject_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
     reject_parser.add_argument("--all", action="store_true", help="reject all review files")

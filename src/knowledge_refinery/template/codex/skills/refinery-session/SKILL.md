@@ -20,9 +20,9 @@ description: セッション運用全体を標準化する orchestrator skill。
 
 ### Session start
 
-1. 対象の会話に対応する `session_id` が未作成なら、`knowledge-refinery skills init-session --task "<task>"` でセッション知識ストアを作成する。
+1. 対象の会話に対応する `session_id` が未作成なら、`knowledge-refinery session init --task "<task>"` でセッション知識ストアを作成する。
 2. 既存 session がある場合は、その `session_id` を確認して以後の更新対象として扱う。
-3. 初回入力時はまず `knowledge-refinery skills search knowledge --scope stock` で既知の安定知識を確認し、その後必要に応じて `knowledge-refinery skills search knowledge --session-id "<session_id>" --scope flow` で未昇格の関連知識を確認する。
+3. 初回入力時はまず `knowledge-refinery knowledge search --scope stock` で既知の安定知識を確認し、その後必要に応じて `knowledge-refinery knowledge search --session-id "<session_id>" --scope flow` で未昇格の関連知識を確認する。
 
 ### During work
 
@@ -41,28 +41,28 @@ description: セッション運用全体を標準化する orchestrator skill。
 ### Before closing the request
 
 1. ユーザの依頼を完了したら、未整理の `raw/` が残っていないか確認し、必要なら `refinery-curation` を再度適用する。
-2. review 用スナップショットが未作成なら `knowledge-refinery skills prepare-review` で `flow` から `shared/review` へコピーする。
-3. 既存の review 用スナップショットを最新の `flow` に置き換える必要がある場合は、`knowledge-refinery skills search review --session-id "<session_id>"` で対象を特定して `knowledge-refinery skills refresh-review --review-file "<review_file>"` を実行する。
+2. review 用スナップショットが未作成なら `knowledge-refinery review prepare` で `flow` から `shared/review` へコピーする。
+3. 既存の review 用スナップショットを最新の `flow` に置き換える必要がある場合は、`knowledge-refinery review search --session-id "<session_id>"` で対象を特定して `knowledge-refinery review refresh --review-file "<review_file>"` を実行する。
 4. review 準備ができたら `refinery-shared` の手順へ進み、promotion / rejection を判断する。
 5. session に紐づく `state.md` を更新し、依頼完了時点の現在地を残す。
 
 ## Preferred commands
 
-- `knowledge-refinery skills init-session --task "<task>"`
-- `knowledge-refinery skills update-session --session-id "<session_id>" --next-action "<next_action>"`
-- `knowledge-refinery skills search sessions`
-- `knowledge-refinery skills search knowledge --session-id "<session_id>" --scope flow`
-- `knowledge-refinery skills search review --session-id "<session_id>"`
-- `knowledge-refinery skills search knowledge --scope stock`
-- `knowledge-refinery skills prepare-review`
-- `knowledge-refinery skills refresh-review --review-file "<review_file>"`
+- `knowledge-refinery session init --task "<task>"`
+- `knowledge-refinery session update --session-id "<session_id>" --next-action "<next_action>"`
+- `knowledge-refinery session search`
+- `knowledge-refinery knowledge search --session-id "<session_id>" --scope flow`
+- `knowledge-refinery review search --session-id "<session_id>"`
+- `knowledge-refinery knowledge search --scope stock`
+- `knowledge-refinery review prepare`
+- `knowledge-refinery review refresh --review-file "<review_file>"`
 
 ## Guardrails
 
 - `shared/` を直接更新しない。
 - `raw` の書き方は `refinery-capture`、`flow` の書き方は `refinery-curation` に委ねる。
 - promotion が必要になったら `refinery-shared` の手順で処理し、追加のユーザー確認待ちは不要とする。
-- `sessions/*/meta.yaml` を更新するときは、まず `knowledge-refinery skills update-session` を使う。
+- `sessions/*/meta.yaml` を更新するときは、まず `knowledge-refinery session update` を使う。
 - `flow -> review` は move ではなく copy で扱う。
 - 同じ session の review は追記ではなく再生成で更新する。
 
@@ -70,7 +70,7 @@ description: セッション運用全体を標準化する orchestrator skill。
 
 - `sessions/*/meta.yaml` は YAML として扱い、文字列置換ベースで更新しない。
 - 既存フィールドの意味・型互換（`null`, list, scalar）を維持する。
-- 更新後は `knowledge-refinery skills search sessions` で読み取り確認し、必要なら差分説明に型変更有無を明記する。
+- 更新後は `knowledge-refinery session search` で読み取り確認し、必要なら差分説明に型変更有無を明記する。
 
 ## meta.yaml 形式
 

@@ -15,7 +15,7 @@ def test_main_warns_when_template_cli_version_differs(
 ) -> None:
     write_text(refinery_root / "template-meta.yaml", "cli_version: 9.9.9\n")
 
-    exit_code = cli.main(["skills", "search", "sessions", "--root", str(refinery_root)])
+    exit_code = cli.main(["session", "search", "--root", str(refinery_root)])
     captured = capsys.readouterr()
 
     assert exit_code == 0
@@ -30,7 +30,7 @@ def test_main_does_not_warn_when_template_cli_version_matches(
 ) -> None:
     write_text(refinery_root / "template-meta.yaml", f"cli_version: {__version__}\n")
 
-    exit_code = cli.main(["skills", "search", "sessions", "--root", str(refinery_root)])
+    exit_code = cli.main(["session", "search", "--root", str(refinery_root)])
     captured = capsys.readouterr()
 
     assert exit_code == 0
@@ -45,9 +45,7 @@ def test_main_renders_structured_error_for_invalid_front_matter(
     bad_file = refinery_root / "sessions" / "session-123" / "flow" / "bad.md"
     write_text(bad_file, "---\n- invalid\n---\n")
 
-    exit_code = cli.main(
-        ["skills", "search", "knowledge", "--root", str(refinery_root), "--scope", "flow"]
-    )
+    exit_code = cli.main(["knowledge", "search", "--root", str(refinery_root), "--scope", "flow"])
     captured = capsys.readouterr()
 
     assert exit_code == 2
@@ -70,7 +68,7 @@ def test_main_renders_structured_error_for_invalid_meta_yaml(
     meta_path = refinery_root / "sessions" / "session-123" / "meta.yaml"
     write_text(meta_path, "- invalid\n")
 
-    exit_code = cli.main(["skills", "search", "sessions", "--root", str(refinery_root)])
+    exit_code = cli.main(["session", "search", "--root", str(refinery_root)])
     captured = capsys.readouterr()
 
     assert exit_code == 2
@@ -102,7 +100,7 @@ def test_main_renders_structured_error_for_refinery_conflict(
 
     monkeypatch.setattr(cli, "run_search_sessions", fake_run_search_sessions)
 
-    exit_code = cli.main(["skills", "search", "sessions"])
+    exit_code = cli.main(["session", "search"])
     captured = capsys.readouterr()
 
     assert exit_code == 2
@@ -119,8 +117,8 @@ def test_main_renders_structured_error_for_missing_review_file(
 
     exit_code = cli.main(
         [
-            "skills",
-            "promote-review",
+            "review",
+            "promote",
             "--root",
             str(refinery_root),
             "--review-file",

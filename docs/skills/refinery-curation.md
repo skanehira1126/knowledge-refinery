@@ -9,7 +9,7 @@
 - `flow` に `title`, `description`, `summary` を持つ知識を作る
 - 必要に応じて `knowledge_type: reference|constructive` を付ける
 - 不確実性や反証を落とさずに暫定知識として保つ
-- front matter の新規作成・更新は `knowledge-refinery skills upsert-knowledge --scope flow` を優先し、更新後に `knowledge-refinery skills search knowledge --scope flow` で読み取り確認する
+- front matter の新規作成・更新は `knowledge-refinery knowledge upsert --scope flow` を優先し、更新後に `knowledge-refinery knowledge search --scope flow` で読み取り確認する
 
 ## 向いている場面
 

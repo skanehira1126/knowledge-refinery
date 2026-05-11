@@ -38,7 +38,8 @@ def render_apply_template_output(
         "`.refinery/template-meta.yaml` were copied.",
         "4) Later template updates can be applied with "
         "`knowledge-refinery update-template --target ...`.",
-        "5) Use `knowledge-refinery skills ...` for session, search, and review operations.",
+        "5) Use `knowledge-refinery session ...`, `knowledge-refinery knowledge ...`, "
+        "or `knowledge-refinery review ...` for runtime operations.",
         "6) Use sessions/*/meta.yaml as the single session metadata format.",
     ]
 
@@ -64,8 +65,10 @@ def render_update_template_output(
         f"3) Review the updated diffs under .{skill_destination}/skills/ and .refinery/shared/.",
         "4) `.refinery/template-meta.yaml` is refreshed to match the CLI version used "
         "for this update.",
-        "5) Existing .refinery/shared/state.md is preserved during template refreshes.",
-        "6) Use `knowledge-refinery skills ...` for session, search, and review operations.",
+        "5) Existing .refinery/shared/state.md is preserved, and "
+        ".refinery/shared/experiences/EXPERIENCES.md is also preserved during template refreshes.",
+        "6) Use `knowledge-refinery session ...`, `knowledge-refinery knowledge ...`, "
+        "or `knowledge-refinery review ...` for runtime operations.",
         "7) Keep sessions/*/meta.yaml as the single session metadata format.",
     ]
 

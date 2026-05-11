@@ -2,16 +2,17 @@
 
 このリポジトリでは refinery を利用して作業記録を管理する。
 
-- セッション開始時は `knowledge-refinery skills init-session --task "..."` を利用する。
+- セッション開始時は `knowledge-refinery session init --task "..."` を利用する。
 - 作業中の証拠は `raw/`、暫定知識は `flow/`、現在地は `state.md` に記録する。
 - `shared/stock` は安定知識のみを格納する。
+- `shared/experiences` は `shared/stock` から手動で抽出した短い経験則を格納し、`shared/experiences/EXPERIENCES.md` で参照範囲を管理する。
 - `shared/review` は `flow` からコピーした review 用スナップショットを格納する。
 - `shared/review/rejected` は review キューから外した rejected ファイルを保管する。
-- `flow` を更新したセッションでは、作業終了前に `knowledge-refinery skills prepare-review` または `knowledge-refinery skills refresh-review` で review スナップショットを整え、`knowledge-refinery skills search review` などで review キューを確認し、昇格候補があれば `refinery-shared` の手順で promote / reject を判断する。
+- `flow` を更新したセッションでは、作業終了前に `knowledge-refinery review prepare` または `knowledge-refinery review refresh` で review スナップショットを整え、`knowledge-refinery review search` などで review キューを確認し、昇格候補があれば `refinery-shared` の手順で promote / reject を判断する。
 - 知識ファイルは原則 Markdown (`.md`) で管理し、検索性のため各ファイルの先頭に YAML front matter を付ける。
 - ディレクトリ単位のローカル運用ルールは各ディレクトリの `AGENTS.md` に置く。
 - shared 領域はルールを満たす更新であれば自律的に更新してよい。
-- `sessions/*/meta.yaml` の更新は `knowledge-refinery skills update-session` を優先し、直接編集が必要な場合だけ YAML の型を保って扱う。
+- `sessions/*/meta.yaml` の更新は `knowledge-refinery session update` を優先し、直接編集が必要な場合だけ YAML の型を保って扱う。
 
 ### 知識ファイル形式
 
@@ -49,15 +50,16 @@ confidence: medium
 - 作業中の観測事実や証拠を `raw/` へ軽量記録するときは `refinery-capture` を使う。
 - マイルストーンごとに `raw/` を `flow/` の暫定知識へ整理するときは `refinery-curation` を使う。
 - `flow` を更新したセッションの終了前に review キューを確認し、昇格候補の promote / reject 判断は `refinery-shared` を使う。
+- `shared/stock` から短い経験則を抽出し、`shared/experiences` や `EXPERIENCES.md` を更新するときは `refinery-experiences` を使う。
 - front matter や `meta.yaml` が壊れて CLI が読めないときの修復は `refinery-repair` を使う。
-- パッケージ更新後に配布済み skill や shared テンプレートを追従させる場合は、`knowledge-refinery update-template --target .` を使い、その後 `knowledge-refinery update-agents-md --target . --lang jp|en` で管理ブロックも更新する。既存の `shared/state.md` は update-template では上書きしない。
+- パッケージ更新後に配布済み skill や shared テンプレートを追従させる場合は、`knowledge-refinery update-template --target .` を使い、その後 `knowledge-refinery update-agents-md --target . --lang jp|en` で管理ブロックも更新する。既存の `shared/state.md` と `shared/experiences/EXPERIENCES.md` は update-template では上書きしない。
 
 ### meta.yaml 更新規約
 
 - `sessions/*/meta.yaml` は YAML として正しく保つ。
 - 更新時は既存キーを維持し、意図しない削除・型変更を避ける。
 - `null` / `[]` / 文字列などの型を崩さない。
-- 更新後は `knowledge-refinery skills search sessions` や `knowledge-refinery skills search knowledge` などの検索 CLI で確認する。
+- 更新後は `knowledge-refinery session search` や `knowledge-refinery knowledge search` などの検索 CLI で確認する。
 
 ### meta.yaml 形式
 

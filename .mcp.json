@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "knowledge-refinery": {
+      "title": "Knowledge Refinery",
+      "description": "Search and write a local Git-backed experience vault.",
+      "cwd": ".",
+      "command": "uv",
+      "args": ["run", "--frozen", "--project", ".", "knowledge-refinery", "mcp", "serve"]
+    }
+  }
+}

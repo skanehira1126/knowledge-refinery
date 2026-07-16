@@ -1,1086 +1,540 @@
+from __future__ import annotations
+
 import argparse
-from argparse import SUPPRESS
-from argparse import Action
 from collections.abc import Sequence
+import importlib.util
+import json
 from pathlib import Path
+import shutil
 import sys
-from typing import Any
-from typing import cast
 
 from knowledge_refinery import get_version
 from knowledge_refinery.agents_ops import GUIDE_FILENAME_CHOICES
 from knowledge_refinery.agents_ops import LANG_CHOICES
 from knowledge_refinery.agents_ops import apply_agents_md
-from knowledge_refinery.cli_output import render_apply_template_output
-from knowledge_refinery.cli_output import render_copy_results_output
-from knowledge_refinery.cli_output import render_knowledge_search_output
-from knowledge_refinery.cli_output import render_refresh_review_output
-from knowledge_refinery.cli_output import render_review_search_output
-from knowledge_refinery.cli_output import render_session_search_output
-from knowledge_refinery.cli_output import render_session_update_output
-from knowledge_refinery.cli_output import render_update_template_output
-from knowledge_refinery.cli_output import render_upsert_knowledge_output
+from knowledge_refinery.agents_ops import has_managed_block
+from knowledge_refinery.agents_ops import remove_agents_md
+from knowledge_refinery.config_ops import get_active_vault
+from knowledge_refinery.config_ops import set_active_vault
 from knowledge_refinery.errors import RefineryCliError
-from knowledge_refinery.errors import RefineryPathError
-from knowledge_refinery.knowledge_ops import prepare_review
-from knowledge_refinery.knowledge_ops import promote_review
-from knowledge_refinery.knowledge_ops import refresh_review
-from knowledge_refinery.knowledge_ops import reject_review
-from knowledge_refinery.knowledge_ops import upsert_knowledge
-from knowledge_refinery.search_ops import search_knowledge
-from knowledge_refinery.search_ops import search_review
-from knowledge_refinery.search_ops import search_sessions
-from knowledge_refinery.session_metadata import init_session
-from knowledge_refinery.session_metadata import read_yaml_mapping
-from knowledge_refinery.session_metadata import update_session
-from knowledge_refinery.template_ops import SKILL_DESTINATION_CHOICES
-from knowledge_refinery.template_ops import TEMPLATE_METADATA_RELATIVE_PATH
-from knowledge_refinery.template_ops import apply_template
+from knowledge_refinery.experience_ops import CONFIDENCE_CHOICES
+from knowledge_refinery.experience_ops import EVIDENCE_TYPE_CHOICES
+from knowledge_refinery.experience_ops import EXPERIENCE_STATUS_CHOICES
+from knowledge_refinery.experience_ops import MEMORY_SCOPE_CHOICES
+from knowledge_refinery.experience_ops import SearchFilters
+from knowledge_refinery.experience_ops import parse_datetime_filter
+from knowledge_refinery.experience_ops import search_documents_at
+from knowledge_refinery.experience_ops import upsert_experience_at
+from knowledge_refinery.experience_ops import upsert_memory_at
+from knowledge_refinery.vault_ops import disable_project
+from knowledge_refinery.vault_ops import enable_project
+from knowledge_refinery.vault_ops import init_vault
+from knowledge_refinery.vault_ops import inspect_project
+from knowledge_refinery.vault_ops import resolve_project_id
+from knowledge_refinery.vault_ops import setup_project
 
 
-special_actions = (
-    argparse._SubParsersAction,
-    argparse._HelpAction,
-    argparse._VersionAction,
-)
-flag_actions = (
-    argparse._StoreConstAction,
-    argparse._StoreTrueAction,
-    argparse._StoreFalseAction,
-)
-
-
-class _ZshCompletionAction(Action):
-    def __init__(
-        self,
-        option_strings: Sequence[str],
-        dest: str = SUPPRESS,
-        default: str = SUPPRESS,
-        help: str | None = None,
-        deprecated: bool = False,
-    ) -> None:
-        super().__init__(
-            option_strings=option_strings,
-            dest=dest,
-            default=default,
-            nargs=0,
-            help=help,
-        )
-
-    def __call__(
-        self,
-        parser: argparse.ArgumentParser,
-        namespace: argparse.Namespace,
-        values: str | Sequence[Any] | None,
-        option_string: str | None = None,
-    ) -> None:
-        cast("ZshCompletionArgParser", parser).print_completion_script()
-        parser.exit()
-
-
-class _ZshCompletionArgumentGroup(argparse._ArgumentGroup):
-    def add_argument(self, *args: Any, **kwargs: Any) -> argparse.Action:
-        completion = kwargs.pop("completion", None)
-        action = super().add_argument(*args, **kwargs)
-        if completion is not None:
-            action._completion = completion  # type: ignore[attr-defined] # zsh completion hint
-        return action
-
-
-class ZshCompletionArgParser(argparse.ArgumentParser):
-    def __init__(
-        self,
-        *args: Any,
-        func_name: str | None = None,
-        completion_cmd: str = "zsh",
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(*args, **kwargs)
-
-        # Ensure argument groups can accept completion metadata too.
-        self._argument_group_class = _ZshCompletionArgumentGroup
-
-        self.register("action", "zsh", _ZshCompletionAction)
-
-        if func_name is None:
-            self.func_name = self.prog
-        else:
-            self.func_name = func_name
-        self.func_name = self.func_name.replace("-", "_").replace(" ", "_").replace(".", "_")
-
-        if completion_cmd:
-            self.add_argument(
-                f"--{completion_cmd}",
-                action="zsh",
-                help="print zsh completion scripts of this argparser.",
-            )
-
-    def add_argument_group(self, *args: Any, **kwargs: Any) -> _ZshCompletionArgumentGroup:
-        """Ensure groups also support completion metadata."""
-        group = _ZshCompletionArgumentGroup(self, *args, **kwargs)
-        self._action_groups.append(group)
-        return group
-
-    def add_argument(self, *args: Any, **kwargs: Any) -> argparse.Action:
-        """Add an argument and optionally attach zsh completion metadata.
-
-        Parameters
-        ----------
-        completion : {"file", "dir"} | None, optional (kw-only)
-            zsh補完のために明示的な種別を指定する。
-
-            - ``"file"``: ファイルパス補完。zsh側では ``_files`` を使用する。
-            - ``"dir"``: ディレクトリ補完。zsh側では ``_path_files -/`` を使用する。
-
-        Notes
-        -----
-        - ``completion`` が指定された場合、対応する補完関数を
-          ``argparse.Action`` にメタデータとして保持する。
-        - ``completion`` が指定されない場合でも、以下のヒューリスティックにより
-          パス補完を推定する:
-          - option/positional 名や help, metavar, dest に
-            ``path``, ``file``, ``dir``, ``directory``, ``folder``,
-            ``save``, ``output``, ``config`` が含まれる場合は ``file`` 補完
-          - ``dir`` / ``directory`` / ``folder`` / ``save_dir`` などが
-            明示されている場合は ``dir`` 補完を優先
-        - ``choices`` が定義されている場合は、``choices`` による補完を優先し、
-          ``completion`` の指定は無視する。
-        - ``store_true`` など値を取らないフラグには補完は付与しない。
-        """
-        completion = kwargs.pop("completion", None)
-        action = super().add_argument(*args, **kwargs)
-        if completion is not None:
-            action._completion = completion  # type: ignore[attr-defined] # zsh completion hint
-        return action
-
-    @property
-    def has_subcmds(self) -> bool:
-        return self.check_in_action(argparse._SubParsersAction)
-
-    @property
-    def has_help(self) -> bool:
-        return self.check_in_action(argparse._HelpAction)
-
-    @property
-    def has_version(self) -> bool:
-        return self.check_in_action(argparse._VersionAction)
-
-    def check_in_action(self, target: type[argparse.Action]) -> bool:
-        return any(isinstance(action, target) for action in self._actions)
-
-    def print_completion_script(self) -> None:
-        print(self.build_completion_script())
-
-    def build_completion_script(self) -> str:
-        """
-        make zsh completion scripts
-        """
-
-        # In .py script
-
-        script_header = f"#compdef {self.prog}\n"
-        script_footer = f"compdef _{self.func_name} {self.prog}"
-
-        script_main = self.generate_completion_function()
-
-        return script_header + script_main + script_footer
-
-    def make_function_header(self) -> str:
-        """
-        When this parser has sub command, define subcmds array as local variable.
-        """
-
-        if self.has_subcmds:
-            # parser cannot have any _subParsersAction
-            subcmd_action = self._find_subparsers_action()
-            if subcmd_action is None:
-                return "\n"
-
-            subcmds = []
-            for _pseudo_action in subcmd_action._choices_actions:
-                dest = _pseudo_action.dest
-                if _pseudo_action.help is not None:
-                    prefix = "$"
-                    help = _pseudo_action.help.replace("'", "\\'")
-                else:
-                    prefix = ""
-                    help = ""
-
-                subcmds.append(f"    {prefix}'{dest}[{help}]'")
-            function_headers = [
-                "local -a subcmds",
-                "subcmds=(",
-                "\n".join(subcmds),
-                ")",
-            ]
-
-            return "\n".join(function_headers) + "\n"
-        else:
-            return "\n"
-
-    def _find_subparsers_action(self) -> argparse._SubParsersAction | None:
-        for action in self._actions:
-            if isinstance(action, argparse._SubParsersAction):
-                return action
-        return None
-
-    def generate_completion_function(self, cmd_index: int = 1) -> str:  # noqa: C901
-        """
-        zshの補完用スクリプトを作成する
-
-        """
-        function_header = self.make_function_header()
-
-        arguments = []
-        if self.has_help:
-            arguments.append("  '(- *)'{-h,--help} \\")
-        if self.has_version:
-            arguments.append("  '--version' \\")
-
-        if self.has_subcmds:
-            arguments.append("  '1: :->subcmds' \\")
-            arguments.append("  '*:: :->args'")
-
-            case_statement = "case $state in\n"
-            case_statement += "  subcmds)\n"
-            case_statement += "    _values 'subcommand' $subcmds\n"
-            case_statement += "    ;;\n"
-            case_statement += "  args)\n"
-            case_statement += f'    local cur_cmd="_{self.func_name}_$words[{cmd_index}]"\n'
-            case_statement += "    if (( $+functions[$cur_cmd] )); then\n"
-            case_statement += "      $cur_cmd\n"
-            case_statement += "    fi\n"
-            case_statement += "    ;;\n"
-            case_statement += "esac"
-        else:
-            case_statement = ""
-
-            # postitional argumentsがある場合とない場合で処理が変わる
-            cnt_positional_args = cmd_index
-            positional_args = []
-            for action in sorted(
-                self._actions,
-                key=lambda _act: 1 if _act.option_strings else 0,  # 位置引数から触る
-            ):
-                if isinstance(action, special_actions):
-                    continue
-                if action.help:
-                    prefix = "$" if "'" in action.help else ""
-                    help_text = action.help.replace("'", "\\'")
-                else:
-                    prefix = ""
-                    help_text = ""
-
-                completion_func = self._resolve_completion_function(action)
-
-                if action.option_strings:
-                    choice_sep = " "
-                    if len(action.option_strings) == 1:
-                        arg_value = f"  {prefix}'{action.option_strings[0]}[{help_text}]"
-                    else:
-                        option_strings_join_space = " ".join(action.option_strings)
-                        option_strings_join_comma = ",".join(action.option_strings)
-                        arg_value = (
-                            f"  '({option_strings_join_space})'"
-                            + ("{" + option_strings_join_comma + "}")
-                            + f"{prefix}'[{help_text}]"
-                        )
-                    if isinstance(action, flag_actions):
-                        pass
-                    else:
-                        if completion_func:
-                            arg_value += f": :{completion_func}"
-                        else:
-                            arg_value += ": :"
-
-                else:
-                    choice_sep = " "
-                    if completion_func:
-                        arg_value = (
-                            f"  {prefix}'{cnt_positional_args}:{help_text}:{completion_func}"
-                        )
-                    else:
-                        arg_value = f"  {prefix}'{cnt_positional_args}:{help_text}:"
-                    cnt_positional_args += 1
-
-                if action.choices is not None:
-                    arg_value = arg_value + f"({choice_sep.join(map(str, action.choices))})"
-                else:
-                    arg_value += ""
-
-                if action.option_strings:
-                    arguments.append(arg_value + "' \\")
-                else:
-                    positional_args.append(arg_value + "' \\")
-
-            # 位置引数は(- *)のまえ
-            arguments = positional_args + arguments
-
-        scripts = function_header
-        scripts += "_arguments \\\n" + "\n".join(arguments) + "\n\n"
-        scripts += case_statement
-        scripts = f"_{self.func_name}() " + "{\n" + scripts
-
-        scripts = scripts.replace("\n", "\n" + "  ") + "\n}\n"
-
-        if self.has_subcmds:
-            subcmd_action = self._find_subparsers_action()
-            if subcmd_action is None:
-                return scripts
-            for _, _parser in subcmd_action.choices.items():
-                if isinstance(_parser, ZshCompletionArgParser):
-                    scripts += _parser.generate_completion_function(cmd_index=cmd_index)
-
-        return scripts
-
-    def _resolve_completion_function(self, action: argparse.Action) -> str | None:
-        """Return zsh completion function name for this action, if any."""
-        if self._should_skip_completion(action):
-            return None
-
-        explicit = self._resolve_explicit_completion(action)
-        if explicit is not None:
-            return explicit
-
-        return self._resolve_heuristic_completion(action)
-
-    def _should_skip_completion(self, action: argparse.Action) -> bool:
-        if isinstance(action, flag_actions) or isinstance(action, special_actions):
-            return True
-        return action.choices is not None
-
-    def _resolve_explicit_completion(self, action: argparse.Action) -> str | None:
-        explicit = getattr(action, "_completion", None)
-        if explicit is None:
-            return None
-        mapping = {
-            "file": "_files",
-            "dir": "_path_files -/",
-        }
-        return mapping.get(str(explicit))
-
-    def _resolve_heuristic_completion(self, action: argparse.Action) -> str | None:
-        keywords: list[str] = []
-        keywords.extend(action.option_strings)
-        if action.dest:
-            keywords.append(action.dest)
-        if action.metavar:
-            keywords.append(str(action.metavar))
-        if action.help:
-            keywords.append(action.help)
-
-        haystack = " ".join(keywords).lower()
-        dir_tokens = ("dir", "directory", "folder", "save_dir", "savedir")
-        if any(token in haystack for token in dir_tokens):
-            return "_path_files -/"
-        file_tokens = ("path", "file", "save", "output", "config")
-        if any(token in haystack for token in file_tokens):
-            return "_files"
-        return None
-
-
-def build_parser() -> ZshCompletionArgParser:
-    parser = ZshCompletionArgParser(
-        prog="knowledge-refinery", description="Knowledge refinery CLI"
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="knowledge-refinery",
+        description="Keep project experiences in a central personal refinery repository.",
     )
+    parser.add_argument("--version", action="version", version=get_version())
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    apply_parser = subparsers.add_parser(
-        "apply-template", help="Copy the refinery template into a target repository"
+    vault_parser = subparsers.add_parser("vault", help="Manage the central refinery repository")
+    vault_subparsers = vault_parser.add_subparsers(dest="vault_command", required=True)
+    vault_init = vault_subparsers.add_parser(
+        "init", help="Initialize a central refinery repository"
     )
-    apply_parser.add_argument("--target", default=".", help="target repository path")
-    apply_parser.add_argument("--force", action="store_true", help="overwrite existing files")
-    apply_parser.add_argument(
-        "--skill-destination",
-        choices=SKILL_DESTINATION_CHOICES,
-        default="codex",
-        help="directory for distributed skills: .codex or .agent",
+    vault_init.add_argument("--root", required=True, help="central refinery repository path")
+    vault_init.add_argument("--force", action="store_true", help="refresh managed template files")
+    vault_init.set_defaults(handler=run_vault_init)
+    vault_configure = vault_subparsers.add_parser(
+        "configure", help="Set the active vault used by the local MCP server"
     )
-    apply_parser.set_defaults(handler=run_apply_template)
+    vault_configure.add_argument("--root", required=True, help="central refinery repository path")
+    vault_configure.set_defaults(handler=run_vault_configure)
 
-    update_template_parser = subparsers.add_parser(
-        "update-template",
-        help="Refresh distributed refinery skills and shared files in a target repository",
+    project_parser = subparsers.add_parser("project", help="Connect a project to a refinery")
+    project_subparsers = project_parser.add_subparsers(dest="project_command", required=True)
+    project_setup = project_subparsers.add_parser(
+        "setup", help="Create a project area and link it as .refinery"
     )
-    update_template_parser.add_argument("--target", default=".", help="target repository path")
-    update_template_parser.add_argument(
-        "--skill-destination",
-        choices=SKILL_DESTINATION_CHOICES,
-        default="codex",
-        help="directory for distributed skills: .codex or .agent",
+    project_setup.add_argument("--target", default=".", help="project repository path")
+    project_setup.add_argument("--vault", required=True, help="central refinery repository path")
+    project_setup.add_argument("--project-id", default=None, help="stable project slug")
+    project_setup.add_argument(
+        "--link",
+        action="store_true",
+        help="optionally create a human-facing .refinery symlink",
     )
-    update_template_parser.set_defaults(handler=run_update_template)
+    add_guide_arguments(project_setup)
+    project_setup.add_argument(
+        "--no-agents",
+        action="store_true",
+        help="do not install the managed repository guidance block",
+    )
+    project_setup.set_defaults(handler=run_project_setup)
+
+    project_enable = project_subparsers.add_parser(
+        "enable", help="Re-enable Knowledge Refinery for a configured project"
+    )
+    project_enable.add_argument("--target", default=".", help="project repository path")
+    project_enable.add_argument(
+        "--vault", default=None, help="central vault; defaults to the active vault"
+    )
+    project_enable.add_argument(
+        "--link",
+        action="store_true",
+        help="optionally create a human-facing .refinery symlink",
+    )
+    add_guide_arguments(project_enable)
+    project_enable.set_defaults(handler=run_project_enable)
+
+    project_disable = project_subparsers.add_parser(
+        "disable", help="Disable integration without deleting central knowledge"
+    )
+    project_disable.add_argument("--target", default=".", help="project repository path")
+    project_disable.add_argument("--filename", choices=GUIDE_FILENAME_CHOICES, default="AGENTS.md")
+    project_disable.set_defaults(handler=run_project_disable)
+
+    project_status = project_subparsers.add_parser(
+        "status", help="Inspect repository integration and active-vault consistency"
+    )
+    project_status.add_argument("--target", default=".", help="project repository path")
+    project_status.add_argument("--filename", choices=GUIDE_FILENAME_CHOICES, default="AGENTS.md")
+    project_status.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    project_status.set_defaults(handler=run_project_status)
+
+    experience_parser = subparsers.add_parser("experience", help="Record and search experiences")
+    experience_subparsers = experience_parser.add_subparsers(
+        dest="experience_command", required=True
+    )
+    experience_upsert = experience_subparsers.add_parser(
+        "upsert", help="Create or update one integrated experience document"
+    )
+    experience_upsert.add_argument("--project", default=".", help="configured project path")
+    experience_upsert.add_argument("--experience-id", default=None, help="stable experience ID")
+    experience_upsert.add_argument("--title", required=True, help="experience title")
+    experience_upsert.add_argument("--purpose", required=True, help="purpose of the attempt")
+    experience_upsert.add_argument(
+        "--status",
+        choices=EXPERIENCE_STATUS_CHOICES,
+        default="completed",
+        help="experience outcome state",
+    )
+    experience_upsert.add_argument("--tag", action="append", default=[], help="search tag")
+    experience_upsert.add_argument(
+        "--evidence", action="append", default=[], help="evidence reference; repeatable"
+    )
+    experience_upsert.add_argument(
+        "--related-experience", action="append", default=[], help="related experience ID"
+    )
+    experience_upsert.add_argument(
+        "--supersedes", action="append", default=[], help="superseded experience ID"
+    )
+    experience_upsert.add_argument("--confidence", choices=CONFIDENCE_CHOICES, default=None)
+    add_body_arguments(experience_upsert)
+    experience_upsert.set_defaults(handler=run_experience_upsert)
+
+    experience_search = experience_subparsers.add_parser(
+        "search", help="Search experiences across projects"
+    )
+    add_search_arguments(experience_search)
+    experience_search.add_argument(
+        "--status", action="append", choices=EXPERIENCE_STATUS_CHOICES, default=[]
+    )
+    experience_search.add_argument(
+        "--related-experience", action="append", default=[], help="related experience filter"
+    )
+    experience_search.add_argument(
+        "--evidence-type", action="append", choices=EVIDENCE_TYPE_CHOICES, default=[]
+    )
+    add_typed_search_arguments(experience_search)
+    experience_search.set_defaults(handler=run_experience_search)
+
+    memory_parser = subparsers.add_parser("memory", help="Record and search distilled memory")
+    memory_subparsers = memory_parser.add_subparsers(dest="memory_command", required=True)
+    memory_upsert = memory_subparsers.add_parser(
+        "upsert", help="Create or update a reusable memory document"
+    )
+    memory_upsert.add_argument("--project", default=".", help="configured project path")
+    memory_upsert.add_argument("--memory-id", default=None, help="stable memory ID")
+    memory_upsert.add_argument("--title", required=True, help="memory title")
+    memory_upsert.add_argument("--summary", required=True, help="reusable principle")
+    memory_upsert.add_argument("--tag", action="append", default=[], help="search tag")
+    memory_upsert.add_argument(
+        "--source-experience",
+        action="append",
+        default=[],
+        help="experience ID supporting this memory",
+    )
+    memory_upsert.add_argument("--shared", action="store_true", help="write to shared/memory")
+    memory_upsert.add_argument("--confidence", choices=CONFIDENCE_CHOICES, default=None)
+    memory_upsert.add_argument(
+        "--expected-updated-at",
+        default=None,
+        help="revision returned by a prior read; required when updating existing memory",
+    )
+    add_body_arguments(memory_upsert)
+    memory_upsert.set_defaults(handler=run_memory_upsert)
+
+    memory_search = memory_subparsers.add_parser("search", help="Search project and shared memory")
+    add_search_arguments(memory_search)
+    memory_search.add_argument(
+        "--source-experience", action="append", default=[], help="supporting experience filter"
+    )
+    memory_search.add_argument(
+        "--scope", action="append", choices=MEMORY_SCOPE_CHOICES, default=[]
+    )
+    add_typed_search_arguments(memory_search)
+    memory_search.set_defaults(handler=run_memory_search)
 
     agents_parser = subparsers.add_parser(
-        "update-agents-md",
-        help="Append or update the managed refinery section in a target AGENTS.md or CLAUDE.md",
+        "update-agents-md", help="Update the managed refinery guidance block"
     )
-    agents_parser.add_argument(
-        "--target", default=".", help="target repository path, AGENTS.md path, or CLAUDE.md path"
-    )
-    agents_parser.add_argument(
-        "--lang", choices=LANG_CHOICES, default="jp", help="snippet language"
-    )
-    agents_parser.add_argument(
-        "--filename",
-        choices=GUIDE_FILENAME_CHOICES,
-        default="AGENTS.md",
-        help="guide file to create when --target is a directory",
-    )
+    agents_parser.add_argument("--target", default=".")
+    agents_parser.add_argument("--lang", choices=LANG_CHOICES, default="jp")
+    agents_parser.add_argument("--filename", choices=GUIDE_FILENAME_CHOICES, default="AGENTS.md")
     agents_parser.set_defaults(handler=run_apply_agents_md)
 
-    session_parser = subparsers.add_parser(
-        "session", help="Manage refinery sessions and session metadata"
-    )
-    session_subparsers = session_parser.add_subparsers(dest="session_command", required=True)
-    add_session_subcommands(session_subparsers)
+    mcp_parser = subparsers.add_parser("mcp", help="Run the local MCP server")
+    mcp_subparsers = mcp_parser.add_subparsers(dest="mcp_command", required=True)
+    mcp_serve = mcp_subparsers.add_parser("serve", help="Serve MCP over stdio")
+    mcp_serve.set_defaults(handler=run_mcp_serve)
 
-    knowledge_parser = subparsers.add_parser(
-        "knowledge", help="Search and edit refinery knowledge files"
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="Diagnose runtime, active vault, and project integration"
     )
-    knowledge_subparsers = knowledge_parser.add_subparsers(dest="knowledge_command", required=True)
-    add_knowledge_subcommands(knowledge_subparsers)
-
-    review_parser = subparsers.add_parser(
-        "review", help="Manage review snapshots and stock promotion"
+    doctor_parser.add_argument(
+        "--target",
+        "--project",
+        dest="target",
+        default=".",
+        help="project repository path (--project is a compatibility alias)",
     )
-    review_subparsers = review_parser.add_subparsers(dest="review_command", required=True)
-    add_review_subcommands(review_subparsers)
-
+    doctor_parser.add_argument("--filename", choices=GUIDE_FILENAME_CHOICES, default="AGENTS.md")
+    doctor_parser.add_argument(
+        "--mcp-version",
+        default=None,
+        help="version returned by refinery_info; enables CLI/Plugin drift detection",
+    )
+    doctor_parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    doctor_parser.set_defaults(handler=run_doctor)
     return parser
 
 
-def add_session_subcommands(subparsers: argparse._SubParsersAction) -> None:
-    init_parser = subparsers.add_parser(
-        "init",
-        help="Initialize a refinery session",
-    )
-    init_parser.add_argument("--task", required=True, help="Task summary")
-    init_parser.add_argument("--kind", default="task", help="Session kind (default: task)")
-    init_parser.add_argument(
-        "--title", default=None, help="Session title (default: same as --task)"
-    )
-    init_parser.add_argument(
-        "--created-by",
-        default="user",
-        choices=["user", "llm"],
-        help="Session creator (default: user)",
-    )
-    init_parser.add_argument("--repository", default=None, help="Repository name")
-    init_parser.add_argument("--domain", default=None, help="Session domain")
-    init_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
-    init_parser.set_defaults(handler=run_init_session)
-
-    update_session_parser = subparsers.add_parser(
-        "update",
-        help="Update selected fields in a refinery session meta.yaml",
-    )
-    update_session_parser.add_argument("--session-id", required=True, help="Session ID to update")
-    update_session_parser.add_argument("--title", default=None, help="Session title")
-    update_session_parser.add_argument("--task", default=None, help="Task summary")
-    update_session_parser.add_argument("--status", default=None, help="Session status")
-    update_session_parser.add_argument("--phase", default=None, help="Session phase")
-    update_session_parser.add_argument("--current-step", default=None, help="Current step")
-    update_session_parser.add_argument("--next-action", default=None, help="Next action")
-    update_session_parser.add_argument("--blocked-reason", default=None, help="Blocked reason")
-    update_session_parser.add_argument("--resume-condition", default=None, help="Resume condition")
-    update_session_parser.add_argument("--domain", default=None, help="Session domain")
-    update_session_parser.add_argument("--repository", default=None, help="Repository name")
-    update_session_parser.add_argument(
-        "--evidence-status", default=None, help="Evidence collection status"
-    )
-    update_session_parser.add_argument("--flow-status", default=None, help="Flow status")
-    update_session_parser.add_argument("--synthesis-status", default=None, help="Synthesis status")
-    update_session_parser.add_argument("--coverage-status", default=None, help="Coverage status")
-    update_session_parser.add_argument("--confidence", default=None, help="Confidence level")
-    update_session_parser.add_argument(
-        "--clear-blocked-reason", action="store_true", help="Clear blocked_reason"
-    )
-    update_session_parser.add_argument(
-        "--clear-resume-condition", action="store_true", help="Clear resume_condition"
-    )
-    update_session_parser.add_argument("--clear-domain", action="store_true", help="Clear domain")
-    update_session_parser.add_argument(
-        "--clear-repository", action="store_true", help="Clear repository"
-    )
-    update_session_parser.add_argument(
-        "--root", default=".refinery", help="Refinery root directory"
-    )
-    update_session_parser.set_defaults(handler=run_update_session)
-
-    search_sessions_parser = subparsers.add_parser(
-        "search", help="Search refinery session metadata and state"
-    )
-    search_sessions_parser.add_argument(
-        "terms", nargs="*", default=[], help="search terms combined with AND matching"
-    )
-    search_sessions_parser.add_argument(
-        "--root", default=".refinery", help="Refinery root directory"
-    )
-    search_sessions_parser.add_argument(
-        "--session-id",
-        action="append",
-        default=[],
-        help="session ID exact match; may be specified multiple times",
-    )
-    search_sessions_parser.add_argument(
-        "--status",
-        action="append",
-        default=[],
-        help="session status exact match; may be specified multiple times",
-    )
-    search_sessions_parser.add_argument(
-        "--phase",
-        action="append",
-        default=[],
-        help="session phase exact match; may be specified multiple times",
-    )
-    search_sessions_parser.add_argument(
-        "--domain",
-        action="append",
-        default=[],
-        help="session domain exact match; may be specified multiple times",
-    )
-    search_sessions_parser.set_defaults(handler=run_search_sessions)
+def add_guide_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--lang", choices=LANG_CHOICES, default="jp")
+    parser.add_argument("--filename", choices=GUIDE_FILENAME_CHOICES, default="AGENTS.md")
 
 
-def add_knowledge_subcommands(subparsers: argparse._SubParsersAction) -> None:
-    search_knowledge_parser = subparsers.add_parser(
-        "search", help="Search refinery knowledge files"
-    )
-    search_knowledge_parser.add_argument(
-        "terms", nargs="*", default=[], help="search terms combined with AND matching"
-    )
-    search_knowledge_parser.add_argument(
-        "--root", default=".refinery", help="Refinery root directory"
-    )
-    search_knowledge_parser.add_argument(
-        "--scope",
-        action="append",
-        choices=["raw", "flow", "review", "stock"],
-        default=[],
-        help="limit search to a layer; may be specified multiple times",
-    )
-    search_knowledge_parser.add_argument(
-        "--session-id",
-        action="append",
-        default=[],
-        help=(
-            "session ID filter; path-based for raw/flow and source_sessions-based for review/stock"
-        ),
-    )
-    search_knowledge_parser.add_argument(
-        "--tag",
-        action="append",
-        default=[],
-        help="require a tag exact match; may be specified multiple times",
-    )
-    search_knowledge_parser.add_argument(
-        "--knowledge-id",
-        action="append",
-        default=[],
-        help="knowledge_id exact match; may be specified multiple times",
-    )
-    search_knowledge_parser.add_argument(
-        "--knowledge-type",
-        action="append",
-        choices=["reference", "constructive"],
-        default=[],
-        help="knowledge_type exact match; may be specified multiple times",
-    )
-    search_knowledge_parser.add_argument(
-        "--include-rejected", action="store_true", help="include rejected review files"
-    )
-    search_knowledge_parser.set_defaults(handler=run_search_knowledge)
-
-    upsert_parser = subparsers.add_parser(
-        "upsert",
-        help="Create or update a Markdown knowledge file with typed YAML front matter",
-    )
-    upsert_parser.add_argument(
-        "--scope",
-        required=True,
-        choices=["raw", "flow", "stock"],
-        help="knowledge layer to update",
-    )
-    upsert_parser.add_argument(
-        "--session-id",
-        default=None,
-        help="session ID for raw or flow knowledge",
-    )
-    upsert_parser.add_argument(
-        "--file",
-        default=None,
-        completion="file",
-        help="Markdown file path relative to the selected scope",
-    )
-    upsert_parser.add_argument("--title", default=None, help="knowledge title")
-    upsert_parser.add_argument("--description", default=None, help="knowledge description")
-    upsert_parser.add_argument("--summary", default=None, help="knowledge summary")
-    upsert_parser.add_argument("--knowledge-id", default=None, help="stable knowledge slug")
-    upsert_parser.add_argument(
-        "--knowledge-type",
-        default=None,
-        choices=["reference", "constructive"],
-        help="knowledge type",
-    )
-    upsert_parser.add_argument(
-        "--tag",
-        action="append",
-        default=[],
-        help="tag to set; may be specified multiple times",
-    )
-    upsert_parser.add_argument(
-        "--source-session",
-        action="append",
-        default=[],
-        help="source session ID to set; may be specified multiple times",
-    )
-    upsert_parser.add_argument(
-        "--derived-from",
-        action="append",
-        default=[],
-        help="repository-relative lineage path to set; may be specified multiple times",
-    )
-    upsert_parser.add_argument("--confidence", default=None, help="confidence label")
-    body_group = upsert_parser.add_mutually_exclusive_group()
-    body_group.add_argument("--body", default=None, help="replace body with this text")
-    body_group.add_argument(
-        "--body-file",
-        default=None,
-        help="replace body with the contents of this UTF-8 file",
-    )
-    upsert_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
-    upsert_parser.set_defaults(handler=run_upsert_knowledge)
+def add_body_arguments(parser: argparse.ArgumentParser) -> None:
+    body_group = parser.add_mutually_exclusive_group()
+    body_group.add_argument("--body", default=None, help="Markdown body")
+    body_group.add_argument("--body-file", default=None, help="UTF-8 Markdown body file")
 
 
-def add_review_subcommands(subparsers: argparse._SubParsersAction) -> None:
-    search_review_parser = subparsers.add_parser(
-        "search", help="Search review knowledge files in shared/review"
-    )
-    search_review_parser.add_argument(
-        "terms", nargs="*", default=[], help="search terms combined with AND matching"
-    )
-    search_review_parser.add_argument(
-        "--root", default=".refinery", help="Refinery root directory"
-    )
-    search_review_parser.add_argument(
-        "--session-id",
-        action="append",
-        default=[],
-        help="source session ID filter; may be specified multiple times",
-    )
-    search_review_parser.add_argument(
-        "--tag",
-        action="append",
-        default=[],
-        help="require a tag exact match; may be specified multiple times",
-    )
-    search_review_parser.add_argument(
-        "--knowledge-id",
-        action="append",
-        default=[],
-        help="knowledge_id exact match; may be specified multiple times",
-    )
-    search_review_parser.add_argument(
-        "--knowledge-type",
-        action="append",
-        choices=["reference", "constructive"],
-        default=[],
-        help="knowledge_type exact match; may be specified multiple times",
-    )
-    search_review_parser.add_argument(
-        "--include-rejected", action="store_true", help="include rejected review files"
-    )
-    search_review_parser.set_defaults(handler=run_search_review)
-
-    review_parser = subparsers.add_parser(
-        "prepare", help="Copy flow knowledge files into shared/review"
-    )
-    review_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
-    review_parser.add_argument(
-        "--session-id", default=None, help="Session ID to process (default: all sessions)"
-    )
-    review_parser.add_argument(
-        "--force", action="store_true", help="overwrite existing review files"
-    )
-    review_parser.set_defaults(handler=run_prepare_review)
-
-    promote_parser = subparsers.add_parser(
-        "promote", help="Copy review knowledge files into shared/stock"
-    )
-    promote_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
-    promote_parser.add_argument("--all", action="store_true", help="promote all review files")
-    promote_parser.add_argument(
-        "--knowledge-id",
-        action="append",
-        default=[],
-        help="knowledge_id to promote; may be specified multiple times",
-    )
-    promote_parser.add_argument(
-        "--knowledge-type",
-        action="append",
-        choices=["reference", "constructive"],
-        default=[],
-        help="knowledge_type to disambiguate --knowledge-id; may be specified multiple times",
-    )
-    promote_parser.add_argument(
-        "--review-file",
-        action="append",
-        default=[],
-        help="review file path to promote; may be specified multiple times",
-    )
-    promote_parser.set_defaults(handler=run_promote_review)
-
-    refresh_parser = subparsers.add_parser(
-        "refresh", help="Refresh review files from their flow sources"
-    )
-    refresh_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
-    refresh_parser.add_argument("--all", action="store_true", help="refresh all review files")
-    refresh_parser.add_argument(
-        "--knowledge-id",
-        action="append",
-        default=[],
-        help="knowledge_id to refresh; may be specified multiple times",
-    )
-    refresh_parser.add_argument(
-        "--knowledge-type",
-        action="append",
-        choices=["reference", "constructive"],
-        default=[],
-        help="knowledge_type to disambiguate --knowledge-id; may be specified multiple times",
-    )
-    refresh_parser.add_argument(
-        "--review-file",
-        action="append",
-        default=[],
-        help="review file path to refresh; may be specified multiple times",
-    )
-    refresh_parser.set_defaults(handler=run_refresh_review)
-
-    reject_parser = subparsers.add_parser(
-        "reject", help="Move review files out of the active review queue"
-    )
-    reject_parser.add_argument("--root", default=".refinery", help="Refinery root directory")
-    reject_parser.add_argument("--all", action="store_true", help="reject all review files")
-    reject_parser.add_argument(
-        "--knowledge-id",
-        action="append",
-        default=[],
-        help="knowledge_id to reject; may be specified multiple times",
-    )
-    reject_parser.add_argument(
-        "--knowledge-type",
-        action="append",
-        choices=["reference", "constructive"],
-        default=[],
-        help="knowledge_type to disambiguate --knowledge-id; may be specified multiple times",
-    )
-    reject_parser.add_argument(
-        "--review-file",
-        action="append",
-        default=[],
-        help="review file path to reject; may be specified multiple times",
-    )
-    reject_parser.add_argument(
-        "--force", action="store_true", help="overwrite existing rejected files"
-    )
-    reject_parser.set_defaults(handler=run_reject_review)
+def add_search_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("terms", nargs="*", default=[], help="AND-matched search terms")
+    parser.add_argument("--project", default=".", help="configured project path")
+    parser.add_argument("--project-id", action="append", default=[], help="project filter")
+    parser.add_argument("--tag", action="append", default=[], help="required tag")
+    parser.add_argument("--all-projects", action="store_true", help="search every project")
 
 
-def run_apply_template(args: argparse.Namespace) -> int:
-    target_root = Path(args.target).resolve()
-    template_root, copied = apply_template(
-        target_root,
-        force=args.force,
-        skill_destination=args.skill_destination,
-    )
+def add_typed_search_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--id", action="append", default=[], help="exact document ID")
+    parser.add_argument("--confidence", action="append", choices=CONFIDENCE_CHOICES, default=[])
+    parser.add_argument("--recorded-from", default=None, help="inclusive ISO date or datetime")
+    parser.add_argument("--recorded-to", default=None, help="inclusive ISO date or datetime")
 
-    for line in render_apply_template_output(
-        template_root=template_root,
-        target_root=target_root,
-        skill_destination=args.skill_destination,
-        copied_count=len(copied),
-    ):
-        print(line)
+
+def read_body(args: argparse.Namespace) -> str | None:
+    if args.body_file is not None:
+        return Path(args.body_file).read_text(encoding="utf-8")
+    return args.body
+
+
+def run_vault_init(args: argparse.Namespace) -> int:
+    result = init_vault(Path(args.root), force=bool(args.force))
+    config = set_active_vault(result.root)
+    print(f"Refinery initialized: {result.root}")
+    print(f"Active vault configured: {config}")
+    print(f"Created or updated files: {len(result.changed)}")
     return 0
 
 
-def run_update_template(args: argparse.Namespace) -> int:
-    target_root = Path(args.target).resolve()
-    template_root, copied = apply_template(
-        target_root,
-        force=True,
-        skill_destination=args.skill_destination,
-    )
+def run_vault_configure(args: argparse.Namespace) -> int:
+    path = set_active_vault(Path(args.root))
+    print(f"Active vault configured: {path}")
+    return 0
 
-    for line in render_update_template_output(
-        template_root=template_root,
-        target_root=target_root,
-        skill_destination=args.skill_destination,
-        copied_count=len(copied),
-    ):
-        print(line)
+
+def run_project_setup(args: argparse.Namespace) -> int:
+    vault = Path(args.vault)
+    result = setup_project(
+        Path(args.target),
+        vault,
+        project_id=args.project_id,
+        create_link=bool(args.link),
+    )
+    set_active_vault(vault)
+    print(f"Project configured: {result.project_id}")
+    print(f"Project config: {result.config_path}")
+    print(f"Refinery store: {result.project_store}")
+    if result.link_path is not None:
+        print(f"Optional refinery link: {result.link_path}")
+    if not args.no_agents:
+        agents_path = apply_agents_md(Path(args.target), lang=args.lang, filename=args.filename)
+        print(f"Managed repository guidance: {agents_path}")
+    return 0
+
+
+def run_project_enable(args: argparse.Namespace) -> int:
+    vault = Path(args.vault) if args.vault is not None else get_active_vault()
+    result = enable_project(Path(args.target), vault, create_link=bool(args.link))
+    if args.vault is not None:
+        set_active_vault(vault)
+    agents_path = apply_agents_md(Path(args.target), lang=args.lang, filename=args.filename)
+    print(f"Project enabled: {result.project_id}")
+    print(f"Project config: {result.config_path}")
+    print(f"Refinery store: {result.project_store}")
+    if result.link_path is not None:
+        print(f"Optional refinery link: {result.link_path}")
+    print(f"Managed repository guidance: {agents_path}")
+    return 0
+
+
+def run_project_disable(args: argparse.Namespace) -> int:
+    project = Path(args.target)
+    config = disable_project(project)
+    removed = remove_agents_md(project, filename=args.filename)
+    print(f"Project disabled: {config.project_id}")
+    print("Central refinery data was preserved.")
+    if removed is not None:
+        print(f"Managed repository guidance removed: {removed}")
+    return 0
+
+
+def _active_vault_or_error() -> tuple[Path | None, str | None]:
+    try:
+        return get_active_vault(), None
+    except (OSError, ValueError) as error:
+        return None, str(error)
+
+
+def _project_status_payload(project: Path, filename: str) -> dict[str, object]:
+    vault, vault_error = _active_vault_or_error()
+    status = inspect_project(project, vault)
+    return {
+        "state": status.state,
+        "ready": status.ready,
+        "project_root": str(status.project_root),
+        "config_path": str(status.config_path),
+        "config_exists": status.config_exists,
+        "config_valid": status.config_valid,
+        "config_error": status.config_error,
+        "project_id": status.project_id,
+        "enabled": status.enabled,
+        "active_vault": str(status.vault_root) if status.vault_root is not None else None,
+        "active_vault_error": vault_error,
+        "vault_registered": status.vault_registered,
+        "project_store": (str(status.project_store) if status.project_store is not None else None),
+        "link_state": status.link_state,
+        "managed_guidance": has_managed_block(project, filename=filename),
+        "guidance_filename": filename,
+    }
+
+
+def _print_mapping(payload: dict[str, object]) -> None:
+    for key, value in payload.items():
+        if isinstance(value, bool):
+            rendered = "yes" if value else "no"
+        elif value is None:
+            rendered = "-"
+        else:
+            rendered = str(value)
+        print(f"{key}: {rendered}")
+
+
+def run_project_status(args: argparse.Namespace) -> int:
+    payload = _project_status_payload(Path(args.target), args.filename)
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    else:
+        _print_mapping(payload)
+    return 0
+
+
+def run_doctor(args: argparse.Namespace) -> int:
+    project = _project_status_payload(Path(args.target), args.filename)
+    runtime_checks: list[dict[str, object]] = [
+        {
+            "name": "python",
+            "ok": sys.version_info >= (3, 11),
+            "detail": sys.version.split()[0],
+        },
+        {
+            "name": "mcp",
+            "ok": importlib.util.find_spec("mcp") is not None,
+            "detail": "Python package importable",
+        },
+        {
+            "name": "uv",
+            "ok": shutil.which("uv") is not None,
+            "detail": shutil.which("uv") or "executable not found",
+        },
+        {
+            "name": "active_vault",
+            "ok": project["active_vault_error"] is None,
+            "detail": project["active_vault"] or project["active_vault_error"],
+        },
+        {
+            "name": "project",
+            "ok": project["ready"],
+            "detail": project["state"],
+        },
+    ]
+    if args.mcp_version is not None:
+        runtime_checks.append(
+            {
+                "name": "version_match",
+                "ok": args.mcp_version == get_version(),
+                "detail": f"cli={get_version()}, mcp={args.mcp_version}",
+            }
+        )
+    payload: dict[str, object] = {
+        "ok": all(bool(check["ok"]) for check in runtime_checks),
+        "runtime": runtime_checks,
+        "project": project,
+    }
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    else:
+        print(f"ok: {'yes' if payload['ok'] else 'no'}")
+        for check in runtime_checks:
+            state = "ok" if check["ok"] else "error"
+            print(f"{check['name']}: {state} ({check['detail']})")
+        print(f"project_id: {project['project_id'] or '-'}")
+        print(f"link_state: {project['link_state']}")
+        print(f"managed_guidance: {'yes' if project['managed_guidance'] else 'no'}")
+    return 0 if payload["ok"] else 1
+
+
+def run_experience_upsert(args: argparse.Namespace) -> int:
+    project = Path(args.project)
+    path = upsert_experience_at(
+        get_active_vault(),
+        resolve_project_id(project),
+        title=args.title,
+        purpose=args.purpose,
+        status=args.status,
+        experience_id=args.experience_id,
+        filename=None,
+        tags=list(args.tag),
+        evidence=list(args.evidence),
+        related_experiences=list(args.related_experience),
+        supersedes=list(args.supersedes),
+        confidence=args.confidence,
+        body=read_body(args),
+    )
+    print(path)
+    return 0
+
+
+def run_memory_upsert(args: argparse.Namespace) -> int:
+    project = Path(args.project)
+    path = upsert_memory_at(
+        get_active_vault(),
+        resolve_project_id(project),
+        title=args.title,
+        summary=args.summary,
+        memory_id=args.memory_id,
+        filename=None,
+        tags=list(args.tag),
+        source_experiences=list(args.source_experience),
+        shared=bool(args.shared),
+        confidence=args.confidence,
+        body=read_body(args),
+        expected_updated_at=args.expected_updated_at,
+    )
+    print(path)
+    return 0
+
+
+def run_experience_search(args: argparse.Namespace) -> int:
+    return run_document_search(args, kind="experiences", statuses=list(args.status))
+
+
+def run_memory_search(args: argparse.Namespace) -> int:
+    return run_document_search(args, kind="memory", statuses=[])
+
+
+def run_document_search(args: argparse.Namespace, *, kind: str, statuses: list[str]) -> int:
+    filters = SearchFilters(
+        document_ids=tuple(args.id),
+        source_experiences=tuple(getattr(args, "source_experience", [])),
+        related_experiences=tuple(getattr(args, "related_experience", [])),
+        evidence_types=tuple(getattr(args, "evidence_type", [])),
+        scopes=tuple(getattr(args, "scope", [])),
+        confidences=tuple(args.confidence),
+        recorded_from=(
+            parse_datetime_filter(args.recorded_from, end_of_day=False)
+            if args.recorded_from
+            else None
+        ),
+        recorded_to=(
+            parse_datetime_filter(args.recorded_to, end_of_day=True) if args.recorded_to else None
+        ),
+    )
+    project = Path(args.project)
+    entries = search_documents_at(
+        get_active_vault(),
+        resolve_project_id(project),
+        kind=kind,
+        terms=list(args.terms),
+        project_ids=list(args.project_id),
+        tags=list(args.tag),
+        statuses=statuses,
+        all_projects=bool(args.all_projects),
+        filters=filters,
+    )
+    for entry in entries:
+        print(
+            f'project="{entry.project_id}" id="{entry.document_id}" '
+            f'title="{entry.title}" path="{entry.path}"'
+        )
     return 0
 
 
 def run_apply_agents_md(args: argparse.Namespace) -> int:
-    agents_path = apply_agents_md(Path(args.target), lang=args.lang, filename=args.filename)
-    print(agents_path.as_posix())
+    path = apply_agents_md(Path(args.target), lang=args.lang, filename=args.filename)
+    print(path)
     return 0
 
 
-def run_init_session(args: argparse.Namespace) -> int:
-    session_root = init_session(
-        Path(args.root),
-        task=args.task,
-        kind=args.kind,
-        title=args.title or args.task,
-        created_by=args.created_by,
-        repository=args.repository,
-        domain=args.domain,
-    )
-    print(session_root.as_posix())
+def run_mcp_serve(args: argparse.Namespace) -> int:
+    del args
+    from knowledge_refinery.mcp_server import serve
+
+    serve()
     return 0
-
-
-def run_update_session(args: argparse.Namespace) -> int:
-    updates = {
-        field: value
-        for field, value in [
-            ("title", args.title),
-            ("task", args.task),
-            ("status", args.status),
-            ("phase", args.phase),
-            ("current_step", args.current_step),
-            ("next_action", args.next_action),
-            ("blocked_reason", args.blocked_reason),
-            ("resume_condition", args.resume_condition),
-            ("domain", args.domain),
-            ("repository", args.repository),
-            ("evidence_status", args.evidence_status),
-            ("flow_status", args.flow_status),
-            ("synthesis_status", args.synthesis_status),
-            ("coverage_status", args.coverage_status),
-            ("confidence", args.confidence),
-        ]
-        if value is not None
-    }
-    clear_fields = [
-        field
-        for field, enabled in [
-            ("blocked_reason", args.clear_blocked_reason),
-            ("resume_condition", args.clear_resume_condition),
-            ("domain", args.clear_domain),
-            ("repository", args.clear_repository),
-        ]
-        if enabled
-    ]
-    path, meta = update_session(
-        Path(args.root),
-        session_id=args.session_id,
-        updates=updates,
-        clear_fields=clear_fields,
-    )
-    print(render_session_update_output(path, meta))
-    return 0
-
-
-def run_search_sessions(args: argparse.Namespace) -> int:
-    entries = search_sessions(
-        Path(args.root),
-        terms=list(args.terms),
-        session_ids=list(args.session_id),
-        statuses=list(args.status),
-        phases=list(args.phase),
-        domains=list(args.domain),
-    )
-    for line in render_session_search_output(entries):
-        print(line)
-    return 0
-
-
-def run_search_knowledge(args: argparse.Namespace) -> int:
-    entries = search_knowledge(
-        Path(args.root),
-        terms=list(args.terms),
-        scopes=list(args.scope),
-        session_ids=list(args.session_id),
-        tags=list(args.tag),
-        knowledge_ids=list(args.knowledge_id),
-        knowledge_types=list(args.knowledge_type),
-        include_rejected=bool(args.include_rejected),
-    )
-    for line in render_knowledge_search_output(entries):
-        print(line)
-    return 0
-
-
-def run_upsert_knowledge(args: argparse.Namespace) -> int:
-    body = args.body
-    if args.body_file is not None:
-        body_path = Path(args.body_file)
-        try:
-            body = body_path.read_text(encoding="utf-8")
-        except OSError as exc:
-            raise RefineryPathError(
-                summary="Knowledge body file could not be read.",
-                path=body_path,
-                detail=str(exc),
-                expected="A readable UTF-8 text file passed with `--body-file`.",
-                suggested_action="Check the body file path and permissions, then rerun.",
-            ) from exc
-
-    result = upsert_knowledge(
-        Path(args.root),
-        scope=args.scope,
-        session_id=args.session_id,
-        file=args.file,
-        title=args.title,
-        description=args.description,
-        summary=args.summary,
-        knowledge_id=args.knowledge_id,
-        knowledge_type=args.knowledge_type,
-        tags=list(args.tag),
-        source_sessions=list(args.source_session),
-        derived_from=list(args.derived_from),
-        confidence=args.confidence,
-        body=body,
-    )
-    print(render_upsert_knowledge_output(result))
-    return 0
-
-
-def run_prepare_review(args: argparse.Namespace) -> int:
-    results = prepare_review(Path(args.root), session_id=args.session_id, force=args.force)
-    for line in render_copy_results_output(
-        results,
-        empty_message="No flow knowledge files found.",
-        copied_label="copied",
-        skipped_label="skipped",
-        summary_prefix="Prepared review files",
-    ):
-        print(line)
-    return 0
-
-
-def run_promote_review(args: argparse.Namespace) -> int:
-    results = promote_review(
-        Path(args.root),
-        knowledge_ids=list(args.knowledge_id),
-        review_files=list(args.review_file),
-        all_files=bool(args.all),
-        knowledge_types=list(args.knowledge_type),
-    )
-
-    for line in render_copy_results_output(
-        results,
-        empty_message="No review files found.",
-        copied_label="copied",
-        skipped_label="skipped",
-        summary_prefix="Promoted review files",
-    ):
-        print(line)
-    return 0
-
-
-def run_search_review(args: argparse.Namespace) -> int:
-    entries = search_review(
-        Path(args.root),
-        terms=list(args.terms),
-        session_ids=list(args.session_id),
-        tags=list(args.tag),
-        knowledge_ids=list(args.knowledge_id),
-        knowledge_types=list(args.knowledge_type),
-        include_rejected=bool(args.include_rejected),
-    )
-    for line in render_review_search_output(entries):
-        print(line)
-    return 0
-
-
-def run_refresh_review(args: argparse.Namespace) -> int:
-    results = refresh_review(
-        Path(args.root),
-        knowledge_ids=list(args.knowledge_id),
-        review_files=list(args.review_file),
-        all_files=bool(args.all),
-        knowledge_types=list(args.knowledge_type),
-    )
-    for line in render_refresh_review_output(results):
-        print(line)
-    return 0
-
-
-def run_reject_review(args: argparse.Namespace) -> int:
-    results = reject_review(
-        Path(args.root),
-        knowledge_ids=list(args.knowledge_id),
-        review_files=list(args.review_file),
-        all_files=bool(args.all),
-        knowledge_types=list(args.knowledge_type),
-        force=args.force,
-    )
-    for line in render_copy_results_output(
-        results,
-        empty_message="No review files found.",
-        copied_label="moved",
-        skipped_label="skipped",
-        summary_prefix="Rejected review files",
-    ):
-        print(line)
-    return 0
-
-
-def resolve_refinery_root(args: argparse.Namespace) -> Path | None:
-    if hasattr(args, "root"):
-        return Path(args.root).resolve()
-
-    if not hasattr(args, "target"):
-        return None
-
-    target = Path(args.target).resolve()
-    if args.command == "update-agents-md" and target.name in GUIDE_FILENAME_CHOICES:
-        target = target.parent
-
-    return target / TEMPLATE_METADATA_RELATIVE_PATH.parent.name
-
-
-def warn_if_cli_version_mismatch(args: argparse.Namespace) -> None:
-    refinery_root = resolve_refinery_root(args)
-    if refinery_root is None:
-        return
-
-    metadata_path = refinery_root / TEMPLATE_METADATA_RELATIVE_PATH.name
-    if not metadata_path.is_file():
-        return
-
-    try:
-        metadata = read_yaml_mapping(metadata_path)
-    except (OSError, SystemExit, RefineryCliError) as exc:
-        detail = exc.render() if isinstance(exc, RefineryCliError) else str(exc)
-        print(
-            f"Warning: failed to read template metadata at {metadata_path}: {detail}",
-            file=sys.stderr,
-        )
-        return
-
-    applied_version = metadata.get("cli_version")
-    current_version = get_version()
-    if applied_version != current_version:
-        print(
-            "Warning: distributed refinery template was applied with CLI version "
-            f"{applied_version}, but the current CLI version is {current_version}.",
-            file=sys.stderr,
-        )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
     try:
-        warn_if_cli_version_mismatch(args)
-        return args.handler(args)
-    except RefineryCliError as exc:
-        print(exc.render(), file=sys.stderr)
-        return exc.exit_code
+        args = parser.parse_args(argv)
+        return int(args.handler(args))
+    except RefineryCliError as error:
+        print(error.render(), file=sys.stderr)
+        return error.exit_code
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

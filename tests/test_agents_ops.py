@@ -3,6 +3,8 @@ from pathlib import Path
 from knowledge_refinery.agents_ops import END_MARKER
 from knowledge_refinery.agents_ops import START_MARKER_PREFIX
 from knowledge_refinery.agents_ops import apply_agents_md
+from knowledge_refinery.agents_ops import has_managed_block
+from knowledge_refinery.agents_ops import remove_agents_md
 
 
 def test_apply_agents_md_appends_managed_block_to_existing_file(tmp_path: Path) -> None:
@@ -56,3 +58,23 @@ def test_apply_agents_md_repairs_truncated_managed_block(tmp_path: Path) -> None
     assert content.count(START_MARKER_PREFIX) == 1
     assert f"{START_MARKER_PREFIX} lang=en -->" in content
     assert "## Tail\n\nKeep this section.\n" in content
+
+
+def test_remove_agents_md_preserves_user_authored_content(tmp_path: Path) -> None:
+    agents_path = tmp_path / "AGENTS.md"
+    agents_path.write_text("# Existing Guide\n", encoding="utf-8")
+    apply_agents_md(tmp_path, lang="jp")
+
+    assert has_managed_block(tmp_path)
+    assert remove_agents_md(tmp_path) == agents_path
+
+    assert agents_path.read_text(encoding="utf-8") == "# Existing Guide\n\n"
+    assert not has_managed_block(tmp_path)
+
+
+def test_remove_agents_md_deletes_managed_only_guide(tmp_path: Path) -> None:
+    agents_path = apply_agents_md(tmp_path, lang="jp")
+
+    remove_agents_md(tmp_path)
+
+    assert not agents_path.exists()

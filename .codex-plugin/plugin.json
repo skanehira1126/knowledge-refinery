@@ -1,0 +1,29 @@
+{
+  "name": "knowledge-refinery",
+  "version": "0.2.0",
+  "description": "Local, Git-backed cross-project experience and memory refinery",
+  "author": {
+    "name": "Shinichi Kanehira",
+    "email": "shinichi.kanehira@gmail.com",
+    "url": "https://github.com/skanehira1126"
+  },
+  "homepage": "https://github.com/skanehira1126/knowledge-refinery",
+  "repository": "https://github.com/skanehira1126/knowledge-refinery",
+  "license": "Apache-2.0",
+  "keywords": ["knowledge", "experience", "memory", "mcp", "codex"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Knowledge Refinery",
+    "shortDescription": "Keep reusable experience in a local Git-backed vault.",
+    "longDescription": "Knowledge Refinery records integrated development experiences and reusable memory through a local MCP server while keeping product and knowledge Git histories separate.",
+    "developerName": "Shinichi Kanehira",
+    "category": "Productivity",
+    "capabilities": ["Search", "Write", "Local MCP"],
+    "defaultPrompt": [
+      "Set up Knowledge Refinery for this repository.",
+      "Check whether Knowledge Refinery is enabled here.",
+      "Review enabled repositories for reusable memory."
+    ]
+  }
+}

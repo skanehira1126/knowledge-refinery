@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refinery Experience"
+  short_description: "Record findings from meaningful development attempts."
+  default_prompt: "Use $refinery-experience to search related knowledge and record the reusable findings from this work."

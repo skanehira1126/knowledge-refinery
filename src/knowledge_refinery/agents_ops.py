@@ -2,6 +2,8 @@ from importlib.resources import files
 from pathlib import Path
 import re
 
+from knowledge_refinery.storage_ops import atomic_write_text
+
 
 LANG_CHOICES = ("jp", "en")
 GUIDE_FILENAME_CHOICES = ("AGENTS.md", "CLAUDE.md")
@@ -82,5 +84,33 @@ def apply_agents_md(target: Path, lang: str, filename: str = "AGENTS.md") -> Pat
         updated = block
 
     agents_path.parent.mkdir(parents=True, exist_ok=True)
-    agents_path.write_text(updated, encoding="utf-8")
+    atomic_write_text(agents_path, updated)
+    return agents_path
+
+
+def has_managed_block(target: Path, filename: str = "AGENTS.md") -> bool:
+    agents_path = resolve_agents_path(target, filename=filename)
+    if not agents_path.is_file():
+        return False
+    return MANAGED_BLOCK_RE.search(agents_path.read_text(encoding="utf-8")) is not None
+
+
+def remove_agents_md(target: Path, filename: str = "AGENTS.md") -> Path | None:
+    """Remove only the Knowledge Refinery managed block.
+
+    A guide created solely for the managed block is removed. User-authored content is
+    preserved byte-for-byte except for the separator directly surrounding the block.
+    """
+    agents_path = resolve_agents_path(target, filename=filename)
+    if not agents_path.is_file():
+        return None
+
+    current = agents_path.read_text(encoding="utf-8")
+    if MANAGED_BLOCK_RE.search(current) is None:
+        return None
+    updated = MANAGED_BLOCK_RE.sub("", current, count=1)
+    if not updated.strip():
+        agents_path.unlink()
+    else:
+        atomic_write_text(agents_path, updated)
     return agents_path

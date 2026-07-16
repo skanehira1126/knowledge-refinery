@@ -58,7 +58,19 @@ knowledge-refinery project setup \
   --project-id my-project
 ```
 
-`project-id` は小文字、数字、hyphenの安定したslugにします。このコマンドは `.refinery.yaml`、中央vaultのproject領域、managed AGENTS blockを冪等に整備します。
+`project-id` は小文字、数字、hyphenの安定したslugにします。このコマンドは `.refinery.yaml` と中央vaultのproject領域を冪等に整備します。デフォルトでは `AGENTS.md` を作成・変更しません。
+
+Knowledge Refineryの共通ルールを `AGENTS.md` に追記する場合は `--agents` を指定します。既存の内容は保持され、管理対象のblockだけが追加または更新されます。
+
+```bash
+knowledge-refinery project setup \
+  --target "$PROJECT_ROOT" \
+  --vault "$REFINERY_VAULT" \
+  --project-id my-project \
+  --agents
+```
+
+作業領域に固有のルールも追加したい場合は、[AGENTS.md追記サンプル](agents-guidance-examples.md)から必要なものを選んでください。
 
 ## 5. 検証
 

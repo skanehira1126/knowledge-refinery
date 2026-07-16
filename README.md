@@ -67,7 +67,11 @@ knowledge-refinery doctor --target "$PROJECT_ROOT"
 ```
 
 `doctor` に `ok: yes` と表示されたら準備完了です。`project setup` はrepoに
-`.refinery.yaml` とmanaged AGENTS blockを作り、中央vaultにプロジェクト領域を用意します。
+`.refinery.yaml` を作り、中央vaultにプロジェクト領域を用意します。Knowledge Refineryの
+共通ルールも `AGENTS.md` へ追記する場合だけ、setupに `--agents` を付けてください。
+
+データ分析やアプリケーション開発など、作業内容に合わせた追加ルールは
+[AGENTS.md追記サンプル](docs/agents-guidance-examples.md)を参照してください。
 
 ## 普段の使い方
 

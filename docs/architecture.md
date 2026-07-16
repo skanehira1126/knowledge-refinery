@@ -15,7 +15,7 @@ Codex surfaces
 
 Product repo
   ├─ .refinery.yaml → project_id + enabled
-  └─ AGENTS.md → managed workflow block
+  └─ AGENTS.md → optional managed workflow block (`project setup --agents`)
 ```
 
 ## 境界

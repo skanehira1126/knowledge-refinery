@@ -71,9 +71,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_guide_arguments(project_setup)
     project_setup.add_argument(
-        "--no-agents",
+        "--agents",
         action="store_true",
-        help="do not install the managed repository guidance block",
+        help="append the managed repository guidance block",
     )
     project_setup.set_defaults(handler=run_project_setup)
 
@@ -286,7 +286,7 @@ def run_project_setup(args: argparse.Namespace) -> int:
     print(f"Refinery store: {result.project_store}")
     if result.link_path is not None:
         print(f"Optional refinery link: {result.link_path}")
-    if not args.no_agents:
+    if args.agents:
         agents_path = apply_agents_md(Path(args.target), lang=args.lang, filename=args.filename)
         print(f"Managed repository guidance: {agents_path}")
     return 0

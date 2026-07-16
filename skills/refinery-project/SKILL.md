@@ -23,7 +23,7 @@ Resolve the current repository to an absolute path and refer to that value as `P
 1. Require an initialized central vault. If none exists, run `knowledge-refinery vault init --root "$VAULT_ROOT"` with the user-selected absolute vault path.
 2. Run `knowledge-refinery project setup --target "$PROJECT_ROOT" --vault "$VAULT_ROOT" --project-id "$PROJECT_ID"`.
 3. Add `--link` only when a human explicitly wants a `.refinery` browsing symlink.
-4. `project setup` installs the managed guidance block by default; use `--no-agents` only when explicitly required.
+4. `project setup` does not change repository guidance by default. Add `--agents` only when a human explicitly wants the managed guidance block appended.
 5. Verify with `knowledge-refinery doctor --target "$PROJECT_ROOT"`.
 
 ## Toggle use

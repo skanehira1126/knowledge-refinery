@@ -12,12 +12,14 @@ knowledge-refinery vault configure --root PATH
 ## project lifecycle
 
 ```text
-knowledge-refinery project setup --target PATH --vault PATH [--project-id SLUG] [--link] [--lang jp|en] [--no-agents]
+knowledge-refinery project setup --target PATH --vault PATH [--project-id SLUG] [--link] [--agents] [--lang jp|en] [--filename AGENTS.md|CLAUDE.md]
 knowledge-refinery project enable --target PATH [--vault PATH] [--link] [--lang jp|en]
 knowledge-refinery project disable --target PATH
 knowledge-refinery project status --target PATH [--json]
 knowledge-refinery doctor --target PATH [--mcp-version VERSION] [--json]
 ```
+
+`project setup` はデフォルトではrepository guidanceを変更しません。`--agents` を指定した場合だけ、`--filename` で選んだファイルへmanaged blockを追記します。既定のファイルは `AGENTS.md`、言語は `jp` です。
 
 MCP接続後は `refinery_info.version` を `doctor --mcp-version` へ渡すと、PATH上CLIとPlugin内MCPのrelease driftも機械的に検出します。
 

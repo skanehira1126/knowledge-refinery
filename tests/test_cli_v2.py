@@ -26,6 +26,7 @@ def test_parser_exposes_v2_commands(tmp_path: Path) -> None:
     assert args.command == "project"
     assert args.project_command == "setup"
     assert args.project_id == "pybr"
+    assert args.agents is False
 
 
 def test_cli_initializes_and_connects_project(
@@ -54,7 +55,40 @@ def test_cli_initializes_and_connects_project(
     )
     assert not (project / ".refinery").exists()
     assert (vault / "projects" / "pybr" / "experiences").is_dir()
-    assert "knowledge-refinery:agents:start" in (project / "AGENTS.md").read_text(encoding="utf-8")
+    assert not (project / "AGENTS.md").exists()
+
+
+def test_cli_setup_can_append_managed_guidance_when_requested(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("REFINERY_CONFIG", str(tmp_path / "config.yaml"))
+    vault = tmp_path / "refinery"
+    project = tmp_path / "pybr"
+    project.mkdir()
+    agents_path = project / "AGENTS.md"
+    agents_path.write_text("# Project Guide\n", encoding="utf-8")
+
+    assert main(["vault", "init", "--root", str(vault)]) == 0
+    assert (
+        main(
+            [
+                "project",
+                "setup",
+                "--target",
+                str(project),
+                "--vault",
+                str(vault),
+                "--project-id",
+                "pybr",
+                "--agents",
+            ]
+        )
+        == 0
+    )
+
+    content = agents_path.read_text(encoding="utf-8")
+    assert content.startswith("# Project Guide\n")
+    assert "knowledge-refinery:agents:start" in content
 
 
 def test_cli_can_disable_status_and_reenable_project(

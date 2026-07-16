@@ -31,6 +31,7 @@ markdown_extensions:
 nav:
   - 概要: index.md
   - 導入: getting-started.md
+  - AGENTS.md追記サンプル: agents-guidance-examples.md
   - repoの有効・無効: project-lifecycle.md
   - アーキテクチャ: architecture.md
   - リファレンス:

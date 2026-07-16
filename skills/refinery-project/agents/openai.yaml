@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refinery Project"
+  short_description: "Set up and diagnose repository knowledge access."
+  default_prompt: "Use $refinery-project to safely set up, diagnose, enable, or disable Knowledge Refinery for this repository."

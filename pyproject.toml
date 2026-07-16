@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-refinery"
-description = "CLI tools and template distribution for knowledge refinery"
+description = "Central, cross-project experience repository tooling for Codex"
 readme = "README.md"
 license = "Apache-2.0"
 authors = [
@@ -28,6 +28,7 @@ classifiers = [
 ]
 license-files = ["LICENSE"]
 dependencies = [
+    "mcp>=1.0,<2",
     "PyYAML>=6.0.2,<7",
 ]
 
@@ -43,6 +44,9 @@ dev = [
     "ruff>=0.11.0,<0.12",
     "tox>=4.24.0,<5",
     "types-PyYAML>=6.0.12.20250822,<7",
+]
+docs = [
+    "mkdocs-material>=9,<10",
 ]
 
 [dependency-groups]

@@ -1,0 +1,20 @@
+{
+  "name": "knowledge-refinery",
+  "interface": {
+    "displayName": "Knowledge Refinery"
+  },
+  "plugins": [
+    {
+      "name": "knowledge-refinery",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

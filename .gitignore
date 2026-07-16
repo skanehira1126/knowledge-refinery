@@ -206,5 +206,4 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# uv
-uv.lock
+# uv lock is committed because the bundled MCP runs with --frozen.

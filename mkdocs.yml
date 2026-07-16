@@ -1,0 +1,46 @@
+site_name: Knowledge Refinery
+site_description: Central, Git-backed development knowledge for Codex
+repo_url: https://github.com/skanehira1126/knowledge-refinery
+repo_name: skanehira1126/knowledge-refinery
+theme:
+  name: material
+  language: ja
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: cyan
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: cyan
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+nav:
+  - 概要: index.md
+  - 導入: getting-started.md
+  - repoの有効・無効: project-lifecycle.md
+  - アーキテクチャ: architecture.md
+  - リファレンス:
+      - CLI: cli.md
+      - MCP tools: mcp.md
+      - YAML schema: schema.md
+      - Skills: skills/README.md
+      - refinery-project: skills/refinery-project.md
+      - refinery-experience: skills/refinery-experience.md
+      - refinery-memory: skills/refinery-memory.md
+      - refinery-maintenance: skills/refinery-maintenance.md
+  - Git運用: git-operations.md
+  - トラブルシューティング: troubleshooting.md
+  - 開発・リリース: development.md

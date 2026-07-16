@@ -10,6 +10,7 @@ bash scripts/validate.sh
 
 - Ruff、Mypy、Pytest（tox）
 - `mkdocs build --strict`
+- 配布構成とPlugin/Python versionの整合性検査
 - Plugin manifest validator
 - 4つの配布Skill validator
 

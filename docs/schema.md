@@ -1,5 +1,15 @@
 # YAML schema
 
+## vault marker
+
+```yaml
+schema_version: 2
+managed_by: knowledge-refinery
+cli_version: 0.2.0
+```
+
+`schema_version` または `managed_by` が未対応の場合、CLIとMCPはvaultへの接続と書き込みを拒否します。
+
 ## repo設定
 
 ```yaml

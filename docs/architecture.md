@@ -24,7 +24,9 @@ Product repo
 - active vaultはユーザー設定に1つ持ちます。設定ファイルは `REFINERY_CONFIG` で明示でき、未指定時は `${XDG_CONFIG_HOME:-$HOME/.config}/knowledge-refinery/config.yaml` を使います。`REFINERY_VAULT` でactive vaultを一時overrideできます。
 - repo-scoped MCP toolsは `project_path` を受け、server側で `enabled` とproject登録を検証します。
 - symlinkは人間の閲覧用であり、MCPとCLIの必須依存ではありません。
-- 中央vaultの書き込みはatomic replaceとpath lockで破損を防ぎ、memory更新は`expected_updated_at`による楽観的排他で競合上書きを拒否します。
+- vault markerのmanagerとschemaを利用前に検証し、未対応schemaへの書き込みを拒否します。
+- 中央vaultの書き込みはatomic replaceとpath lockで破損を防ぎ、experienceとmemoryの更新は`expected_updated_at`による楽観的排他で競合上書きを拒否します。
+- 検索は不正文書を隔離し、exact getは対象IDの正規pathを直接検証します。不正文書の一覧は `refinery_validate` が返します。
 
 ## データフロー
 

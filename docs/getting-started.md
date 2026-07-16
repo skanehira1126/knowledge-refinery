@@ -79,7 +79,7 @@ knowledge-refinery project status --target "$PROJECT_ROOT" --json
 knowledge-refinery doctor --target "$PROJECT_ROOT"
 ```
 
-`doctor` の `ok: yes` を確認し、新しいCodex taskで使用を開始します。
+`doctor` の `ok: yes` を確認し、新しいCodex taskで使用を開始します。doctorはvault schema、書き込み可能性、knowledge文書、ローカルMCP runtime、project登録を検査します。Codex側のPlugin登録確認はPlugin settingsで行います。
 
 MCP接続後は `refinery_info` の `version` を `MCP_VERSION` に設定し、doctorへ渡して一致を確認します。
 

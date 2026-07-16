@@ -37,5 +37,10 @@ def test_stdio_server_lists_expected_tools() -> None:
             "refinery_search_memory",
             "refinery_validate",
         }
+        record_experience = next(
+            tool for tool in result.tools if tool.name == "refinery_record_experience"
+        )
+        assert "expected_updated_at" in record_experience.inputSchema["properties"]
+        assert "expected_updated_at" not in record_experience.inputSchema.get("required", [])
 
     anyio.run(exercise_server)

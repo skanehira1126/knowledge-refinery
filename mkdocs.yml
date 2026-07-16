@@ -33,6 +33,7 @@ nav:
   - 導入: getting-started.md
   - AGENTS.md追記サンプル: agents-guidance-examples.md
   - repoの有効・無効: project-lifecycle.md
+  - ナレッジ運用: knowledge-operations.md
   - アーキテクチャ: architecture.md
   - リファレンス:
       - CLI: cli.md

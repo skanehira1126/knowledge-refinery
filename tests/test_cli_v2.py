@@ -29,6 +29,16 @@ def test_parser_exposes_v2_commands(tmp_path: Path) -> None:
     assert args.agents is False
 
 
+def test_project_status_returns_nonzero_when_unconfigured(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "unconfigured"
+    project.mkdir()
+
+    assert main(["project", "status", "--target", str(project), "--json"]) == 1
+    assert json.loads(capsys.readouterr().out)["state"] == "unconfigured"
+
+
 def test_cli_initializes_and_connects_project(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -157,3 +167,38 @@ def test_cli_can_disable_status_and_reenable_project(
         "ok": False,
         "detail": "cli=0.2.0, mcp=0.1.0",
     }
+
+
+def test_doctor_reports_malformed_vault_documents(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("REFINERY_CONFIG", str(tmp_path / "config.yaml"))
+    vault = tmp_path / "refinery"
+    project = tmp_path / "project"
+    project.mkdir()
+    assert main(["vault", "init", "--root", str(vault)]) == 0
+    assert (
+        main(
+            [
+                "project",
+                "setup",
+                "--target",
+                str(project),
+                "--vault",
+                str(vault),
+                "--project-id",
+                "project",
+            ]
+        )
+        == 0
+    )
+    (vault / "projects" / "project" / "experiences" / "broken.md").write_text(
+        "not front matter\n", encoding="utf-8"
+    )
+    capsys.readouterr()
+
+    assert main(["doctor", "--target", str(project), "--json"]) == 1
+    diagnosis = json.loads(capsys.readouterr().out)
+    documents = next(check for check in diagnosis["runtime"] if check["name"] == "vault_documents")
+    assert documents["ok"] is False
+    assert documents["detail"] == "checked=0, errors=1"

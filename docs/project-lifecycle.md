@@ -2,6 +2,8 @@
 
 repo側のsource of truthは `.refinery.yaml` です。
 
+`project_id` は登録後に変更しません。未設定repoからvault内の既存IDへ接続しようとすると、別repoのknowledge混在を防ぐためsetupは拒否されます。同じproduct repoのcloneでは、version管理された既存 `.refinery.yaml` を引き継ぎます。
+
 以下の例は対象repoのrootで実行し、その絶対パスを一度だけ取得します。
 
 ```bash

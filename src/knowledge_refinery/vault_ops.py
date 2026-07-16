@@ -14,6 +14,8 @@ PROJECT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 VAULT_MARKER = ".refinery-vault.yaml"
 PROJECT_CONFIG = ".refinery.yaml"
 PROJECT_LINK = ".refinery"
+VAULT_SCHEMA_VERSION = 2
+VAULT_MANAGER = "knowledge-refinery"
 
 
 @dataclass(frozen=True)
@@ -93,8 +95,8 @@ def init_vault(root: Path, *, force: bool = False) -> VaultInitResult:
     files = {
         root / VAULT_MARKER: yaml.safe_dump(
             {
-                "schema_version": 2,
-                "managed_by": "knowledge-refinery",
+                "schema_version": VAULT_SCHEMA_VERSION,
+                "managed_by": VAULT_MANAGER,
                 "cli_version": get_version(),
             },
             sort_keys=False,
@@ -124,10 +126,7 @@ def setup_project(
         raise ValueError(f"Project repository does not exist: {target}")
     if target == vault or target in vault.parents or vault in target.parents:
         raise ValueError("Project repository and refinery vault must use separate directory trees")
-    if not (vault / VAULT_MARKER).is_file():
-        raise ValueError(
-            f"Not a refinery vault: {vault}. Run `knowledge-refinery vault init` first."
-        )
+    vault = validate_vault_root(vault)
     resolved_id = project_id or target.name.lower().replace("_", "-")
     _validate_project_id(resolved_id)
 
@@ -141,6 +140,11 @@ def setup_project(
             )
 
     project_store = vault / "projects" / resolved_id
+    if project_store.exists() and not config_path.is_file():
+        raise ValueError(
+            f"project_id is already registered in this vault: {resolved_id}. "
+            f"Refusing to connect an unconfigured repository to {project_store}"
+        )
     for name in ("experiences", "evidence", "memory"):
         (project_store / name).mkdir(parents=True, exist_ok=True)
     _write_if_needed(project_store / "AGENTS.md", _project_store_agents(resolved_id), force=False)
@@ -278,9 +282,7 @@ def _link_state(project_root: Path, expected_store: Path | None) -> str:
 
 
 def context_from_vault(vault: Path, project_id: str) -> ProjectContext:
-    vault_root = vault.expanduser().resolve()
-    if not (vault_root / VAULT_MARKER).is_file():
-        raise ValueError(f"Not a refinery vault: {vault_root}")
+    vault_root = validate_vault_root(vault)
     _validate_project_id(project_id)
     project_store = vault_root / "projects" / project_id
     if not project_store.is_dir():
@@ -307,10 +309,31 @@ def resolve_project_context(project: Path, vault: Path | None = None) -> Project
 
 
 def list_project_ids(vault: Path) -> list[str]:
-    root = vault.expanduser().resolve()
-    if not (root / VAULT_MARKER).is_file():
-        raise ValueError(f"Not a refinery vault: {root}")
+    root = validate_vault_root(vault)
     return sorted(path.name for path in (root / "projects").iterdir() if path.is_dir())
+
+
+def validate_vault_root(vault: Path) -> Path:
+    """Return a supported refinery vault root or reject it before any writes."""
+    root = vault.expanduser().resolve()
+    marker = root / VAULT_MARKER
+    if not marker.is_file():
+        raise ValueError(f"Not a refinery vault: {root}")
+    try:
+        raw = yaml.safe_load(marker.read_text(encoding="utf-8"))
+    except yaml.YAMLError as error:
+        raise ValueError(f"Invalid refinery vault marker: {marker}: {error}") from error
+    if not isinstance(raw, dict):
+        raise ValueError(f"Invalid refinery vault marker: {marker}")
+    if raw.get("managed_by") != VAULT_MANAGER:
+        raise ValueError(
+            f"Unsupported refinery vault manager in {marker}: {raw.get('managed_by')}"
+        )
+    if raw.get("schema_version") != VAULT_SCHEMA_VERSION:
+        raise ValueError(
+            f"Unsupported refinery vault schema in {marker}: {raw.get('schema_version')}"
+        )
+    return root
 
 
 def _validate_project_id(project_id: str) -> None:

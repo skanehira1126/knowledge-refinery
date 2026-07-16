@@ -17,6 +17,7 @@ fi
 
 uv run tox
 uv run --extra docs mkdocs build --strict
+uv run python scripts/validate_distribution.py
 uv run python "${plugin_creator}/scripts/validate_plugin.py" .
 
 for skill in refinery-project refinery-experience refinery-memory refinery-maintenance; do

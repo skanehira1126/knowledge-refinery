@@ -56,6 +56,7 @@ def test_local_mcp_records_searches_and_validates(
     assert refinery_list_projects() == ["pybr"]
     assert refinery_info() == {"version": "0.2.0", "schema_version": 2}
     assert recorded["experience_id"] == "boruta-trial"
+    assert recorded["updated_at"]
     assert (
         refinery_search_experiences(
             project_path=str(project),
@@ -175,6 +176,80 @@ def test_memory_update_requires_current_revision(
     )
     assert updated["updated_at"] != created["updated_at"]
     assert refinery_get_memory(str(project), "rule")["header"]["summary"] == "safe update"
+
+
+def test_experience_update_requires_current_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "pybr"
+    created = refinery_record_experience(
+        project_path=str(project),
+        title="trial",
+        purpose="first",
+        status="completed",
+        body="first",
+        experience_id="trial",
+    )
+
+    with pytest.raises(ValueError, match="expected_updated_at"):
+        refinery_record_experience(
+            project_path=str(project),
+            title="trial",
+            purpose="unsafe",
+            status="completed",
+            body="unsafe",
+            experience_id="trial",
+        )
+    with pytest.raises(ValueError, match="stale"):
+        refinery_record_experience(
+            project_path=str(project),
+            title="trial",
+            purpose="stale",
+            status="completed",
+            body="stale",
+            experience_id="trial",
+            expected_updated_at="stale",
+        )
+
+    updated = refinery_record_experience(
+        project_path=str(project),
+        title="trial",
+        purpose="safe",
+        status="completed",
+        body="safe",
+        experience_id="trial",
+        expected_updated_at=created["updated_at"],
+    )
+    assert updated["updated_at"] != created["updated_at"]
+    assert refinery_get_experience(str(project), "trial")["body"] == "safe"
+
+
+def test_malformed_memory_does_not_block_healthy_reads_or_search(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "pybr"
+    refinery_record_experience(
+        project_path=str(project),
+        title="source",
+        purpose="support memory",
+        status="completed",
+        body="source",
+        experience_id="source",
+    )
+    refinery_record_memory(
+        project_path=str(project),
+        title="healthy",
+        summary="healthy",
+        source_experiences=["source"],
+        memory_id="healthy",
+    )
+    (vault / "shared" / "memory" / "broken.md").write_text("not front matter\n", encoding="utf-8")
+
+    assert refinery_get_memory(str(project), "healthy")["body"] == "healthy"
+    assert [entry["id"] for entry in refinery_search_memory(str(project))] == ["healthy"]
+    assert refinery_validate()["valid"] is False
 
 
 def test_validate_rejects_path_project_mismatch(

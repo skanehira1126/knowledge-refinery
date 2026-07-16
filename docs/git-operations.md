@@ -1,6 +1,8 @@
 # Git運用
 
 Knowledge Refineryはproduct Gitと中央vault Gitのライフサイクルを分離します。
+commit頻度、backup、validation、復旧を含む日常runbookは
+[ナレッジ運用](knowledge-operations.md)を参照してください。
 
 ## 原則
 

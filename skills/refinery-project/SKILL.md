@@ -1,6 +1,6 @@
 ---
 name: refinery-project
-description: Set up, enable, disable, inspect, or diagnose Knowledge Refinery for a repository while preserving the central vault. Use when onboarding or offboarding a repository, changing its project ID or vault, repairing `.refinery.yaml`, updating the managed AGENTS block, or troubleshooting the local MCP connection.
+description: Set up, enable, disable, inspect, or diagnose Knowledge Refinery for a repository while preserving the central vault. Use when onboarding or offboarding a repository, selecting its vault, repairing `.refinery.yaml`, updating the managed AGENTS block, or troubleshooting the local MCP connection.
 ---
 
 # Refinery project
@@ -22,6 +22,7 @@ Resolve the current repository to an absolute path and refer to that value as `P
 
 1. Require an initialized central vault. If none exists, run `knowledge-refinery vault init --root "$VAULT_ROOT"` with the user-selected absolute vault path.
 2. Run `knowledge-refinery project setup --target "$PROJECT_ROOT" --vault "$VAULT_ROOT" --project-id "$PROJECT_ID"`.
+   Treat `PROJECT_ID` as immutable. The CLI rejects connecting an unconfigured repository to an ID already registered in the vault.
 3. Add `--link` only when a human explicitly wants a `.refinery` browsing symlink.
 4. `project setup` does not change repository guidance by default. Add `--agents` only when a human explicitly wants the managed guidance block appended.
 5. Verify with `knowledge-refinery doctor --target "$PROJECT_ROOT"`.

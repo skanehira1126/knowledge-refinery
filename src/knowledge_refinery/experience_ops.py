@@ -10,6 +10,7 @@ import secrets
 
 import yaml
 
+from knowledge_refinery.errors import RefineryCliError
 from knowledge_refinery.front_matter import split_front_matter
 from knowledge_refinery.storage_ops import atomic_write_text
 from knowledge_refinery.storage_ops import interprocess_lock
@@ -53,7 +54,7 @@ def _slug(value: str) -> str:
 
 def _new_id(title: str) -> str:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    return f"{stamp}-{_slug(title)[:40]}-{secrets.token_hex(2)}"
+    return f"{stamp}-{_slug(title)[:40]}-{secrets.token_hex(8)}"
 
 
 def _render(header: dict[str, object], body: str) -> str:
@@ -106,6 +107,7 @@ def upsert_experience(
     supersedes: list[str],
     confidence: str | None,
     body: str | None,
+    expected_updated_at: str | None = None,
 ) -> Path:
     context = resolve_project_context(project)
     return _upsert_experience(
@@ -121,6 +123,7 @@ def upsert_experience(
         supersedes=supersedes,
         confidence=confidence,
         body=body,
+        expected_updated_at=expected_updated_at,
     )
 
 
@@ -139,6 +142,7 @@ def upsert_experience_at(
     supersedes: list[str],
     confidence: str | None,
     body: str | None,
+    expected_updated_at: str | None = None,
 ) -> Path:
     context = context_from_vault(vault, project_id)
     return _upsert_experience(
@@ -154,6 +158,7 @@ def upsert_experience_at(
         supersedes=supersedes,
         confidence=confidence,
         body=body,
+        expected_updated_at=expected_updated_at,
     )
 
 
@@ -171,6 +176,7 @@ def _upsert_experience(
     supersedes: list[str],
     confidence: str | None,
     body: str | None,
+    expected_updated_at: str | None,
 ) -> Path:
     if status not in EXPERIENCE_STATUS_CHOICES:
         raise ValueError(f"Unsupported experience status: {status}")
@@ -189,9 +195,18 @@ def _upsert_experience(
         created_at = datetime.now(UTC).isoformat()
         if path.exists():
             current, current_body = split_front_matter(path.read_text(encoding="utf-8"))
+            current_updated_at = str(current.get("updated_at", ""))
+            if expected_updated_at is None:
+                raise ValueError(
+                    "experience already exists; read it and pass expected_updated_at to update"
+                )
+            if expected_updated_at != current_updated_at:
+                raise ValueError("experience update conflict: expected_updated_at is stale")
             created_at = str(current.get("recorded_at", created_at))
             if body is None:
                 body = current_body
+        elif expected_updated_at is not None:
+            raise ValueError("experience does not exist; omit expected_updated_at to create it")
         header: dict[str, object] = {
             "schema_version": 2,
             "experience_id": document_id,
@@ -406,9 +421,14 @@ def _search_documents(
         for path in sorted(root.rglob("*.md")):
             if path.name == "AGENTS.md":
                 continue
-            text = path.read_text(encoding="utf-8")
-            header, _ = split_front_matter(text)
-            validate_document_header(header, kind=kind)
+            try:
+                text = path.read_text(encoding="utf-8")
+                header, _ = split_front_matter(text)
+                validate_document_header(header, kind=kind)
+            except (OSError, ValueError, RefineryCliError):
+                # Keep healthy knowledge searchable. refinery_validate reports the
+                # malformed document with its path and exact reason.
+                continue
             haystack = text.casefold()
             if any(term not in haystack for term in lowered_terms):
                 continue
@@ -430,6 +450,66 @@ def _search_documents(
                 )
             )
     return entries
+
+
+def read_experience_at(
+    vault: Path, project_id: str, experience_id: str
+) -> tuple[Path, dict[str, object], str]:
+    context = context_from_vault(vault, project_id)
+    _validate_slugs([experience_id], field="experience_id")
+    path = _find_document_path(context.project_store / "experiences", experience_id)
+    header, body = _read_exact_document(path, kind="experiences")
+    if header.get("experience_id") != experience_id or header.get("project_id") != project_id:
+        raise ValueError("experience ID and project_id must match its path")
+    return path, header, body
+
+
+def read_memory_at(
+    vault: Path,
+    current_project_id: str,
+    memory_id: str,
+    *,
+    scope: str,
+    project_id: str | None = None,
+) -> tuple[Path, dict[str, object], str]:
+    context = context_from_vault(vault, current_project_id)
+    _validate_slugs([memory_id], field="memory_id")
+    if scope == "shared":
+        if project_id is not None:
+            raise ValueError("project_id must be omitted for shared memory")
+        root = context.vault_root / "shared" / "memory"
+        expected_project_id: str | None = None
+    elif scope == "project":
+        expected_project_id = project_id or current_project_id
+        target = context_from_vault(context.vault_root, expected_project_id)
+        root = target.project_store / "memory"
+    else:
+        raise ValueError("scope must be project or shared")
+    path = _find_document_path(root, memory_id)
+    header, body = _read_exact_document(path, kind="memory")
+    if header.get("memory_id") != memory_id or header.get("scope") != scope:
+        raise ValueError("memory ID and scope must match its path")
+    if header.get("project_id") != expected_project_id:
+        raise ValueError("memory project_id must match its path")
+    return path, header, body
+
+
+def _read_exact_document(path: Path, *, kind: str) -> tuple[dict[str, object], str]:
+    header, body = split_front_matter(path.read_text(encoding="utf-8"))
+    validate_document_header(header, kind=kind)
+    return header, body
+
+
+def _find_document_path(root: Path, document_id: str) -> Path:
+    direct = _safe_child(root, f"{document_id}.md")
+    if direct.is_file():
+        return direct
+    candidates = sorted(root.rglob(f"{document_id}.md")) if root.is_dir() else []
+    if not candidates:
+        raise ValueError(f"Unknown refinery document: {document_id}")
+    if len(candidates) != 1:
+        raise ValueError(f"Ambiguous refinery document ID: {document_id}")
+    return candidates[0]
 
 
 def _search_roots(

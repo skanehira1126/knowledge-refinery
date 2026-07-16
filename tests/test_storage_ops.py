@@ -52,27 +52,51 @@ def _configured_vault(tmp_path: Path) -> tuple[Path, Path]:
 
 def test_concurrent_experience_updates_remain_coherent(tmp_path: Path) -> None:
     vault, _ = _configured_vault(tmp_path)
+    initial_path = upsert_experience_at(
+        vault,
+        "project",
+        title="initial",
+        purpose="initial",
+        status="completed",
+        experience_id="concurrent",
+        filename=None,
+        tags=[],
+        evidence=[],
+        related_experiences=[],
+        supersedes=[],
+        confidence="medium",
+        body="initial",
+    )
+    initial_header, _ = split_front_matter(initial_path.read_text(encoding="utf-8"))
+    revision = str(initial_header["updated_at"])
 
-    def write(index: int) -> None:
-        upsert_experience_at(
-            vault,
-            "project",
-            title=f"title-{index}",
-            purpose=f"purpose-{index}",
-            status="completed",
-            experience_id="concurrent",
-            filename=None,
-            tags=[],
-            evidence=[],
-            related_experiences=[],
-            supersedes=[],
-            confidence="medium",
-            body=f"body-{index}",
-        )
+    def write(index: int) -> bool:
+        try:
+            upsert_experience_at(
+                vault,
+                "project",
+                title=f"title-{index}",
+                purpose=f"purpose-{index}",
+                status="completed",
+                experience_id="concurrent",
+                filename=None,
+                tags=[],
+                evidence=[],
+                related_experiences=[],
+                supersedes=[],
+                confidence="medium",
+                body=f"body-{index}",
+                expected_updated_at=revision,
+            )
+        except ValueError as error:
+            assert "stale" in str(error)
+            return False
+        return True
 
     with ThreadPoolExecutor(max_workers=8) as executor:
-        list(executor.map(write, range(24)))
+        results = list(executor.map(write, range(24)))
 
+    assert sum(results) == 1
     path = vault / "projects" / "project" / "experiences" / "concurrent.md"
     header, body = split_front_matter(path.read_text(encoding="utf-8"))
     final_index = str(header["title"]).removeprefix("title-")

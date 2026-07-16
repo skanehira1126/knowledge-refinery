@@ -8,7 +8,7 @@ description: Search prior knowledge and record a meaningful development attempt 
 1. Resolve the current repository to an absolute `PROJECT_ROOT`, then run `knowledge-refinery project status --target "$PROJECT_ROOT" --json`. Never pass a literal placeholder path. Stop without calling refinery tools unless `ready` and `enabled` are true.
 2. Pass the repository's absolute path as `project_path` to every repo-scoped MCP tool. Search relevant project memory, shared memory, and experiences before acting. Start narrow; use cross-project search only when the decision can generalize.
 3. After a meaningful attempt or before closing the task, decide whether the result can change a future decision. Skip routine task logs.
-4. Record one integrated document with `refinery_record_experience`. Do not split the attempt and its evaluation into separate records.
+4. Record one integrated document with `refinery_record_experience`. Do not split the attempt and its evaluation into separate records. Creating a new experience omits `expected_updated_at`. Updating an existing experience requires the exact `updated_at` returned by `refinery_get_experience` or the prior record response; if it is stale, read and reconcile before retrying.
 5. Search the returned ID or read it back to confirm the saved record.
 
 Use this body shape:

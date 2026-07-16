@@ -10,6 +10,8 @@ from knowledge_refinery.config_ops import get_active_vault
 from knowledge_refinery.errors import RefineryCliError
 from knowledge_refinery.experience_ops import SearchFilters
 from knowledge_refinery.experience_ops import parse_datetime_filter
+from knowledge_refinery.experience_ops import read_experience_at
+from knowledge_refinery.experience_ops import read_memory_at
 from knowledge_refinery.experience_ops import search_documents_at
 from knowledge_refinery.experience_ops import upsert_experience_at
 from knowledge_refinery.experience_ops import upsert_memory_at
@@ -108,23 +110,8 @@ def refinery_get_experience(project_path: str, source: str) -> dict[str, object]
         experience_id = source
     elif not source_project_id or not experience_id or "/" in experience_id:
         raise ValueError("source must use experience-id or project-id/experience-id")
-    entries = search_documents_at(
-        vault,
-        current_project_id,
-        kind="experiences",
-        terms=[],
-        project_ids=[source_project_id],
-        tags=[],
-        statuses=[],
-        all_projects=True,
-        filters=SearchFilters(document_ids=(experience_id,)),
-    )
-    if not entries:
-        raise ValueError(f"Unknown experience: {source_project_id}/{experience_id}")
-    if len(entries) != 1:
-        raise ValueError(f"Ambiguous experience ID: {source_project_id}/{experience_id}")
-    header, body = split_front_matter(entries[0].path.read_text(encoding="utf-8"))
-    return {"header": header, "body": body, "path": str(entries[0].path.relative_to(vault))}
+    path, header, body = read_experience_at(vault, source_project_id, experience_id)
+    return {"header": header, "body": body, "path": str(path.relative_to(vault))}
 
 
 @mcp.tool()
@@ -140,8 +127,9 @@ def refinery_record_experience(
     supersedes: list[str] | None = None,
     confidence: str | None = None,
     experience_id: str | None = None,
+    expected_updated_at: str | None = None,
 ) -> dict[str, str]:
-    """Create or update an experience for a repository with integration enabled."""
+    """Create an experience, or update it with the revision returned by a prior read."""
     vault = get_active_vault()
     project_id = resolve_project_id(Path(project_path))
     path = upsert_experience_at(
@@ -158,10 +146,12 @@ def refinery_record_experience(
         supersedes=_list(supersedes),
         confidence=confidence,
         body=body,
+        expected_updated_at=expected_updated_at,
     )
     header, _ = split_front_matter(path.read_text(encoding="utf-8"))
     return {
         "experience_id": str(header["experience_id"]),
+        "updated_at": str(header["updated_at"]),
         "path": str(path.relative_to(vault)),
     }
 
@@ -208,31 +198,16 @@ def refinery_get_memory(
     project_id: str | None = None,
 ) -> dict[str, object]:
     """Read exact project or shared memory from an enabled repository."""
-    if scope not in {"project", "shared"}:
-        raise ValueError("scope must be project or shared")
     vault = get_active_vault()
     current_project_id = resolve_project_id(Path(project_path))
-    if scope == "shared" and project_id is not None:
-        raise ValueError("project_id must be omitted for shared memory")
-    target_project_id = project_id or current_project_id
-    entries = search_documents_at(
+    path, header, body = read_memory_at(
         vault,
         current_project_id,
-        kind="memory",
-        terms=[],
-        project_ids=[] if scope == "shared" else [target_project_id],
-        tags=[],
-        statuses=[],
-        all_projects=True,
-        filters=SearchFilters(document_ids=(memory_id,), scopes=(scope,)),
+        memory_id,
+        scope=scope,
+        project_id=project_id,
     )
-    if not entries:
-        namespace = "shared" if scope == "shared" else target_project_id
-        raise ValueError(f"Unknown memory: {namespace}/{memory_id}")
-    if len(entries) != 1:
-        raise ValueError(f"Ambiguous memory ID: {memory_id}")
-    header, body = split_front_matter(entries[0].path.read_text(encoding="utf-8"))
-    return {"header": header, "body": body, "path": str(entries[0].path.relative_to(vault))}
+    return {"header": header, "body": body, "path": str(path.relative_to(vault))}
 
 
 @mcp.tool()

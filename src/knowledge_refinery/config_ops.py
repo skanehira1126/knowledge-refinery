@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 
 from knowledge_refinery.storage_ops import atomic_write_text
-from knowledge_refinery.vault_ops import VAULT_MARKER
+from knowledge_refinery.vault_ops import validate_vault_root
 
 
 def config_path() -> Path:
@@ -47,7 +47,7 @@ def get_active_vault() -> Path:
 
 
 def _validate_vault(path: Path) -> Path:
-    root = path.expanduser().resolve()
-    if not (root / VAULT_MARKER).is_file():
-        raise ValueError(f"Configured refinery vault does not exist: {root}")
-    return root
+    try:
+        return validate_vault_root(path)
+    except ValueError as error:
+        raise ValueError(f"Configured refinery vault is invalid: {error}") from error

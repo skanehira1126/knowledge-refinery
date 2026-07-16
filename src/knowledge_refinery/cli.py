@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
-import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
+import tempfile
 
 from knowledge_refinery import get_version
 from knowledge_refinery.agents_ops import GUIDE_FILENAME_CHOICES
@@ -135,6 +136,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--supersedes", action="append", default=[], help="superseded experience ID"
     )
     experience_upsert.add_argument("--confidence", choices=CONFIDENCE_CHOICES, default=None)
+    experience_upsert.add_argument(
+        "--expected-updated-at",
+        default=None,
+        help="revision returned by a prior read; required when updating existing experience",
+    )
     add_body_arguments(experience_upsert)
     experience_upsert.set_defaults(handler=run_experience_upsert)
 
@@ -365,22 +371,76 @@ def run_project_status(args: argparse.Namespace) -> int:
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
     else:
         _print_mapping(payload)
-    return 0
+    return 0 if payload["state"] == "disabled" or payload["ready"] else 1
+
+
+def _vault_write_check(vault: Path | None) -> tuple[bool, str]:
+    if vault is None:
+        return False, "active vault unavailable"
+    descriptor = -1
+    temporary_name = ""
+    try:
+        descriptor, temporary_name = tempfile.mkstemp(prefix=".doctor-", dir=vault)
+        os.close(descriptor)
+        descriptor = -1
+        Path(temporary_name).unlink()
+    except OSError as error:
+        if descriptor >= 0:
+            os.close(descriptor)
+        if temporary_name:
+            try:
+                Path(temporary_name).unlink()
+            except OSError:
+                pass
+        return False, str(error)
+    return True, "temporary write succeeded"
+
+
+def _mcp_runtime_and_vault_check() -> tuple[dict[str, object], dict[str, object]]:
+    try:
+        from knowledge_refinery.mcp_server import refinery_info
+        from knowledge_refinery.mcp_server import refinery_validate
+
+        info = refinery_info()
+    except (ImportError, OSError, ValueError, RefineryCliError) as error:
+        runtime = {"name": "mcp_runtime", "ok": False, "detail": str(error)}
+        documents = {
+            "name": "vault_documents",
+            "ok": False,
+            "detail": "MCP runtime unavailable",
+        }
+        return runtime, documents
+    runtime = {
+        "name": "mcp_runtime",
+        "ok": info.get("version") == get_version(),
+        "detail": f"server={info.get('version')}, schema={info.get('schema_version')}",
+    }
+    try:
+        validation = refinery_validate()
+    except (OSError, ValueError, RefineryCliError) as error:
+        documents = {"name": "vault_documents", "ok": False, "detail": str(error)}
+        return runtime, documents
+    errors = validation.get("errors", [])
+    documents = {
+        "name": "vault_documents",
+        "ok": bool(validation.get("valid")),
+        "detail": f"checked={validation.get('checked', 0)}, errors={len(errors)}",
+    }
+    return runtime, documents
 
 
 def run_doctor(args: argparse.Namespace) -> int:
     project = _project_status_payload(Path(args.target), args.filename)
+    active_vault = Path(str(project["active_vault"])) if project["active_vault"] else None
+    write_ok, write_detail = _vault_write_check(active_vault)
+    mcp_runtime, vault_documents = _mcp_runtime_and_vault_check()
     runtime_checks: list[dict[str, object]] = [
         {
             "name": "python",
             "ok": sys.version_info >= (3, 11),
             "detail": sys.version.split()[0],
         },
-        {
-            "name": "mcp",
-            "ok": importlib.util.find_spec("mcp") is not None,
-            "detail": "Python package importable",
-        },
+        mcp_runtime,
         {
             "name": "uv",
             "ok": shutil.which("uv") is not None,
@@ -391,6 +451,8 @@ def run_doctor(args: argparse.Namespace) -> int:
             "ok": project["active_vault_error"] is None,
             "detail": project["active_vault"] or project["active_vault_error"],
         },
+        {"name": "vault_writable", "ok": write_ok, "detail": write_detail},
+        vault_documents,
         {
             "name": "project",
             "ok": project["ready"],
@@ -439,6 +501,7 @@ def run_experience_upsert(args: argparse.Namespace) -> int:
         supersedes=list(args.supersedes),
         confidence=args.confidence,
         body=read_body(args),
+        expected_updated_at=args.expected_updated_at,
     )
     print(path)
     return 0

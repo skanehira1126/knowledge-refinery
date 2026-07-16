@@ -96,6 +96,32 @@ def test_setup_project_refuses_to_replace_project_id(tmp_path: Path) -> None:
         setup_project(project, vault, project_id="second")
 
 
+def test_setup_project_refuses_project_id_collision(tmp_path: Path) -> None:
+    vault = tmp_path / "refinery"
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    init_vault(vault)
+    setup_project(first, vault, project_id="shared-id")
+
+    with pytest.raises(ValueError, match="already registered"):
+        setup_project(second, vault, project_id="shared-id")
+
+
+def test_setup_project_rejects_unsupported_vault_schema(tmp_path: Path) -> None:
+    vault = tmp_path / "refinery"
+    project = tmp_path / "project"
+    project.mkdir()
+    init_vault(vault)
+    (vault / VAULT_MARKER).write_text(
+        "schema_version: 999\nmanaged_by: knowledge-refinery\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match="Unsupported refinery vault schema"):
+        setup_project(project, vault, project_id="project")
+
+
 def test_setup_project_requires_separate_directory_trees(tmp_path: Path) -> None:
     project = tmp_path / "product"
     project.mkdir()

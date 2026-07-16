@@ -1,5 +1,6 @@
 site_name: Knowledge Refinery
 site_description: Central, Git-backed development knowledge for Codex
+site_url: https://skanehira1126.github.io/knowledge-refinery/
 repo_url: https://github.com/skanehira1126/knowledge-refinery
 repo_name: skanehira1126/knowledge-refinery
 theme:

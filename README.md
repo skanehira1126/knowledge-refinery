@@ -94,6 +94,7 @@ uv tool upgrade knowledge-refinery
 
 ## 詳細情報
 
+- [Web版ドキュメント](https://skanehira1126.github.io/knowledge-refinery/)
 - [導入手順](docs/getting-started.md)
 - [CLIリファレンス](docs/cli.md)
 - [仕組みとデータ配置](docs/architecture.md)

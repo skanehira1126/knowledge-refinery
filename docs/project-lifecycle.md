@@ -1,6 +1,7 @@
 # repoの有効・無効
 
 repo側のsource of truthは `.refinery.yaml` です。
+projectの説明情報は中央vaultの `projects/<project_id>/project.yaml` をsource of truthとします。
 
 `project_id` は登録後に変更しません。未設定repoからvault内の既存IDへ接続しようとすると、別repoのknowledge混在を防ぐためsetupは拒否されます。同じproduct repoのcloneでは、version管理された既存 `.refinery.yaml` を引き継ぎます。
 
@@ -42,3 +43,4 @@ knowledge-refinery project status --target "$PROJECT_ROOT" --json
 ```
 
 JSONの `state`、`ready`、`enabled`、`active_vault`、`vault_registered`、`managed_guidance`、`link_state` をautomationの安定契約として使えます。
+`project_metadata` には検証済みmetadata、`project_metadata_error` には読めない場合の理由が入ります。

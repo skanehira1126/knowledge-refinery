@@ -29,12 +29,14 @@ def test_stdio_server_lists_expected_tools() -> None:
         assert names == {
             "refinery_get_experience",
             "refinery_get_memory",
+            "refinery_get_project_metadata",
             "refinery_info",
             "refinery_list_projects",
             "refinery_record_experience",
             "refinery_record_memory",
             "refinery_search_experiences",
             "refinery_search_memory",
+            "refinery_update_project_metadata",
             "refinery_validate",
         }
         record_experience = next(
@@ -42,5 +44,11 @@ def test_stdio_server_lists_expected_tools() -> None:
         )
         assert "expected_updated_at" in record_experience.inputSchema["properties"]
         assert "expected_updated_at" not in record_experience.inputSchema.get("required", [])
+        update_metadata = next(
+            tool for tool in result.tools if tool.name == "refinery_update_project_metadata"
+        )
+        assert "expected_updated_at" in update_metadata.inputSchema.get("required", [])
+        assert "name" not in update_metadata.inputSchema.get("required", [])
+        assert "tags" not in update_metadata.inputSchema.get("required", [])
 
     anyio.run(exercise_server)

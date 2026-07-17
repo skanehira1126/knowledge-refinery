@@ -8,6 +8,7 @@ Codex surfaces
              │
              ├─ REFINERY_CONFIG or XDG config directory → active vault
              └─ central vault Git
+                 ├─ projects/<project_id>/project.yaml
                  ├─ projects/<project_id>/experiences
                  ├─ projects/<project_id>/evidence
                  ├─ projects/<project_id>/memory
@@ -25,13 +26,13 @@ Product repo
 - repo-scoped MCP toolsは `project_path` を受け、server側で `enabled` とproject登録を検証します。
 - symlinkは人間の閲覧用であり、MCPとCLIの必須依存ではありません。
 - vault markerのmanagerとschemaを利用前に検証し、未対応schemaへの書き込みを拒否します。
-- 中央vaultの書き込みはatomic replaceとpath lockで破損を防ぎ、experienceとmemoryの更新は`expected_updated_at`による楽観的排他で競合上書きを拒否します。
+- 中央vaultの書き込みはatomic replaceとpath lockで破損を防ぎ、project metadata、experience、memoryの更新は`expected_updated_at`による楽観的排他で競合上書きを拒否します。
 - 検索は不正文書を隔離し、exact getは対象IDの正規pathを直接検証します。不正文書の一覧は `refinery_validate` が返します。
 
 ## データフロー
 
 1. Skillが `project status` でrepoの有効性を確認する。
 2. MCPが `project_path` からproject IDを導出する。
-3. domain処理がYAML schemaとprovenanceを検証する。
+3. domain処理がproject metadataまたはknowledge文書のYAML schemaとprovenanceを検証する。
 4. storage層が中央vaultへatomicに保存する。
 5. refinery Gitがknowledge履歴をproduct Gitとは別に追跡する。

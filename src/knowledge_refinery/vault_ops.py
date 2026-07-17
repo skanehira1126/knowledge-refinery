@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC
+from datetime import datetime
 from pathlib import Path
 import re
 
@@ -8,12 +10,16 @@ import yaml
 
 from knowledge_refinery import get_version
 from knowledge_refinery.storage_ops import atomic_write_text
+from knowledge_refinery.storage_ops import interprocess_lock
 
 
 PROJECT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+PROJECT_TAG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 VAULT_MARKER = ".refinery-vault.yaml"
 PROJECT_CONFIG = ".refinery.yaml"
 PROJECT_LINK = ".refinery"
+PROJECT_METADATA = "project.yaml"
+PROJECT_METADATA_SCHEMA_VERSION = 1
 VAULT_SCHEMA_VERSION = 2
 VAULT_MANAGER = "knowledge-refinery"
 
@@ -28,6 +34,7 @@ class VaultInitResult:
 class ProjectSetupResult:
     project_id: str
     project_store: Path
+    metadata_path: Path
     config_path: Path
     link_path: Path | None
 
@@ -48,6 +55,30 @@ class ProjectConfig:
 
 
 @dataclass(frozen=True)
+class ProjectMetadata:
+    schema_version: int
+    project_id: str
+    name: str
+    summary: str
+    tags: tuple[str, ...]
+    technologies: tuple[str, ...]
+    created_at: str
+    updated_at: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "project_id": self.project_id,
+            "name": self.name,
+            "summary": self.summary,
+            "tags": list(self.tags),
+            "technologies": list(self.technologies),
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+
+@dataclass(frozen=True)
 class ProjectStatus:
     project_root: Path
     config_path: Path
@@ -59,6 +90,9 @@ class ProjectStatus:
     vault_root: Path | None
     vault_registered: bool
     project_store: Path | None
+    metadata_path: Path | None
+    metadata_valid: bool
+    metadata_error: str | None
     link_state: str
 
     @property
@@ -76,6 +110,7 @@ class ProjectStatus:
             and self.enabled
             and self.vault_root is not None
             and self.vault_registered
+            and self.metadata_valid
             and self.link_state in {"absent", "valid"}
         )
 
@@ -118,6 +153,10 @@ def setup_project(
     vault: Path,
     *,
     project_id: str | None = None,
+    project_name: str | None = None,
+    summary: str = "",
+    tags: list[str] | None = None,
+    technologies: list[str] | None = None,
     create_link: bool = False,
 ) -> ProjectSetupResult:
     target = target.expanduser().resolve()
@@ -139,6 +178,19 @@ def setup_project(
                 "refusing to replace it with a different project_id"
             )
 
+    now = datetime.now(UTC).isoformat()
+    metadata = ProjectMetadata(
+        schema_version=PROJECT_METADATA_SCHEMA_VERSION,
+        project_id=resolved_id,
+        name=target.name if project_name is None else project_name,
+        summary=summary,
+        tags=tuple(tags or []),
+        technologies=tuple(technologies or []),
+        created_at=now,
+        updated_at=now,
+    )
+    validate_project_metadata(metadata.as_dict(), expected_project_id=resolved_id)
+
     project_store = vault / "projects" / resolved_id
     if project_store.exists() and not config_path.is_file():
         raise ValueError(
@@ -148,6 +200,9 @@ def setup_project(
     for name in ("experiences", "evidence", "memory"):
         (project_store / name).mkdir(parents=True, exist_ok=True)
     _write_if_needed(project_store / "AGENTS.md", _project_store_agents(resolved_id), force=False)
+    metadata_path = project_store / PROJECT_METADATA
+    _write_if_needed(metadata_path, _render_project_metadata(metadata), force=False)
+    read_project_metadata(vault, resolved_id)
 
     atomic_write_text(
         config_path,
@@ -160,7 +215,7 @@ def setup_project(
     link_path = _ensure_optional_link(target, project_store) if create_link else None
     if link_path is not None:
         _ensure_gitignore(target / ".gitignore", f"/{PROJECT_LINK}")
-    return ProjectSetupResult(resolved_id, project_store, config_path, link_path)
+    return ProjectSetupResult(resolved_id, project_store, metadata_path, config_path, link_path)
 
 
 def read_project_config(project: Path) -> ProjectConfig:
@@ -250,11 +305,23 @@ def inspect_project(project: Path, vault: Path | None) -> ProjectStatus:
             vault_root=vault,
             vault_registered=False,
             project_store=None,
+            metadata_path=None,
+            metadata_valid=False,
+            metadata_error=None,
             link_state=_link_state(project_root, None),
         )
 
     vault_root = vault.expanduser().resolve() if vault is not None else None
     project_store = vault_root / "projects" / config.project_id if vault_root is not None else None
+    metadata_path = project_store / PROJECT_METADATA if project_store is not None else None
+    metadata_valid = False
+    metadata_error: str | None = None
+    if vault_root is not None and project_store is not None and project_store.is_dir():
+        try:
+            read_project_metadata(vault_root, config.project_id)
+            metadata_valid = True
+        except (OSError, ValueError) as error:
+            metadata_error = str(error)
     return ProjectStatus(
         project_root=project_root,
         config_path=project_config_path,
@@ -266,6 +333,9 @@ def inspect_project(project: Path, vault: Path | None) -> ProjectStatus:
         vault_root=vault_root,
         vault_registered=bool(project_store is not None and project_store.is_dir()),
         project_store=project_store,
+        metadata_path=metadata_path,
+        metadata_valid=metadata_valid,
+        metadata_error=metadata_error,
         link_state=_link_state(project_root, project_store),
     )
 
@@ -311,6 +381,130 @@ def resolve_project_context(project: Path, vault: Path | None = None) -> Project
 def list_project_ids(vault: Path) -> list[str]:
     root = validate_vault_root(vault)
     return sorted(path.name for path in (root / "projects").iterdir() if path.is_dir())
+
+
+def list_project_metadata(vault: Path) -> list[ProjectMetadata]:
+    root = validate_vault_root(vault)
+    return [read_project_metadata(root, project_id) for project_id in list_project_ids(root)]
+
+
+def read_project_metadata(vault: Path, project_id: str) -> ProjectMetadata:
+    context = context_from_vault(vault, project_id)
+    path = context.project_store / PROJECT_METADATA
+    if not path.is_file():
+        raise ValueError(f"Missing project metadata: {path}")
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as error:
+        raise ValueError(f"Invalid project metadata: {path}: {error}") from error
+    validate_project_metadata(raw, expected_project_id=project_id)
+    assert isinstance(raw, dict)
+    tags = raw["tags"]
+    technologies = raw["technologies"]
+    assert isinstance(tags, list)
+    assert isinstance(technologies, list)
+    return ProjectMetadata(
+        schema_version=PROJECT_METADATA_SCHEMA_VERSION,
+        project_id=project_id,
+        name=str(raw["name"]),
+        summary=str(raw["summary"]),
+        tags=tuple(str(item) for item in tags),
+        technologies=tuple(str(item) for item in technologies),
+        created_at=str(raw["created_at"]),
+        updated_at=str(raw["updated_at"]),
+    )
+
+
+def update_project_metadata(
+    vault: Path,
+    project_id: str,
+    *,
+    expected_updated_at: str,
+    name: str | None = None,
+    summary: str | None = None,
+    tags: list[str] | None = None,
+    technologies: list[str] | None = None,
+) -> ProjectMetadata:
+    if name is None and summary is None and tags is None and technologies is None:
+        raise ValueError("project metadata update requires at least one changed field")
+    context = context_from_vault(vault, project_id)
+    path = context.project_store / PROJECT_METADATA
+    with interprocess_lock(path):
+        current = read_project_metadata(context.vault_root, project_id)
+        if expected_updated_at != current.updated_at:
+            raise ValueError("project metadata update conflict: expected_updated_at is stale")
+        updated = ProjectMetadata(
+            schema_version=PROJECT_METADATA_SCHEMA_VERSION,
+            project_id=project_id,
+            name=current.name if name is None else name,
+            summary=current.summary if summary is None else summary,
+            tags=current.tags if tags is None else tuple(tags),
+            technologies=(current.technologies if technologies is None else tuple(technologies)),
+            created_at=current.created_at,
+            updated_at=datetime.now(UTC).isoformat(),
+        )
+        validate_project_metadata(updated.as_dict(), expected_project_id=project_id)
+        atomic_write_text(path, _render_project_metadata(updated))
+    return updated
+
+
+def validate_project_metadata(raw: object, *, expected_project_id: str | None = None) -> None:
+    if not isinstance(raw, dict):
+        raise ValueError("project metadata must be a mapping")
+    if raw.get("schema_version") != PROJECT_METADATA_SCHEMA_VERSION:
+        raise ValueError(f"Unsupported project metadata schema: {raw.get('schema_version')}")
+    project_id = raw.get("project_id")
+    if not isinstance(project_id, str):
+        raise ValueError("project metadata requires project_id")
+    _validate_project_id(project_id)
+    if expected_project_id is not None and project_id != expected_project_id:
+        raise ValueError(
+            f"project metadata project_id must match path project: {expected_project_id}"
+        )
+    name = raw.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("project metadata requires a non-empty name")
+    summary = raw.get("summary")
+    if not isinstance(summary, str):
+        raise ValueError("project metadata summary must be a string")
+    tags = raw.get("tags")
+    technologies = raw.get("technologies")
+    _validate_string_list(tags, field="tags")
+    _validate_string_list(technologies, field="technologies")
+    assert isinstance(tags, list)
+    assert isinstance(technologies, list)
+    if any(not PROJECT_TAG_RE.fullmatch(tag) for tag in tags):
+        raise ValueError("project metadata tags must use lowercase kebab-case")
+    if len(technologies) != len({technology.casefold() for technology in technologies}):
+        raise ValueError(
+            "project metadata technologies must not contain case-insensitive duplicates"
+        )
+    _validate_timestamp(raw.get("created_at"), field="created_at")
+    _validate_timestamp(raw.get("updated_at"), field="updated_at")
+
+
+def _render_project_metadata(metadata: ProjectMetadata) -> str:
+    return yaml.safe_dump(metadata.as_dict(), sort_keys=False, allow_unicode=True)
+
+
+def _validate_string_list(value: object, *, field: str) -> None:
+    if not isinstance(value, list) or any(
+        not isinstance(item, str) or not item.strip() for item in value
+    ):
+        raise ValueError(f"project metadata {field} must be a list of non-empty strings")
+    if len(value) != len(set(value)):
+        raise ValueError(f"project metadata {field} must not contain duplicates")
+
+
+def _validate_timestamp(value: object, *, field: str) -> None:
+    if not isinstance(value, str):
+        raise ValueError(f"project metadata {field} must be an ISO 8601 timestamp")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise ValueError(f"project metadata {field} must be an ISO 8601 timestamp") from error
+    if parsed.tzinfo is None:
+        raise ValueError(f"project metadata {field} must include a timezone")
 
 
 def validate_vault_root(vault: Path) -> Path:
@@ -368,6 +562,7 @@ def _vault_readme() -> str:
 
 Personal, cross-project experience repository managed by knowledge-refinery.
 
+- `projects/<project_id>/project.yaml`: project identity and discovery metadata
 - `projects/<project_id>/experiences`: integrated attempt and outcome records
 - `projects/<project_id>/evidence`: small retained evidence and metadata
 - `projects/<project_id>/memory`: reusable project-specific principles
@@ -391,6 +586,7 @@ def _vault_agents() -> str:
 def _project_store_agents(project_id: str) -> str:
     return f"""# {project_id} refinery rules
 
+- `project.yaml` stores the project name, summary, tags, and technologies.
 - `experiences/` stores integrated attempts and conclusions.
 - `evidence/` stores only small snapshots or metadata.
 - `memory/` stores reusable principles supported by experiences.

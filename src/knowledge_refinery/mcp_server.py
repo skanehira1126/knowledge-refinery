@@ -18,8 +18,12 @@ from knowledge_refinery.experience_ops import upsert_memory_at
 from knowledge_refinery.experience_ops import validate_document_header
 from knowledge_refinery.experience_ops import validate_memory_source_references
 from knowledge_refinery.front_matter import split_front_matter
-from knowledge_refinery.vault_ops import list_project_ids
+from knowledge_refinery.vault_ops import PROJECT_METADATA
+from knowledge_refinery.vault_ops import PROJECT_METADATA_SCHEMA_VERSION
+from knowledge_refinery.vault_ops import list_project_metadata
+from knowledge_refinery.vault_ops import read_project_metadata
 from knowledge_refinery.vault_ops import resolve_project_id
+from knowledge_refinery.vault_ops import update_project_metadata
 
 
 mcp = FastMCP(
@@ -46,15 +50,50 @@ def _entry(entry: Any, vault: Path) -> dict[str, str]:
 
 
 @mcp.tool()
-def refinery_list_projects() -> list[str]:
-    """List project IDs registered in the active local refinery vault."""
-    return list_project_ids(get_active_vault())
+def refinery_list_projects() -> list[dict[str, object]]:
+    """List project identity and discovery metadata from the active local vault."""
+    return [metadata.as_dict() for metadata in list_project_metadata(get_active_vault())]
+
+
+@mcp.tool()
+def refinery_get_project_metadata(project_path: str) -> dict[str, object]:
+    """Read central metadata for an enabled repository."""
+    vault = get_active_vault()
+    project_id = resolve_project_id(Path(project_path))
+    return read_project_metadata(vault, project_id).as_dict()
+
+
+@mcp.tool()
+def refinery_update_project_metadata(
+    project_path: str,
+    expected_updated_at: str,
+    name: str | None = None,
+    summary: str | None = None,
+    tags: list[str] | None = None,
+    technologies: list[str] | None = None,
+) -> dict[str, object]:
+    """Partially update metadata; omitted fields are preserved and empty lists clear lists."""
+    vault = get_active_vault()
+    project_id = resolve_project_id(Path(project_path))
+    return update_project_metadata(
+        vault,
+        project_id,
+        expected_updated_at=expected_updated_at,
+        name=name,
+        summary=summary,
+        tags=tags,
+        technologies=technologies,
+    ).as_dict()
 
 
 @mcp.tool()
 def refinery_info() -> dict[str, object]:
     """Return the MCP package and document schema versions for drift checks."""
-    return {"version": get_version(), "schema_version": 2}
+    return {
+        "version": get_version(),
+        "schema_version": 2,
+        "project_metadata_schema_version": PROJECT_METADATA_SCHEMA_VERSION,
+    }
 
 
 @mcp.tool()
@@ -250,11 +289,20 @@ def refinery_record_memory(
 
 @mcp.tool()
 def refinery_validate() -> dict[str, object]:
-    """Validate all experience and memory front matter in the active vault."""
+    """Validate project metadata, experience, and memory documents in the active vault."""
     vault = get_active_vault()
     errors: list[dict[str, str]] = []
     checked = 0
     seen_ids: dict[tuple[str, str, str], Path] = {}
+    for project_store in sorted((vault / "projects").iterdir()):
+        if not project_store.is_dir():
+            continue
+        path = project_store / PROJECT_METADATA
+        try:
+            read_project_metadata(vault, project_store.name)
+            checked += 1
+        except (OSError, ValueError, RefineryCliError) as error:
+            errors.append({"path": str(path.relative_to(vault)), "error": str(error)})
     for path in sorted(vault.rglob("*.md")):
         relative = path.relative_to(vault)
         parts = relative.parts

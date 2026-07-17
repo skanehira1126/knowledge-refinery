@@ -5,12 +5,14 @@ import pytest
 from knowledge_refinery.config_ops import set_active_vault
 from knowledge_refinery.mcp_server import refinery_get_experience
 from knowledge_refinery.mcp_server import refinery_get_memory
+from knowledge_refinery.mcp_server import refinery_get_project_metadata
 from knowledge_refinery.mcp_server import refinery_info
 from knowledge_refinery.mcp_server import refinery_list_projects
 from knowledge_refinery.mcp_server import refinery_record_experience
 from knowledge_refinery.mcp_server import refinery_record_memory
 from knowledge_refinery.mcp_server import refinery_search_experiences
 from knowledge_refinery.mcp_server import refinery_search_memory
+from knowledge_refinery.mcp_server import refinery_update_project_metadata
 from knowledge_refinery.mcp_server import refinery_validate
 from knowledge_refinery.vault_ops import disable_project
 from knowledge_refinery.vault_ops import init_vault
@@ -53,8 +55,33 @@ def test_local_mcp_records_searches_and_validates(
         experience_id="boruta-trial",
     )
 
-    assert refinery_list_projects() == ["pybr"]
-    assert refinery_info() == {"version": "0.2.0", "schema_version": 2}
+    metadata = refinery_get_project_metadata(str(project))
+    assert metadata["project_id"] == "pybr"
+    assert refinery_list_projects() == [metadata]
+    updated_metadata = refinery_update_project_metadata(
+        project_path=str(project),
+        name="Pybr",
+        summary="特徴量選択の実験プロジェクト",
+        tags=["ml"],
+        technologies=["Python"],
+        expected_updated_at=str(metadata["updated_at"]),
+    )
+    assert updated_metadata["summary"] == "特徴量選択の実験プロジェクト"
+    tagged_metadata = refinery_update_project_metadata(
+        project_path=str(project),
+        tags=["ml", "feature-selection"],
+        expected_updated_at=str(updated_metadata["updated_at"]),
+    )
+    assert tagged_metadata["name"] == "Pybr"
+    assert tagged_metadata["summary"] == "特徴量選択の実験プロジェクト"
+    assert tagged_metadata["tags"] == ["ml", "feature-selection"]
+    assert tagged_metadata["technologies"] == ["Python"]
+    assert refinery_list_projects() == [tagged_metadata]
+    assert refinery_info() == {
+        "version": "0.2.0",
+        "schema_version": 2,
+        "project_metadata_schema_version": 1,
+    }
     assert recorded["experience_id"] == "boruta-trial"
     assert recorded["updated_at"]
     assert (
@@ -87,7 +114,7 @@ def test_local_mcp_records_searches_and_validates(
         ]
         == "feature-selection"
     )
-    assert refinery_validate() == {"valid": True, "checked": 2, "errors": []}
+    assert refinery_validate() == {"valid": True, "checked": 3, "errors": []}
 
 
 def test_mcp_reads_qualified_experience_and_shared_memory(
@@ -275,6 +302,28 @@ def test_validate_rejects_path_project_mismatch(
     assert "must match path project" in str(result["errors"])
 
 
+def test_validate_rejects_invalid_project_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    path = vault / "projects" / "pybr" / "project.yaml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("name: pybr", "name: ''"),
+        encoding="utf-8",
+    )
+
+    result = refinery_validate()
+
+    assert result["valid"] is False
+    assert result["checked"] == 0
+    assert result["errors"] == [
+        {
+            "path": "projects/pybr/project.yaml",
+            "error": "project metadata requires a non-empty name",
+        }
+    ]
+
+
 def test_validate_rejects_filename_that_does_not_match_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -306,6 +355,8 @@ def test_project_scoped_mcp_rejects_disabled_repository(
 
     with pytest.raises(ValueError, match="is disabled"):
         refinery_search_memory(project_path=str(project))
+    with pytest.raises(ValueError, match="is disabled"):
+        refinery_get_project_metadata(project_path=str(project))
     with pytest.raises(ValueError, match="is disabled"):
         refinery_record_experience(
             project_path=str(project),
@@ -341,6 +392,6 @@ def test_validate_reports_memory_with_missing_source(
     result = refinery_validate()
 
     assert result["valid"] is False
-    assert result["checked"] == 0
+    assert result["checked"] == 1
     assert isinstance(result["errors"], list)
     assert "Unknown source experience" in result["errors"][0]["error"]

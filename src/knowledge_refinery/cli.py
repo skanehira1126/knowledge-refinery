@@ -31,8 +31,10 @@ from knowledge_refinery.vault_ops import disable_project
 from knowledge_refinery.vault_ops import enable_project
 from knowledge_refinery.vault_ops import init_vault
 from knowledge_refinery.vault_ops import inspect_project
+from knowledge_refinery.vault_ops import read_project_metadata
 from knowledge_refinery.vault_ops import resolve_project_id
 from knowledge_refinery.vault_ops import setup_project
+from knowledge_refinery.vault_ops import update_project_metadata
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -60,11 +62,17 @@ def build_parser() -> argparse.ArgumentParser:
     project_parser = subparsers.add_parser("project", help="Connect a project to a refinery")
     project_subparsers = project_parser.add_subparsers(dest="project_command", required=True)
     project_setup = project_subparsers.add_parser(
-        "setup", help="Create a project area and link it as .refinery"
+        "setup", help="Create a project area, metadata, and optional .refinery link"
     )
     project_setup.add_argument("--target", default=".", help="project repository path")
     project_setup.add_argument("--vault", required=True, help="central refinery repository path")
     project_setup.add_argument("--project-id", default=None, help="stable project slug")
+    project_setup.add_argument("--project-name", default=None, help="human-readable project name")
+    project_setup.add_argument("--summary", default="", help="concise project summary")
+    project_setup.add_argument("--tag", action="append", default=[], help="project discovery tag")
+    project_setup.add_argument(
+        "--technology", action="append", default=[], help="technology used by the project"
+    )
     project_setup.add_argument(
         "--link",
         action="store_true",
@@ -107,6 +115,48 @@ def build_parser() -> argparse.ArgumentParser:
     project_status.add_argument("--filename", choices=GUIDE_FILENAME_CHOICES, default="AGENTS.md")
     project_status.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     project_status.set_defaults(handler=run_project_status)
+
+    project_metadata = project_subparsers.add_parser(
+        "metadata", help="Read or update central project metadata"
+    )
+    project_metadata_subparsers = project_metadata.add_subparsers(
+        dest="project_metadata_command", required=True
+    )
+    project_metadata_show = project_metadata_subparsers.add_parser(
+        "show", help="Read project metadata"
+    )
+    project_metadata_show.add_argument("--target", default=".", help="project repository path")
+    project_metadata_show.add_argument(
+        "--json", action="store_true", help="emit machine-readable JSON"
+    )
+    project_metadata_show.set_defaults(handler=run_project_metadata_show)
+    project_metadata_update = project_metadata_subparsers.add_parser(
+        "update", help="Partially update project metadata using the current revision"
+    )
+    project_metadata_update.add_argument("--target", default=".", help="project repository path")
+    project_metadata_update.add_argument("--name", default=None, help="human-readable name")
+    project_metadata_update.add_argument("--summary", default=None, help="concise summary")
+    tag_update = project_metadata_update.add_mutually_exclusive_group()
+    tag_update.add_argument(
+        "--tag", action="append", default=None, help="replace project discovery tags"
+    )
+    tag_update.add_argument("--clear-tags", action="store_true", help="remove every project tag")
+    technology_update = project_metadata_update.add_mutually_exclusive_group()
+    technology_update.add_argument(
+        "--technology", action="append", default=None, help="replace project technologies"
+    )
+    technology_update.add_argument(
+        "--clear-technologies", action="store_true", help="remove every project technology"
+    )
+    project_metadata_update.add_argument(
+        "--expected-updated-at",
+        required=True,
+        help="revision returned by project metadata show",
+    )
+    project_metadata_update.add_argument(
+        "--json", action="store_true", help="emit machine-readable JSON"
+    )
+    project_metadata_update.set_defaults(handler=run_project_metadata_update)
 
     experience_parser = subparsers.add_parser("experience", help="Record and search experiences")
     experience_subparsers = experience_parser.add_subparsers(
@@ -284,12 +334,17 @@ def run_project_setup(args: argparse.Namespace) -> int:
         Path(args.target),
         vault,
         project_id=args.project_id,
+        project_name=args.project_name,
+        summary=args.summary,
+        tags=list(args.tag),
+        technologies=list(args.technology),
         create_link=bool(args.link),
     )
     set_active_vault(vault)
     print(f"Project configured: {result.project_id}")
     print(f"Project config: {result.config_path}")
     print(f"Refinery store: {result.project_store}")
+    print(f"Project metadata: {result.metadata_path}")
     if result.link_path is not None:
         print(f"Optional refinery link: {result.link_path}")
     if args.agents:
@@ -307,6 +362,7 @@ def run_project_enable(args: argparse.Namespace) -> int:
     print(f"Project enabled: {result.project_id}")
     print(f"Project config: {result.config_path}")
     print(f"Refinery store: {result.project_store}")
+    print(f"Project metadata: {result.metadata_path}")
     if result.link_path is not None:
         print(f"Optional refinery link: {result.link_path}")
     print(f"Managed repository guidance: {agents_path}")
@@ -334,9 +390,16 @@ def _active_vault_or_error() -> tuple[Path | None, str | None]:
 def _project_status_payload(project: Path, filename: str) -> dict[str, object]:
     vault, vault_error = _active_vault_or_error()
     status = inspect_project(project, vault)
+    metadata: dict[str, object] | None = None
+    metadata_error = status.metadata_error
+    if vault is not None and status.metadata_valid and status.project_id is not None:
+        try:
+            metadata = read_project_metadata(vault, status.project_id).as_dict()
+        except (OSError, ValueError) as error:
+            metadata_error = str(error)
     return {
         "state": status.state,
-        "ready": status.ready,
+        "ready": status.ready and metadata is not None,
         "project_root": str(status.project_root),
         "config_path": str(status.config_path),
         "config_exists": status.config_exists,
@@ -348,6 +411,12 @@ def _project_status_payload(project: Path, filename: str) -> dict[str, object]:
         "active_vault_error": vault_error,
         "vault_registered": status.vault_registered,
         "project_store": (str(status.project_store) if status.project_store is not None else None),
+        "project_metadata_path": (
+            str(status.metadata_path) if status.metadata_path is not None else None
+        ),
+        "project_metadata": metadata,
+        "project_metadata_valid": status.metadata_valid,
+        "project_metadata_error": metadata_error,
         "link_state": status.link_state,
         "managed_guidance": has_managed_block(project, filename=filename),
         "guidance_filename": filename,
@@ -372,6 +441,41 @@ def run_project_status(args: argparse.Namespace) -> int:
     else:
         _print_mapping(payload)
     return 0 if payload["state"] == "disabled" or payload["ready"] else 1
+
+
+def run_project_metadata_show(args: argparse.Namespace) -> int:
+    vault = get_active_vault()
+    metadata = read_project_metadata(vault, resolve_project_id(Path(args.target))).as_dict()
+    if args.json:
+        print(json.dumps(metadata, ensure_ascii=False, sort_keys=True))
+    else:
+        _print_mapping(metadata)
+    return 0
+
+
+def run_project_metadata_update(args: argparse.Namespace) -> int:
+    vault = get_active_vault()
+    project_id = resolve_project_id(Path(args.target))
+    tags = [] if args.clear_tags else (list(args.tag) if args.tag is not None else None)
+    technologies = (
+        []
+        if args.clear_technologies
+        else (list(args.technology) if args.technology is not None else None)
+    )
+    metadata = update_project_metadata(
+        vault,
+        project_id,
+        expected_updated_at=args.expected_updated_at,
+        name=args.name,
+        summary=args.summary,
+        tags=tags,
+        technologies=technologies,
+    ).as_dict()
+    if args.json:
+        print(json.dumps(metadata, ensure_ascii=False, sort_keys=True))
+    else:
+        _print_mapping(metadata)
+    return 0
 
 
 def _vault_write_check(vault: Path | None) -> tuple[bool, str]:

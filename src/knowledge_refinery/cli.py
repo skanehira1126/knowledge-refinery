@@ -131,16 +131,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     project_metadata_show.set_defaults(handler=run_project_metadata_show)
     project_metadata_update = project_metadata_subparsers.add_parser(
-        "update", help="Replace project metadata using the current revision"
+        "update", help="Partially update project metadata using the current revision"
     )
     project_metadata_update.add_argument("--target", default=".", help="project repository path")
-    project_metadata_update.add_argument("--name", required=True, help="human-readable name")
-    project_metadata_update.add_argument("--summary", required=True, help="concise summary")
-    project_metadata_update.add_argument(
-        "--tag", action="append", default=[], help="project discovery tag"
+    project_metadata_update.add_argument("--name", default=None, help="human-readable name")
+    project_metadata_update.add_argument("--summary", default=None, help="concise summary")
+    tag_update = project_metadata_update.add_mutually_exclusive_group()
+    tag_update.add_argument(
+        "--tag", action="append", default=None, help="replace project discovery tags"
     )
-    project_metadata_update.add_argument(
-        "--technology", action="append", default=[], help="technology used by the project"
+    tag_update.add_argument("--clear-tags", action="store_true", help="remove every project tag")
+    technology_update = project_metadata_update.add_mutually_exclusive_group()
+    technology_update.add_argument(
+        "--technology", action="append", default=None, help="replace project technologies"
+    )
+    technology_update.add_argument(
+        "--clear-technologies", action="store_true", help="remove every project technology"
     )
     project_metadata_update.add_argument(
         "--expected-updated-at",
@@ -450,14 +456,20 @@ def run_project_metadata_show(args: argparse.Namespace) -> int:
 def run_project_metadata_update(args: argparse.Namespace) -> int:
     vault = get_active_vault()
     project_id = resolve_project_id(Path(args.target))
+    tags = [] if args.clear_tags else (list(args.tag) if args.tag is not None else None)
+    technologies = (
+        []
+        if args.clear_technologies
+        else (list(args.technology) if args.technology is not None else None)
+    )
     metadata = update_project_metadata(
         vault,
         project_id,
+        expected_updated_at=args.expected_updated_at,
         name=args.name,
         summary=args.summary,
-        tags=list(args.tag),
-        technologies=list(args.technology),
-        expected_updated_at=args.expected_updated_at,
+        tags=tags,
+        technologies=technologies,
     ).as_dict()
     if args.json:
         print(json.dumps(metadata, ensure_ascii=False, sort_keys=True))

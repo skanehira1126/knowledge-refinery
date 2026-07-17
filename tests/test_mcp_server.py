@@ -67,7 +67,16 @@ def test_local_mcp_records_searches_and_validates(
         expected_updated_at=str(metadata["updated_at"]),
     )
     assert updated_metadata["summary"] == "特徴量選択の実験プロジェクト"
-    assert refinery_list_projects() == [updated_metadata]
+    tagged_metadata = refinery_update_project_metadata(
+        project_path=str(project),
+        tags=["ml", "feature-selection"],
+        expected_updated_at=str(updated_metadata["updated_at"]),
+    )
+    assert tagged_metadata["name"] == "Pybr"
+    assert tagged_metadata["summary"] == "特徴量選択の実験プロジェクト"
+    assert tagged_metadata["tags"] == ["ml", "feature-selection"]
+    assert tagged_metadata["technologies"] == ["Python"]
+    assert refinery_list_projects() == [tagged_metadata]
     assert refinery_info() == {
         "version": "0.2.0",
         "schema_version": 2,

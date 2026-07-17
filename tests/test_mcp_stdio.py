@@ -48,5 +48,7 @@ def test_stdio_server_lists_expected_tools() -> None:
             tool for tool in result.tools if tool.name == "refinery_update_project_metadata"
         )
         assert "expected_updated_at" in update_metadata.inputSchema.get("required", [])
+        assert "name" not in update_metadata.inputSchema.get("required", [])
+        assert "tags" not in update_metadata.inputSchema.get("required", [])
 
     anyio.run(exercise_server)

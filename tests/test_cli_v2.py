@@ -141,6 +141,49 @@ def test_cli_reads_and_updates_project_metadata(
     assert updated["tags"] == ["backend"]
     assert updated["technologies"] == ["Python"]
 
+    assert (
+        main(
+            [
+                "project",
+                "metadata",
+                "update",
+                "--target",
+                str(project),
+                "--tag",
+                "customer-facing",
+                "--expected-updated-at",
+                updated["updated_at"],
+                "--json",
+            ]
+        )
+        == 0
+    )
+    tag_only = json.loads(capsys.readouterr().out)
+    assert tag_only["name"] == "Product API"
+    assert tag_only["summary"] == "顧客向けAPI"
+    assert tag_only["tags"] == ["customer-facing"]
+    assert tag_only["technologies"] == ["Python"]
+
+    assert (
+        main(
+            [
+                "project",
+                "metadata",
+                "update",
+                "--target",
+                str(project),
+                "--clear-technologies",
+                "--expected-updated-at",
+                tag_only["updated_at"],
+                "--json",
+            ]
+        )
+        == 0
+    )
+    cleared = json.loads(capsys.readouterr().out)
+    assert cleared["tags"] == ["customer-facing"]
+    assert cleared["technologies"] == []
+
 
 def test_cli_setup_can_append_managed_guidance_when_requested(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

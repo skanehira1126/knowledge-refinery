@@ -4,7 +4,7 @@ Use Knowledge Refinery to preserve reusable experience from this repository.
 
 - Use Knowledge Refinery only when `.refinery.yaml` has `enabled: true`, and pass the current repository's absolute path as `project_path` to repo-scoped MCP tools.
 - Treat `enabled: false` as an intentional opt-out. Never re-enable only to satisfy a search or recording request; require the user's explicit request or confirmation.
-- When the project name, summary, discovery tags, or principal technologies change, read the current revision and update its central project metadata.
+- When the project name, summary, discovery tags, or principal technologies change, read the current revision and partially update its central project metadata. Keep purpose/domain tags in lowercase kebab-case and technology names only in technologies.
 - Search relevant memory and experience when they could affect a decision.
 - Use `refinery-experience` after meaningful experiments, comparisons, rejections, or informative failures.
 - Keep purpose, attempts, findings, limitations, and future possibilities in one experience.

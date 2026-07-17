@@ -24,8 +24,10 @@ shared memoryの根拠を読むときは `refinery_get_experience(project_path, 
 
 project metadataを更新するときは、`refinery_get_project_metadata` または
 `refinery_list_projects` が返した現在の `updated_at` を
-`refinery_update_project_metadata.expected_updated_at` に渡します。名前、概要、tag、利用技術は
-projectの発見とcross-project検索範囲の判断に使い、secretやローカル絶対pathは保存しません。
+`refinery_update_project_metadata.expected_updated_at` に渡します。変更fieldだけを指定し、
+省略fieldは保持されます。`tags: []` または `technologies: []` は該当listの明示clearです。
+tagはlowercase kebab-caseで目的・領域を表し、技術名は `technologies` だけに保存します。
+名前、概要、tag、利用技術にはsecret、ローカル絶対path、未確認の推測を保存しません。
 
 検索は破損文書を隔離して正常文書を返します。破損文書のpathと理由は管理tool `refinery_validate` で確認します。IDを指定するget toolは対象ファイルを直接読み、対象自身が不正な場合はエラーを返します。
 

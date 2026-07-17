@@ -14,6 +14,7 @@ from knowledge_refinery.storage_ops import interprocess_lock
 
 
 PROJECT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+PROJECT_TAG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 VAULT_MARKER = ".refinery-vault.yaml"
 PROJECT_CONFIG = ".refinery.yaml"
 PROJECT_LINK = ".refinery"
@@ -177,16 +178,6 @@ def setup_project(
                 "refusing to replace it with a different project_id"
             )
 
-    project_store = vault / "projects" / resolved_id
-    if project_store.exists() and not config_path.is_file():
-        raise ValueError(
-            f"project_id is already registered in this vault: {resolved_id}. "
-            f"Refusing to connect an unconfigured repository to {project_store}"
-        )
-    for name in ("experiences", "evidence", "memory"):
-        (project_store / name).mkdir(parents=True, exist_ok=True)
-    _write_if_needed(project_store / "AGENTS.md", _project_store_agents(resolved_id), force=False)
-    metadata_path = project_store / PROJECT_METADATA
     now = datetime.now(UTC).isoformat()
     metadata = ProjectMetadata(
         schema_version=PROJECT_METADATA_SCHEMA_VERSION,
@@ -199,6 +190,17 @@ def setup_project(
         updated_at=now,
     )
     validate_project_metadata(metadata.as_dict(), expected_project_id=resolved_id)
+
+    project_store = vault / "projects" / resolved_id
+    if project_store.exists() and not config_path.is_file():
+        raise ValueError(
+            f"project_id is already registered in this vault: {resolved_id}. "
+            f"Refusing to connect an unconfigured repository to {project_store}"
+        )
+    for name in ("experiences", "evidence", "memory"):
+        (project_store / name).mkdir(parents=True, exist_ok=True)
+    _write_if_needed(project_store / "AGENTS.md", _project_store_agents(resolved_id), force=False)
+    metadata_path = project_store / PROJECT_METADATA
     _write_if_needed(metadata_path, _render_project_metadata(metadata), force=False)
     read_project_metadata(vault, resolved_id)
 
@@ -417,12 +419,14 @@ def update_project_metadata(
     vault: Path,
     project_id: str,
     *,
-    name: str,
-    summary: str,
-    tags: list[str],
-    technologies: list[str],
     expected_updated_at: str,
+    name: str | None = None,
+    summary: str | None = None,
+    tags: list[str] | None = None,
+    technologies: list[str] | None = None,
 ) -> ProjectMetadata:
+    if name is None and summary is None and tags is None and technologies is None:
+        raise ValueError("project metadata update requires at least one changed field")
     context = context_from_vault(vault, project_id)
     path = context.project_store / PROJECT_METADATA
     with interprocess_lock(path):
@@ -432,10 +436,10 @@ def update_project_metadata(
         updated = ProjectMetadata(
             schema_version=PROJECT_METADATA_SCHEMA_VERSION,
             project_id=project_id,
-            name=name,
-            summary=summary,
-            tags=tuple(tags),
-            technologies=tuple(technologies),
+            name=current.name if name is None else name,
+            summary=current.summary if summary is None else summary,
+            tags=current.tags if tags is None else tuple(tags),
+            technologies=(current.technologies if technologies is None else tuple(technologies)),
             created_at=current.created_at,
             updated_at=datetime.now(UTC).isoformat(),
         )
@@ -463,8 +467,18 @@ def validate_project_metadata(raw: object, *, expected_project_id: str | None = 
     summary = raw.get("summary")
     if not isinstance(summary, str):
         raise ValueError("project metadata summary must be a string")
-    _validate_string_list(raw.get("tags"), field="tags")
-    _validate_string_list(raw.get("technologies"), field="technologies")
+    tags = raw.get("tags")
+    technologies = raw.get("technologies")
+    _validate_string_list(tags, field="tags")
+    _validate_string_list(technologies, field="technologies")
+    assert isinstance(tags, list)
+    assert isinstance(technologies, list)
+    if any(not PROJECT_TAG_RE.fullmatch(tag) for tag in tags):
+        raise ValueError("project metadata tags must use lowercase kebab-case")
+    if len(technologies) != len({technology.casefold() for technology in technologies}):
+        raise ValueError(
+            "project metadata technologies must not contain case-insensitive duplicates"
+        )
     _validate_timestamp(raw.get("created_at"), field="created_at")
     _validate_timestamp(raw.get("updated_at"), field="updated_at")
 

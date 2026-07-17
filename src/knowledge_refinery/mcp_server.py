@@ -66,23 +66,23 @@ def refinery_get_project_metadata(project_path: str) -> dict[str, object]:
 @mcp.tool()
 def refinery_update_project_metadata(
     project_path: str,
-    name: str,
-    summary: str,
-    tags: list[str],
-    technologies: list[str],
     expected_updated_at: str,
+    name: str | None = None,
+    summary: str | None = None,
+    tags: list[str] | None = None,
+    technologies: list[str] | None = None,
 ) -> dict[str, object]:
-    """Update project metadata using the revision returned by a prior read or list."""
+    """Partially update metadata; omitted fields are preserved and empty lists clear lists."""
     vault = get_active_vault()
     project_id = resolve_project_id(Path(project_path))
     return update_project_metadata(
         vault,
         project_id,
+        expected_updated_at=expected_updated_at,
         name=name,
         summary=summary,
         tags=tags,
         technologies=technologies,
-        expected_updated_at=expected_updated_at,
     ).as_dict()
 
 

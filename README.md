@@ -101,6 +101,8 @@ knowledge-refinery project enable --target "$PROJECT_ROOT"
 
 project metadataを更新する場合は、先に `refinery_get_project_metadata` で取得した
 `updated_at` を `refinery_update_project_metadata.expected_updated_at` へ渡します。
+変更するfieldだけを指定し、省略したfieldは保持されます。`tags: []` または
+`technologies: []` を明示した場合だけ、そのlistを空にします。
 
 既存experienceを更新する場合は、先に `refinery_get_experience` で取得した
 `updated_at` を `refinery_record_experience.expected_updated_at` へ渡します。memoryと同様に、

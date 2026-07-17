@@ -116,6 +116,30 @@ def test_update_project_metadata_requires_current_revision(tmp_path: Path) -> No
     assert updated.created_at == current.created_at
     assert updated.updated_at != current.updated_at
     assert read_project_metadata(vault, "product") == updated
+    partial = update_project_metadata(
+        vault,
+        "product",
+        summary="更新した概要",
+        expected_updated_at=updated.updated_at,
+    )
+    assert partial.name == "Product API"
+    assert partial.summary == "更新した概要"
+    assert partial.tags == ("backend",)
+    assert partial.technologies == ("Python",)
+    cleared = update_project_metadata(
+        vault,
+        "product",
+        tags=[],
+        expected_updated_at=partial.updated_at,
+    )
+    assert cleared.tags == ()
+    assert cleared.technologies == ("Python",)
+    with pytest.raises(ValueError, match="at least one changed field"):
+        update_project_metadata(
+            vault,
+            "product",
+            expected_updated_at=cleared.updated_at,
+        )
     with pytest.raises(ValueError, match="stale"):
         update_project_metadata(
             vault,
@@ -125,6 +149,27 @@ def test_update_project_metadata_requires_current_revision(tmp_path: Path) -> No
             tags=[],
             technologies=[],
             expected_updated_at=current.updated_at,
+        )
+
+
+def test_project_metadata_requires_canonical_tags_and_technologies(tmp_path: Path) -> None:
+    vault = tmp_path / "refinery"
+    project = tmp_path / "product"
+    project.mkdir()
+    init_vault(vault)
+
+    with pytest.raises(ValueError, match="lowercase kebab-case"):
+        setup_project(project, vault, project_id="product", tags=["Backend"])
+    assert not (vault / "projects" / "product").exists()
+
+    second = tmp_path / "product-two"
+    second.mkdir()
+    with pytest.raises(ValueError, match="case-insensitive duplicates"):
+        setup_project(
+            second,
+            vault,
+            project_id="product-two",
+            technologies=["Python", "python"],
         )
 
 

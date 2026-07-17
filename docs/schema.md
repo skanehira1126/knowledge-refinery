@@ -33,8 +33,10 @@ created_at: 2026-07-17T00:00:00+00:00
 updated_at: 2026-07-17T00:10:00+00:00
 ```
 
-`project_id` はdirectory名と一致し、`name` は空にできません。`tags` と
-`technologies` は重複のない文字列listです。更新時は現在の `updated_at` を使います。
+`project_id` はdirectory名と一致し、`name` は空にできません。`tags` は重複のない
+lowercase kebab-caseにし、projectの目的や領域を表す値だけを入れます。技術名はtagへ重複させず
+`technologies` に標準的な表記で保存し、大文字・小文字だけが異なる重複も禁止します。
+更新時は現在の `updated_at` を使い、省略fieldは保持、空listを明示したfieldだけをclearします。
 
 ## experience
 

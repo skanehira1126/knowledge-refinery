@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from knowledge_refinery.cli import build_parser
 from knowledge_refinery.cli import main
@@ -59,13 +60,86 @@ def test_cli_initializes_and_connects_project(
                 str(vault),
                 "--project-id",
                 "pybr",
+                "--project-name",
+                "Pybr",
+                "--summary",
+                "特徴量選択ツール",
+                "--tag",
+                "ml",
+                "--technology",
+                "Python",
             ]
         )
         == 0
     )
     assert not (project / ".refinery").exists()
     assert (vault / "projects" / "pybr" / "experiences").is_dir()
+    metadata = yaml.safe_load(
+        (vault / "projects" / "pybr" / "project.yaml").read_text(encoding="utf-8")
+    )
+    assert metadata["name"] == "Pybr"
+    assert metadata["summary"] == "特徴量選択ツール"
+    assert metadata["tags"] == ["ml"]
+    assert metadata["technologies"] == ["Python"]
     assert not (project / "AGENTS.md").exists()
+
+
+def test_cli_reads_and_updates_project_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("REFINERY_CONFIG", str(tmp_path / "config.yaml"))
+    vault = tmp_path / "refinery"
+    project = tmp_path / "product"
+    project.mkdir()
+    assert main(["vault", "init", "--root", str(vault)]) == 0
+    assert (
+        main(
+            [
+                "project",
+                "setup",
+                "--target",
+                str(project),
+                "--vault",
+                str(vault),
+                "--project-id",
+                "product",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    assert main(["project", "metadata", "show", "--target", str(project), "--json"]) == 0
+    current = json.loads(capsys.readouterr().out)
+    assert current["name"] == "product"
+    assert (
+        main(
+            [
+                "project",
+                "metadata",
+                "update",
+                "--target",
+                str(project),
+                "--name",
+                "Product API",
+                "--summary",
+                "顧客向けAPI",
+                "--tag",
+                "backend",
+                "--technology",
+                "Python",
+                "--expected-updated-at",
+                current["updated_at"],
+                "--json",
+            ]
+        )
+        == 0
+    )
+    updated = json.loads(capsys.readouterr().out)
+    assert updated["name"] == "Product API"
+    assert updated["summary"] == "顧客向けAPI"
+    assert updated["tags"] == ["backend"]
+    assert updated["technologies"] == ["Python"]
 
 
 def test_cli_setup_can_append_managed_guidance_when_requested(
@@ -137,6 +211,9 @@ def test_cli_can_disable_status_and_reenable_project(
     assert status["state"] == "disabled"
     assert status["enabled"] is False
     assert status["vault_registered"] is True
+    assert status["project_metadata"]["project_id"] == "pybr"
+    assert status["project_metadata_valid"] is True
+    assert status["project_metadata_error"] is None
     assert status["link_state"] == "absent"
     assert status["managed_guidance"] is False
 
@@ -201,4 +278,4 @@ def test_doctor_reports_malformed_vault_documents(
     diagnosis = json.loads(capsys.readouterr().out)
     documents = next(check for check in diagnosis["runtime"] if check["name"] == "vault_documents")
     assert documents["ok"] is False
-    assert documents["detail"] == "checked=0, errors=1"
+    assert documents["detail"] == "checked=1, errors=1"

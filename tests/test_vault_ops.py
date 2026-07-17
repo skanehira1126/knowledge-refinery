@@ -4,15 +4,19 @@ import pytest
 import yaml
 
 from knowledge_refinery.vault_ops import PROJECT_CONFIG
+from knowledge_refinery.vault_ops import PROJECT_METADATA
 from knowledge_refinery.vault_ops import VAULT_MARKER
 from knowledge_refinery.vault_ops import disable_project
 from knowledge_refinery.vault_ops import enable_project
 from knowledge_refinery.vault_ops import init_vault
 from knowledge_refinery.vault_ops import inspect_project
+from knowledge_refinery.vault_ops import list_project_metadata
 from knowledge_refinery.vault_ops import read_project_config
+from knowledge_refinery.vault_ops import read_project_metadata
 from knowledge_refinery.vault_ops import resolve_project_context
 from knowledge_refinery.vault_ops import resolve_project_id
 from knowledge_refinery.vault_ops import setup_project
+from knowledge_refinery.vault_ops import update_project_metadata
 
 
 def test_init_vault_creates_central_layout(tmp_path: Path) -> None:
@@ -54,7 +58,90 @@ def test_setup_project_can_add_optional_link(tmp_path: Path) -> None:
     assert (project / ".gitignore").read_text(encoding="utf-8") == "/.refinery\n"
     config = yaml.safe_load((project / PROJECT_CONFIG).read_text(encoding="utf-8"))
     assert config == {"schema_version": 2, "project_id": "pybr", "enabled": True}
+    metadata = yaml.safe_load(
+        (vault / "projects" / "pybr" / PROJECT_METADATA).read_text(encoding="utf-8")
+    )
+    assert metadata["schema_version"] == 1
+    assert metadata["project_id"] == "pybr"
+    assert metadata["name"] == "pybr"
+    assert metadata["summary"] == ""
+    assert metadata["tags"] == []
+    assert metadata["technologies"] == []
+    assert metadata["created_at"] == metadata["updated_at"]
     assert resolve_project_context(project).vault_root == vault.resolve()
+
+
+def test_setup_project_records_discovery_metadata(tmp_path: Path) -> None:
+    vault = tmp_path / "refinery"
+    project = tmp_path / "product"
+    project.mkdir()
+    init_vault(vault)
+
+    setup_project(
+        project,
+        vault,
+        project_id="product",
+        project_name="Product API",
+        summary="顧客向けAPI",
+        tags=["backend", "customer-facing"],
+        technologies=["Python", "FastAPI"],
+    )
+
+    metadata = read_project_metadata(vault, "product")
+    assert metadata.name == "Product API"
+    assert metadata.summary == "顧客向けAPI"
+    assert metadata.tags == ("backend", "customer-facing")
+    assert metadata.technologies == ("Python", "FastAPI")
+    assert list_project_metadata(vault) == [metadata]
+
+
+def test_update_project_metadata_requires_current_revision(tmp_path: Path) -> None:
+    vault = tmp_path / "refinery"
+    project = tmp_path / "product"
+    project.mkdir()
+    init_vault(vault)
+    setup_project(project, vault, project_id="product")
+    current = read_project_metadata(vault, "product")
+
+    updated = update_project_metadata(
+        vault,
+        "product",
+        name="Product API",
+        summary="顧客向けAPI",
+        tags=["backend"],
+        technologies=["Python"],
+        expected_updated_at=current.updated_at,
+    )
+
+    assert updated.created_at == current.created_at
+    assert updated.updated_at != current.updated_at
+    assert read_project_metadata(vault, "product") == updated
+    with pytest.raises(ValueError, match="stale"):
+        update_project_metadata(
+            vault,
+            "product",
+            name="stale",
+            summary="stale",
+            tags=[],
+            technologies=[],
+            expected_updated_at=current.updated_at,
+        )
+
+
+def test_read_project_metadata_rejects_path_project_mismatch(tmp_path: Path) -> None:
+    vault = tmp_path / "refinery"
+    project = tmp_path / "product"
+    project.mkdir()
+    init_vault(vault)
+    setup_project(project, vault, project_id="product")
+    path = vault / "projects" / "product" / PROJECT_METADATA
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("project_id: product", "project_id: other"),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="must match path project"):
+        read_project_metadata(vault, "product")
 
 
 def test_setup_project_refuses_conflicting_refinery_path(tmp_path: Path) -> None:

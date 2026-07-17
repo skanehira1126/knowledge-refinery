@@ -18,6 +18,24 @@ project_id: my-project
 enabled: true
 ```
 
+## project metadata
+
+中央vaultの `projects/<project_id>/project.yaml` に保存します。
+
+```yaml
+schema_version: 1
+project_id: my-project
+name: My Project
+summary: 顧客向けAPIを提供する
+tags: [backend, customer-facing]
+technologies: [Python, FastAPI]
+created_at: 2026-07-17T00:00:00+00:00
+updated_at: 2026-07-17T00:10:00+00:00
+```
+
+`project_id` はdirectory名と一致し、`name` は空にできません。`tags` と
+`technologies` は重複のない文字列listです。更新時は現在の `updated_at` を使います。
+
 ## experience
 
 ```yaml

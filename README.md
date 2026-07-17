@@ -5,7 +5,8 @@ Codexで得た開発経験を、複数のプロジェクトから再利用でき
 
 ```text
 Codex Plugin ── MCP ── 中央vault
-      │                 ├─ projects/<project-id>/
+      │                 ├─ projects/<project-id>/project.yaml
+      │                 ├─ projects/<project-id>/{experiences,evidence,memory}/
       │                 └─ shared/memory/
       └─ 利用repoの .refinery.yaml でON/OFF
 ```
@@ -61,13 +62,20 @@ PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 knowledge-refinery project setup \
   --target "$PROJECT_ROOT" \
   --vault "$REFINERY_VAULT" \
-  --project-id my-project
+  --project-id my-project \
+  --project-name "My Project" \
+  --summary "プロジェクトの目的を一文で記述" \
+  --tag backend \
+  --technology Python
 
 knowledge-refinery doctor --target "$PROJECT_ROOT"
 ```
 
 `doctor` に `ok: yes` と表示されたら準備完了です。`project setup` はrepoに
-`.refinery.yaml` を作り、中央vaultにプロジェクト領域を用意します。Knowledge Refineryの
+`.refinery.yaml` を作り、中央vaultのproject領域と `project.yaml` を用意します。
+`project.yaml` はproject ID、名前、概要、検索用tag、利用技術を保持し、
+`refinery_list_projects`、`refinery_get_project_metadata`、
+`refinery_update_project_metadata` から参照・更新できます。Knowledge Refineryの
 共通ルールも `AGENTS.md` へ追記する場合だけ、setupに `--agents` を付けてください。
 doctorはvault schema、書き込み可能性、knowledge文書、ローカルMCP runtimeを検査します。
 Codex側のPlugin登録状態はPlugin settingsで確認してください。
@@ -90,6 +98,9 @@ knowledge-refinery project enable --target "$PROJECT_ROOT"
 ```
 
 `disable` しても中央vaultの記録は削除されません。
+
+project metadataを更新する場合は、先に `refinery_get_project_metadata` で取得した
+`updated_at` を `refinery_update_project_metadata.expected_updated_at` へ渡します。
 
 既存experienceを更新する場合は、先に `refinery_get_experience` で取得した
 `updated_at` を `refinery_record_experience.expected_updated_at` へ渡します。memoryと同様に、

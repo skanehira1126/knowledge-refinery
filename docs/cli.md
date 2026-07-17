@@ -12,14 +12,18 @@ knowledge-refinery vault configure --root PATH
 ## project lifecycle
 
 ```text
-knowledge-refinery project setup --target PATH --vault PATH [--project-id SLUG] [--link] [--agents] [--lang jp|en] [--filename AGENTS.md|CLAUDE.md]
+knowledge-refinery project setup --target PATH --vault PATH [--project-id SLUG] [--project-name TEXT] [--summary TEXT] [--tag TEXT] [--technology TEXT] [--link] [--agents] [--lang jp|en] [--filename AGENTS.md|CLAUDE.md]
 knowledge-refinery project enable --target PATH [--vault PATH] [--link] [--lang jp|en]
 knowledge-refinery project disable --target PATH
 knowledge-refinery project status --target PATH [--json]
+knowledge-refinery project metadata show --target PATH [--json]
+knowledge-refinery project metadata update --target PATH --name TEXT --summary TEXT [--tag TEXT] [--technology TEXT] --expected-updated-at TIMESTAMP [--json]
 knowledge-refinery doctor --target PATH [--mcp-version VERSION] [--json]
 ```
 
-`project setup` はデフォルトではrepository guidanceを変更しません。`--agents` を指定した場合だけ、`--filename` で選んだファイルへmanaged blockを追記します。既定のファイルは `AGENTS.md`、言語は `jp` です。未設定repoから既存の `project-id` への登録は、別repoのデータ混在を防ぐため拒否されます。
+`project setup` は中央vaultへ `project.yaml` を必ず作成します。名前、概要、検索用tag、利用技術はsetup optionで指定でき、名前を省略した場合はrepository directory名を使います。デフォルトではrepository guidanceを変更しません。`--agents` を指定した場合だけ、`--filename` で選んだファイルへmanaged blockを追記します。既定のファイルは `AGENTS.md`、言語は `jp` です。未設定repoから既存の `project-id` への登録は、別repoのデータ混在を防ぐため拒否されます。
+
+metadata更新は `show` の `updated_at` を `update --expected-updated-at` に渡します。revisionなし、または古いrevisionでの更新は拒否されます。
 
 `doctor` はactive vaultのschema、書き込み可能性、全knowledge文書、ローカルMCP runtime、project登録を検査します。MCP接続後は `refinery_info.version` を `doctor --mcp-version` へ渡すと、PATH上CLIと実際に接続されたPlugin内MCPのrelease driftも機械的に検出します。Codex側のPlugin登録状態そのものはCLI単独では確認できません。
 

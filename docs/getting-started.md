@@ -55,10 +55,14 @@ PROJECT_ROOT="$(git rev-parse --show-toplevel)"  # 導入対象repoで実行
 knowledge-refinery project setup \
   --target "$PROJECT_ROOT" \
   --vault "$REFINERY_VAULT" \
-  --project-id my-project
+  --project-id my-project \
+  --project-name "My Project" \
+  --summary "プロジェクトの目的を一文で記述" \
+  --tag backend \
+  --technology Python
 ```
 
-`project-id` は小文字、数字、hyphenの安定したslugにします。このコマンドは `.refinery.yaml` と中央vaultのproject領域を冪等に整備します。デフォルトでは `AGENTS.md` を作成・変更しません。
+`project-id` は小文字、数字、hyphenの安定したslugにします。このコマンドは `.refinery.yaml` と中央vaultのproject領域、`project.yaml` を冪等に整備します。project metadataには名前、概要、検索用tag、利用技術が入り、cross-project検索の範囲判断に使われます。デフォルトでは `AGENTS.md` を作成・変更しません。
 
 Knowledge Refineryの共通ルールを `AGENTS.md` に追記する場合は `--agents` を指定します。既存の内容は保持され、管理対象のblockだけが追加または更新されます。
 

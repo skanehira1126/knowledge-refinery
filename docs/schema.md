@@ -109,3 +109,23 @@ tags:
 
 Project metadataの`tags`はproject発見用の別fieldです。Knowledge tagの階層とは混合せず、
 project metadataでは引き続きlowercase kebab-caseの単一segmentを使います。
+
+## Knowledge tag taxonomy
+
+tagの説明を追加すると、中央vault直下の`knowledge-tags.yaml`へ保存します。利用件数は
+Experienceとmemoryから動的に集計するため、このファイルには保存しません。
+
+```yaml
+schema_version: 1
+updated_at: 2026-07-18T00:00:00+00:00
+tags:
+  domain:
+    description: 対象となる業務・知識領域
+  domain/ml:
+    description: 機械学習モデルと分析手法
+```
+
+tag keyにはKnowledge tagと同じ形式を使い、descriptionは空にできません。ファイルがない
+vaultでも`domain`、`artifact`、`task`、`tech`、`issue`の標準説明を読み取り専用の既定値として
+返します。最初の説明登録ではrevisionを省略し、ファイル作成後の更新ではbrowseまたはsearchが
+返した`taxonomy_updated_at`を指定します。

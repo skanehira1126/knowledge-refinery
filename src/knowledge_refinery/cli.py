@@ -27,6 +27,10 @@ from knowledge_refinery.experience_ops import parse_datetime_filter
 from knowledge_refinery.experience_ops import search_documents_at
 from knowledge_refinery.experience_ops import upsert_experience_at
 from knowledge_refinery.experience_ops import upsert_memory_at
+from knowledge_refinery.tag_ops import browse_knowledge_tags
+from knowledge_refinery.tag_ops import search_knowledge_tags
+from knowledge_refinery.tag_ops import update_tag_description
+from knowledge_refinery.vault_ops import context_from_vault
 from knowledge_refinery.vault_ops import disable_project
 from knowledge_refinery.vault_ops import enable_project
 from knowledge_refinery.vault_ops import init_vault
@@ -246,6 +250,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_typed_search_arguments(memory_search)
     memory_search.set_defaults(handler=run_memory_search)
+
+    tag_parser = subparsers.add_parser("tag", help="Browse and describe Knowledge tags")
+    tag_subparsers = tag_parser.add_subparsers(dest="tag_command", required=True)
+    tag_browse = tag_subparsers.add_parser(
+        "browse", help="List the immediate children of one Knowledge tag"
+    )
+    tag_browse.add_argument("--project", default=".", help="configured project path")
+    tag_browse.add_argument("--parent", default=None, help="parent tag; omit for root tags")
+    tag_browse.add_argument(
+        "--all-projects", action="store_true", help="include usage from every project"
+    )
+    tag_browse.set_defaults(handler=run_tag_browse)
+
+    tag_search = tag_subparsers.add_parser(
+        "search", help="Search Knowledge tag paths and descriptions"
+    )
+    tag_search.add_argument("terms", nargs="+", help="AND-matched search terms")
+    tag_search.add_argument("--project", default=".", help="configured project path")
+    tag_search.add_argument(
+        "--all-projects", action="store_true", help="include usage from every project"
+    )
+    tag_search.set_defaults(handler=run_tag_search)
+
+    tag_describe = tag_subparsers.add_parser(
+        "describe", help="Create or update one Knowledge tag description"
+    )
+    tag_describe.add_argument("--project", default=".", help="configured project path")
+    tag_describe.add_argument("--tag", required=True, help="Knowledge tag path")
+    tag_describe.add_argument("--description", required=True, help="stable tag description")
+    tag_describe.add_argument(
+        "--expected-updated-at",
+        default=None,
+        help="taxonomy revision returned by tag browse or search",
+    )
+    tag_describe.set_defaults(handler=run_tag_describe)
 
     agents_parser = subparsers.add_parser(
         "update-agents-md", help="Update the managed refinery guidance block"
@@ -637,6 +676,50 @@ def run_experience_search(args: argparse.Namespace) -> int:
 
 def run_memory_search(args: argparse.Namespace) -> int:
     return run_document_search(args, kind="memory", statuses=[])
+
+
+def run_tag_browse(args: argparse.Namespace) -> int:
+    project = Path(args.project)
+    payload = browse_knowledge_tags(
+        get_active_vault(),
+        resolve_project_id(project),
+        parent_tag=args.parent,
+        all_projects=bool(args.all_projects),
+    )
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+def run_tag_search(args: argparse.Namespace) -> int:
+    project = Path(args.project)
+    payload = search_knowledge_tags(
+        get_active_vault(),
+        resolve_project_id(project),
+        terms=list(args.terms),
+        all_projects=bool(args.all_projects),
+    )
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+def run_tag_describe(args: argparse.Namespace) -> int:
+    project = Path(args.project)
+    vault = get_active_vault()
+    project_id = resolve_project_id(project)
+    context_from_vault(vault, project_id)
+    taxonomy = update_tag_description(
+        vault,
+        tag=args.tag,
+        description=args.description,
+        expected_updated_at=args.expected_updated_at,
+    )
+    payload = {
+        "tag": args.tag,
+        "description": taxonomy.descriptions[args.tag],
+        "taxonomy_updated_at": taxonomy.updated_at,
+    }
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0
 
 
 def run_document_search(args: argparse.Namespace, *, kind: str, statuses: list[str]) -> int:

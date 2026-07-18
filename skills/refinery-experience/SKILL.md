@@ -33,4 +33,4 @@ Pass evidence as structured mappings:
 
 Link related or superseded experience IDs when known. Do not commit product files merely to preserve an experience, and do not invent evidence that was not inspected.
 
-Use knowledge tags with one to three lowercase slug segments separated by `/`, such as `domain/ml/feature-selection`. Prefer existing project tag branches when known; a parent tag search also matches its descendants.
+Before assigning tags, call `refinery_browse_knowledge_tags` without `parent_tag`, then follow relevant children one level at a time. Use `refinery_search_knowledge_tags` when a concept is easier to identify from words than from the hierarchy. Reuse the narrowest existing tag whose description fits; do not invent a parallel spelling when an existing branch applies. Use one to three lowercase slug segments separated by `/`, such as `domain/ml/feature-selection`; a parent tag search also matches its descendants.

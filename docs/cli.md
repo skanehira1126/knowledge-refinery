@@ -19,6 +19,9 @@ knowledge-refinery project status --target PATH [--json]
 knowledge-refinery project metadata show --target PATH [--json]
 knowledge-refinery project metadata update --target PATH [--name TEXT] [--summary TEXT] [--tag TEXT | --clear-tags] [--technology TEXT | --clear-technologies] --expected-updated-at TIMESTAMP [--json]
 knowledge-refinery doctor --target PATH [--mcp-version VERSION] [--json]
+knowledge-refinery tag browse --project PATH [--parent TAG] [--all-projects]
+knowledge-refinery tag search TERMS... --project PATH [--all-projects]
+knowledge-refinery tag describe --project PATH --tag TAG --description TEXT [--expected-updated-at TIMESTAMP]
 ```
 
 `project setup` は中央vaultへ `project.yaml` を必ず作成します。名前、概要、検索用tag、利用技術はsetup optionで指定でき、名前を省略した場合はrepository directory名を使います。デフォルトではrepository guidanceを変更しません。`--agents` を指定した場合だけ、`--filename` で選んだファイルへmanaged blockを追記します。既定のファイルは `AGENTS.md`、言語は `jp` です。未設定repoから既存の `project-id` への登録は、別repoのデータ混在を防ぐため拒否されます。
@@ -38,6 +41,13 @@ knowledge-refinery experience search [TERMS...] --project PATH [filters]
 
 Experienceとmemoryの`--tag`は`/`区切りの最大3階層です。searchで`--tag domain/ml`を
 指定すると、`domain/ml`と`domain/ml/feature-selection`の両方に一致します。
+
+`tag browse`は`--parent`直下だけを説明・利用件数付きのJSONで返します。`--parent`を省略して
+rootから開始し、必要な枝を順に辿ります。`tag search`はtag pathと説明をAND条件で検索します。
+どちらも既定では現在projectとshared memoryを集計し、`--all-projects`で全projectへ広げます。
+
+`tag describe`は説明を中央vaultのtaxonomyへ保存します。最初の登録後は`tag browse`または
+`tag search`が返した`taxonomy_updated_at`を`--expected-updated-at`へ指定します。
 
 既存experienceを更新する場合は、直前に取得したheaderの `updated_at` を `--expected-updated-at` へ渡します。revisionなしの上書きとstale revisionは拒否されます。
 

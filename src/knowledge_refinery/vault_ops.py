@@ -567,6 +567,7 @@ Personal, cross-project experience repository managed by knowledge-refinery.
 - `projects/<project_id>/evidence`: small retained evidence and metadata
 - `projects/<project_id>/memory`: reusable project-specific principles
 - `shared/memory`: principles supported across projects
+- `knowledge-tags.yaml`: optional descriptions for the shared Knowledge tag taxonomy
 """
 
 
@@ -580,6 +581,7 @@ def _vault_agents() -> str:
 - Keep one experience per Markdown file and avoid a global mutable index.
 - Promote only repeatedly useful principles into memory.
 - Use `shared/memory` only for cross-project principles.
+- Keep Knowledge tag descriptions stable and factual in `knowledge-tags.yaml`.
 """
 
 

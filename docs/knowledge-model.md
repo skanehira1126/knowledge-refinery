@@ -73,6 +73,23 @@ tags:
 1階層目はタグの分類軸として揃え、異なる軸は別タグとして付与します。
 Project自体の発見に使う`project.yaml.tags`は別のfieldであり、この階層tagと混ぜません。
 
+## Knowledge tagの探索と説明
+
+生成AIはtagを新しく作る前に、`refinery_browse_knowledge_tags`でrootから既存階層を辿ります。
+toolは指定した`parent_tag`の直属の子だけを返すため、tag数が増えても必要な枝だけを取得できます。
+
+```text
+parent_tagなし → domain → domain/ml → domain/ml/feature-selection
+```
+
+各結果にはtaxonomyに保存された説明、子tagの有無、直指定件数、子孫を含む文書件数、
+experience・project memory・shared memory別件数が含まれます。文書で使われているtagは説明が
+未登録でも階層へ現れ、`description: null`として説明不足を識別できます。
+
+概念名から探す場合は`refinery_search_knowledge_tags`を使います。tag pathと説明を検索対象にし、
+複数termはAND条件です。説明は中央vaultの`knowledge-tags.yaml`へ明示的に保存し、利用件数は
+knowledge文書から動的に計算します。
+
 ## タイトル・サマリー・タグの検索
 
 タイトル、サマリー、タグはいずれも検索できます。ただし、検索方式が異なります。

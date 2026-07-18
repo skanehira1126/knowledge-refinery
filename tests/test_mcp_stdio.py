@@ -27,6 +27,7 @@ def test_stdio_server_lists_expected_tools() -> None:
 
         names = {tool.name for tool in result.tools}
         assert names == {
+            "refinery_browse_knowledge_tags",
             "refinery_get_experience",
             "refinery_get_memory",
             "refinery_get_project_metadata",
@@ -35,12 +36,17 @@ def test_stdio_server_lists_expected_tools() -> None:
             "refinery_record_experience",
             "refinery_record_memory",
             "refinery_search_experiences",
+            "refinery_search_knowledge_tags",
             "refinery_search_memory",
+            "refinery_update_tag_description",
             "refinery_update_project_metadata",
             "refinery_validate",
         }
         descriptions = {tool.name: tool.description for tool in result.tools}
         assert descriptions == {
+            "refinery_browse_knowledge_tags": (
+                "Knowledge tagを指定階層の直下だけ、説明と利用件数を付けて取得します。"
+            ),
             "refinery_get_experience": (
                 "experience IDまたはproject-id/experience-idを指定してexperienceを取得します。"
             ),
@@ -65,6 +71,9 @@ def test_stdio_server_lists_expected_tools() -> None:
             "refinery_search_experiences": (
                 "有効なrepositoryのexperienceを検索し、必要な場合はvault全体へ対象を広げます。"
             ),
+            "refinery_search_knowledge_tags": (
+                "Knowledge tagのpathと説明をAND条件の語句で検索し、利用件数も取得します。"
+            ),
             "refinery_search_memory": (
                 "有効なrepositoryからproject/shared memoryを構造化fieldと全文で検索します。"
             ),
@@ -72,8 +81,11 @@ def test_stdio_server_lists_expected_tools() -> None:
                 "project metadataを部分更新します。省略fieldは保持し、"
                 "空listは対象listを消去します。"
             ),
+            "refinery_update_tag_description": (
+                "Knowledge tagの説明をtaxonomyの現在revisionを使って登録・更新します。"
+            ),
             "refinery_validate": (
-                "active vaultのproject metadata、experience、memoryを検証します。"
+                "active vaultのtaxonomy、project metadata、experience、memoryを検証します。"
             ),
         }
         record_experience = next(
@@ -87,5 +99,18 @@ def test_stdio_server_lists_expected_tools() -> None:
         assert "expected_updated_at" in update_metadata.inputSchema.get("required", [])
         assert "name" not in update_metadata.inputSchema.get("required", [])
         assert "tags" not in update_metadata.inputSchema.get("required", [])
+        browse_tags = next(
+            tool for tool in result.tools if tool.name == "refinery_browse_knowledge_tags"
+        )
+        assert "project_path" in browse_tags.inputSchema.get("required", [])
+        assert "parent_tag" not in browse_tags.inputSchema.get("required", [])
+        search_tags = next(
+            tool for tool in result.tools if tool.name == "refinery_search_knowledge_tags"
+        )
+        assert "terms" in search_tags.inputSchema.get("required", [])
+        update_tag = next(
+            tool for tool in result.tools if tool.name == "refinery_update_tag_description"
+        )
+        assert "expected_updated_at" not in update_tag.inputSchema.get("required", [])
 
     anyio.run(exercise_server)

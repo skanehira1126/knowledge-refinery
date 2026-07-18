@@ -218,6 +218,86 @@ def test_cli_setup_can_append_managed_guidance_when_requested(
     assert "knowledge-refinery:agents:start" in content
 
 
+def test_cli_browses_searches_and_describes_tags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("REFINERY_CONFIG", str(tmp_path / "config.yaml"))
+    vault = tmp_path / "refinery"
+    project = tmp_path / "product"
+    project.mkdir()
+    assert main(["vault", "init", "--root", str(vault)]) == 0
+    assert (
+        main(
+            [
+                "project",
+                "setup",
+                "--target",
+                str(project),
+                "--vault",
+                str(vault),
+                "--project-id",
+                "product",
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "experience",
+                "upsert",
+                "--project",
+                str(project),
+                "--experience-id",
+                "search-timeout",
+                "--title",
+                "検索timeout",
+                "--purpose",
+                "原因を調べる",
+                "--tag",
+                "issue/performance/timeout",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    assert main(["tag", "browse", "--project", str(project), "--parent", "issue"]) == 0
+    browsed = json.loads(capsys.readouterr().out)
+    assert [item["tag"] for item in browsed["tags"]] == ["issue/performance"]
+    assert (
+        main(
+            [
+                "tag",
+                "describe",
+                "--project",
+                str(project),
+                "--tag",
+                "issue/performance",
+                "--description",
+                "実行速度と資源効率の問題",
+            ]
+        )
+        == 0
+    )
+    described = json.loads(capsys.readouterr().out)
+    assert described["taxonomy_updated_at"]
+    assert (
+        main(
+            [
+                "tag",
+                "search",
+                "資源効率",
+                "--project",
+                str(project),
+            ]
+        )
+        == 0
+    )
+    searched = json.loads(capsys.readouterr().out)
+    assert [item["tag"] for item in searched["tags"]] == ["issue/performance"]
+
+
 def test_cli_can_disable_status_and_reenable_project(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

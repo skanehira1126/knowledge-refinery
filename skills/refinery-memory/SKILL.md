@@ -17,4 +17,4 @@ Write the reusable principle in `summary`. Put conditions, limits, counterexampl
 
 Never create memory without `source_experiences`. Do not promote a one-off observation to shared memory, and do not silently overwrite a conflicting principle; preserve the conflict or ask for a decision.
 
-Use knowledge tags with one to three lowercase slug segments separated by `/`, such as `domain/ml/feature-selection`. Prefer existing project tag branches when known; a parent tag search also matches its descendants.
+Before assigning tags, call `refinery_browse_knowledge_tags` without `parent_tag`, then follow relevant children one level at a time. Use `refinery_search_knowledge_tags` when a concept is easier to identify from words than from the hierarchy. Reuse the narrowest existing tag whose description fits; do not invent a parallel spelling when an existing branch applies. Use one to three lowercase slug segments separated by `/`, such as `domain/ml/feature-selection`; a parent tag search also matches its descendants.

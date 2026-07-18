@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+import yaml
 
 from knowledge_refinery import get_version
 from knowledge_refinery.config_ops import get_active_vault
@@ -18,8 +19,17 @@ from knowledge_refinery.experience_ops import upsert_memory_at
 from knowledge_refinery.experience_ops import validate_document_header
 from knowledge_refinery.experience_ops import validate_memory_source_references
 from knowledge_refinery.front_matter import split_front_matter
+from knowledge_refinery.tag_ops import TAG_TAXONOMY
+from knowledge_refinery.tag_ops import TAG_TAXONOMY_SCHEMA_VERSION
+from knowledge_refinery.tag_ops import TagBrowseResult
+from knowledge_refinery.tag_ops import TagSearchResult
+from knowledge_refinery.tag_ops import browse_knowledge_tags
+from knowledge_refinery.tag_ops import search_knowledge_tags
+from knowledge_refinery.tag_ops import update_tag_description
+from knowledge_refinery.tag_ops import validate_tag_taxonomy
 from knowledge_refinery.vault_ops import PROJECT_METADATA
 from knowledge_refinery.vault_ops import PROJECT_METADATA_SCHEMA_VERSION
+from knowledge_refinery.vault_ops import context_from_vault
 from knowledge_refinery.vault_ops import list_project_metadata
 from knowledge_refinery.vault_ops import read_project_metadata
 from knowledge_refinery.vault_ops import resolve_project_id
@@ -93,6 +103,65 @@ def refinery_info() -> dict[str, object]:
         "version": get_version(),
         "schema_version": 2,
         "project_metadata_schema_version": PROJECT_METADATA_SCHEMA_VERSION,
+        "tag_taxonomy_schema_version": TAG_TAXONOMY_SCHEMA_VERSION,
+    }
+
+
+@mcp.tool()
+def refinery_browse_knowledge_tags(
+    project_path: str,
+    parent_tag: str | None = None,
+    all_projects: bool = False,
+) -> TagBrowseResult:
+    """Knowledge tagを指定階層の直下だけ、説明と利用件数を付けて取得します。"""
+    vault = get_active_vault()
+    project_id = resolve_project_id(Path(project_path))
+    return browse_knowledge_tags(
+        vault,
+        project_id,
+        parent_tag=parent_tag,
+        all_projects=all_projects,
+    )
+
+
+@mcp.tool()
+def refinery_search_knowledge_tags(
+    project_path: str,
+    terms: list[str],
+    all_projects: bool = False,
+) -> TagSearchResult:
+    """Knowledge tagのpathと説明をAND条件の語句で検索し、利用件数も取得します。"""
+    vault = get_active_vault()
+    project_id = resolve_project_id(Path(project_path))
+    return search_knowledge_tags(
+        vault,
+        project_id,
+        terms=terms,
+        all_projects=all_projects,
+    )
+
+
+@mcp.tool()
+def refinery_update_tag_description(
+    project_path: str,
+    tag: str,
+    description: str,
+    expected_updated_at: str | None = None,
+) -> dict[str, object]:
+    """Knowledge tagの説明をtaxonomyの現在revisionを使って登録・更新します。"""
+    vault = get_active_vault()
+    project_id = resolve_project_id(Path(project_path))
+    context_from_vault(vault, project_id)
+    taxonomy = update_tag_description(
+        vault,
+        tag=tag,
+        description=description,
+        expected_updated_at=expected_updated_at,
+    )
+    return {
+        "tag": tag,
+        "description": taxonomy.descriptions[tag],
+        "taxonomy_updated_at": taxonomy.updated_at,
     }
 
 
@@ -289,11 +358,18 @@ def refinery_record_memory(
 
 @mcp.tool()
 def refinery_validate() -> dict[str, object]:
-    """active vaultのproject metadata、experience、memoryを検証します。"""
+    """active vaultのtaxonomy、project metadata、experience、memoryを検証します。"""
     vault = get_active_vault()
     errors: list[dict[str, str]] = []
     checked = 0
     seen_ids: dict[tuple[str, str, str], Path] = {}
+    taxonomy_path = vault / TAG_TAXONOMY
+    if taxonomy_path.is_file():
+        try:
+            validate_tag_taxonomy(yaml.safe_load(taxonomy_path.read_text(encoding="utf-8")))
+            checked += 1
+        except (OSError, ValueError, yaml.YAMLError) as error:
+            errors.append({"path": str(taxonomy_path.relative_to(vault)), "error": str(error)})
     for project_store in sorted((vault / "projects").iterdir()):
         if not project_store.is_dir():
             continue

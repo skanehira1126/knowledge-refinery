@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from knowledge_refinery.config_ops import set_active_vault
+from knowledge_refinery.mcp_server import refinery_browse_knowledge_tags
 from knowledge_refinery.mcp_server import refinery_get_experience
 from knowledge_refinery.mcp_server import refinery_get_memory
 from knowledge_refinery.mcp_server import refinery_get_project_metadata
@@ -11,9 +12,12 @@ from knowledge_refinery.mcp_server import refinery_list_projects
 from knowledge_refinery.mcp_server import refinery_record_experience
 from knowledge_refinery.mcp_server import refinery_record_memory
 from knowledge_refinery.mcp_server import refinery_search_experiences
+from knowledge_refinery.mcp_server import refinery_search_knowledge_tags
 from knowledge_refinery.mcp_server import refinery_search_memory
 from knowledge_refinery.mcp_server import refinery_update_project_metadata
+from knowledge_refinery.mcp_server import refinery_update_tag_description
 from knowledge_refinery.mcp_server import refinery_validate
+from knowledge_refinery.tag_ops import TAG_TAXONOMY
 from knowledge_refinery.vault_ops import disable_project
 from knowledge_refinery.vault_ops import init_vault
 from knowledge_refinery.vault_ops import setup_project
@@ -81,6 +85,7 @@ def test_local_mcp_records_searches_and_validates(
         "version": "0.2.0",
         "schema_version": 2,
         "project_metadata_schema_version": 1,
+        "tag_taxonomy_schema_version": 1,
     }
     assert recorded["experience_id"] == "boruta-trial"
     assert recorded["updated_at"]
@@ -115,6 +120,55 @@ def test_local_mcp_records_searches_and_validates(
         == "feature-selection"
     )
     assert refinery_validate() == {"valid": True, "checked": 3, "errors": []}
+
+
+def test_mcp_browses_searches_and_describes_knowledge_tags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "pybr"
+    refinery_record_experience(
+        project_path=str(project),
+        title="検索性能",
+        purpose="timeoutを調査する",
+        status="completed",
+        body="調査結果",
+        tags=["issue/performance/timeout"],
+        experience_id="search-timeout",
+    )
+
+    root = refinery_browse_knowledge_tags(str(project))
+    issue = next(item for item in root["tags"] if item["tag"] == "issue")
+    assert issue["description"] == "発生した問題や障害の分類"
+    assert issue["document_count"] == 1
+    children = refinery_browse_knowledge_tags(str(project), parent_tag="issue")
+    assert [item["tag"] for item in children["tags"]] == ["issue/performance"]
+
+    described = refinery_update_tag_description(
+        project_path=str(project),
+        tag="issue/performance",
+        description="実行速度と資源効率の問題",
+        expected_updated_at=root["taxonomy_updated_at"],
+    )
+    assert described["taxonomy_updated_at"]
+    matches = refinery_search_knowledge_tags(str(project), terms=["資源効率"])
+    assert [item["tag"] for item in matches["tags"]] == ["issue/performance"]
+    assert refinery_validate() == {"valid": True, "checked": 3, "errors": []}
+
+
+def test_validate_reports_malformed_tag_taxonomy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    (vault / TAG_TAXONOMY).write_text(
+        "schema_version: 1\nupdated_at: invalid\ntags: {}\n", encoding="utf-8"
+    )
+
+    result = refinery_validate()
+
+    assert result["valid"] is False
+    assert result["errors"][0]["path"] == TAG_TAXONOMY
+    assert "ISO 8601" in result["errors"][0]["error"]
 
 
 def test_mcp_reads_qualified_experience_and_shared_memory(

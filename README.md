@@ -5,6 +5,7 @@ Codexで得た開発経験を、複数のプロジェクトから再利用でき
 
 ```text
 Codex Plugin ── MCP ── 中央vault
+      │                 ├─ knowledge-tags.yaml（説明を追加した場合）
       │                 ├─ projects/<project-id>/project.yaml
       │                 ├─ projects/<project-id>/{experiences,evidence,memory}/
       │                 └─ shared/memory/
@@ -88,7 +89,10 @@ Codex側のPlugin登録状態はPlugin settingsで確認してください。
 登録したrepoで新しいCodex taskを開くだけです。PluginのSkillsとMCPが、作業開始時の検索、
 意味のある試行や失敗の記録、複数の経験からのmemory抽出を支援します。
 ExperienceとmemoryのKnowledge tagは`/`区切りの最大3階層で、上位tagを指定すると
-配下tagも検索できます。詳細は[ナレッジモデルと検索](docs/knowledge-model.md)を参照してください。
+配下tagも検索できます。記録前に`refinery_browse_knowledge_tags`でrootから1階層ずつ
+既存tagと説明・利用件数を確認でき、`refinery_search_knowledge_tags`ではtag pathと説明を
+語句検索できます。説明は`refinery_update_tag_description`で中央taxonomyへrevision付きで
+保存します。詳細は[ナレッジモデルと検索](docs/knowledge-model.md)を参照してください。
 
 状態確認や一時的なON/OFFはCLIから行えます。
 

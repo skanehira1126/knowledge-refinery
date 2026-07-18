@@ -32,3 +32,5 @@ Pass evidence as structured mappings:
 - Remote evidence: `type: mlflow`, `url`, or `external`, with `uri` and `retention: external`.
 
 Link related or superseded experience IDs when known. Do not commit product files merely to preserve an experience, and do not invent evidence that was not inspected.
+
+Use knowledge tags with one to three lowercase slug segments separated by `/`, such as `domain/ml/feature-selection`. Prefer existing project tag branches when known; a parent tag search also matches its descendants.

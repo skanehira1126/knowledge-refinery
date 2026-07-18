@@ -36,6 +36,9 @@ knowledge-refinery experience search [TERMS...] --project PATH [filters]
 
 主なupsert optionは `--status`、`--experience-id`、`--tag`、`--evidence`、`--related-experience`、`--supersedes`、`--confidence`、`--body`、`--body-file`、`--expected-updated-at` です。filenameはIDから一意に生成されます。CLIのevidenceは `file:path`、`untracked:path`、`git:commit:path`、`mlflow:uri`、`url:uri`、`external:uri` を受けます。
 
+Experienceとmemoryの`--tag`は`/`区切りの最大3階層です。searchで`--tag domain/ml`を
+指定すると、`domain/ml`と`domain/ml/feature-selection`の両方に一致します。
+
 既存experienceを更新する場合は、直前に取得したheaderの `updated_at` を `--expected-updated-at` へ渡します。revisionなしの上書きとstale revisionは拒否されます。
 
 ## memory

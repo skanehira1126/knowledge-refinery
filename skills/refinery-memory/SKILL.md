@@ -16,3 +16,5 @@ Creating a new memory omits `expected_updated_at`. Updating an existing memory r
 Write the reusable principle in `summary`. Put conditions, limits, counterexamples, and operational guidance in the body. Keep detailed attempt history in the source experiences.
 
 Never create memory without `source_experiences`. Do not promote a one-off observation to shared memory, and do not silently overwrite a conflicting principle; preserve the conflict or ask for a decision.
+
+Use knowledge tags with one to three lowercase slug segments separated by `/`, such as `domain/ml/feature-selection`. Prefer existing project tag branches when known; a parent tag search also matches its descendants.

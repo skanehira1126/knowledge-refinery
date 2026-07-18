@@ -95,3 +95,17 @@ confidence: high
 ```
 
 shared sourceは必ずqualified IDで2件以上、distinct projectが2つ以上で、参照experienceが実在する必要があります。
+
+## Knowledge tag
+
+Experienceとmemoryの`tags`は、`/`で区切った1〜3階層です。各segmentは
+lowercaseの英数字かhyphenを使い、空segment、重複tag、4階層以上は拒否します。
+
+```yaml
+tags:
+  - domain/ml/feature-selection
+  - artifact/cli/search
+```
+
+Project metadataの`tags`はproject発見用の別fieldです。Knowledge tagの階層とは混合せず、
+project metadataでは引き続きlowercase kebab-caseの単一segmentを使います。

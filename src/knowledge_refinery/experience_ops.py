@@ -25,6 +25,7 @@ MEMORY_SCOPE_CHOICES = ("project", "shared")
 EVIDENCE_TYPE_CHOICES = ("file", "git", "mlflow", "url", "external")
 EVIDENCE_RETENTION_CHOICES = ("reference", "snapshot", "external", "source")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+MAX_TAG_DEPTH = 3
 
 
 @dataclass(frozen=True)
@@ -534,7 +535,9 @@ def _matches_filters(
     kind: str,
 ) -> bool:
     current_tags = header.get("tags", [])
-    if not isinstance(current_tags, list) or any(tag not in current_tags for tag in tags):
+    if not isinstance(current_tags, list) or any(
+        not any(_tag_matches(current, requested) for current in current_tags) for requested in tags
+    ):
         return False
     if statuses and header.get("status") not in statuses:
         return False
@@ -552,6 +555,12 @@ def _matches_filters(
     if filters.evidence_types and not _matches_evidence_types(header, filters.evidence_types):
         return False
     return _matches_recorded_range(header, filters)
+
+
+def _tag_matches(current: object, requested: str) -> bool:
+    return isinstance(current, str) and (
+        current == requested or current.startswith(f"{requested}/")
+    )
 
 
 def _contains_all(header: dict[str, object], key: str, expected: tuple[str, ...]) -> bool:
@@ -615,6 +624,7 @@ def validate_document_header(header: dict[str, object], *, kind: str) -> None:
         if not isinstance(header.get(field), str) or not str(header[field]).strip():
             raise ValueError(f"{kind} header requires non-empty string field: {field}")
     _validate_string_list(header, "tags")
+    _validate_knowledge_tags(header["tags"])
     if kind == "experiences":
         status = header["status"]
         if status not in EXPERIENCE_STATUS_CHOICES:
@@ -638,6 +648,19 @@ def _validate_string_list(
         raise ValueError(f"{field} must be a list of strings")
     if require_nonempty and not value:
         raise ValueError(f"{field} must not be empty")
+
+
+def _validate_knowledge_tags(value: object) -> None:
+    assert isinstance(value, list)
+    tags = [str(tag) for tag in value]
+    if len(tags) != len(set(tags)):
+        raise ValueError("tags must not contain duplicates")
+    for tag in tags:
+        segments = tag.split("/")
+        if len(segments) > MAX_TAG_DEPTH or any(
+            not SLUG_RE.fullmatch(segment) for segment in segments
+        ):
+            raise ValueError("tags must use one to three lowercase slug segments separated by /")
 
 
 def _validate_memory_header(header: dict[str, object]) -> None:

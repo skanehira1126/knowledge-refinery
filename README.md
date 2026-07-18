@@ -87,6 +87,8 @@ Codex側のPlugin登録状態はPlugin settingsで確認してください。
 
 登録したrepoで新しいCodex taskを開くだけです。PluginのSkillsとMCPが、作業開始時の検索、
 意味のある試行や失敗の記録、複数の経験からのmemory抽出を支援します。
+ExperienceとmemoryのKnowledge tagは`/`区切りの最大3階層で、上位tagを指定すると
+配下tagも検索できます。詳細は[ナレッジモデルと検索](docs/knowledge-model.md)を参照してください。
 
 状態確認や一時的なON/OFFはCLIから行えます。
 
@@ -121,6 +123,7 @@ uv tool upgrade knowledge-refinery
 
 - [Web版ドキュメント](https://skanehira1126.github.io/knowledge-refinery/)
 - [導入手順](docs/getting-started.md)
+- [ナレッジモデルと検索](docs/knowledge-model.md)
 - [CLIリファレンス](docs/cli.md)
 - [ナレッジ運用](docs/knowledge-operations.md)
 - [仕組みとデータ配置](docs/architecture.md)

@@ -25,14 +25,21 @@ markdown_extensions:
   - attr_list
   - def_list
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
+extra_javascript:
+  - javascripts/mermaid.mjs
 nav:
   - 概要: index.md
   - 導入: getting-started.md
   - AGENTS.md追記サンプル: agents-guidance-examples.md
   - repoの有効・無効: project-lifecycle.md
+  - ナレッジモデルと検索: knowledge-model.md
   - ナレッジ運用: knowledge-operations.md
   - アーキテクチャ: architecture.md
   - リファレンス:

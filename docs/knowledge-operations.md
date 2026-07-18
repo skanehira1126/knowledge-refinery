@@ -1,6 +1,7 @@
 # ナレッジ運用
 
 この文書は、中央vaultに保存するexperienceとmemoryを継続的に保守するためのrunbookです。
+昇華フロー、タグ階層、検索可能なfieldは[ナレッジモデルと検索](knowledge-model.md)、
 データ形式の詳細は[YAML schema](schema.md)、Git操作の原則は[Git運用](git-operations.md)、
 障害別の確認事項は[トラブルシューティング](troubleshooting.md)を参照してください。
 

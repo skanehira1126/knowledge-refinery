@@ -20,6 +20,9 @@ Pluginはローカルstdio MCPを起動します。repo-scoped toolsには `.ref
 
 デフォルトは現在projectです。`all_projects: true` は判断が汎用化できる場合だけ使います。memory検索ではshared memoryも対象です。
 
+Experienceとmemoryのtagは`/`区切りの最大3階層です。`tags: [domain/ml]`は
+`domain/ml`と`domain/ml/feature-selection`の両方に一致します。複数tagはAND条件です。
+
 shared memoryの根拠を読むときは `refinery_get_experience(project_path, "project-id/experience-id")` を使います。experienceまたはmemoryを更新するときは、直前の取得結果にある `updated_at` をそれぞれ `refinery_record_experience.expected_updated_at`、`refinery_record_memory.expected_updated_at` へ渡します。不一致は競合として拒否されます。record toolの戻り値にも次回更新用の `updated_at` が含まれます。
 
 project metadataを更新するときは、`refinery_get_project_metadata` または

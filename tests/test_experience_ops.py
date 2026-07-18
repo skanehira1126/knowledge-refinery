@@ -124,6 +124,102 @@ def test_search_experiences_across_projects(tmp_path: Path) -> None:
     assert {entry.project_id for entry in all_entries} == {"pybr", "vision"}
 
 
+def test_searches_title_summary_and_hierarchical_tags(tmp_path: Path) -> None:
+    project, _ = configured_project(tmp_path)
+    upsert_experience(
+        project,
+        title="title-only-marker",
+        purpose="search verification",
+        status="completed",
+        experience_id="search-source",
+        filename=None,
+        tags=["domain/search/full-text"],
+        evidence=[],
+        related_experiences=[],
+        supersedes=[],
+        confidence="high",
+        body="本文には別の内容を書く",
+    )
+    upsert_memory(
+        project,
+        title="検索原則",
+        summary="summary-only-marker",
+        memory_id="search-memory",
+        filename=None,
+        tags=["domain/search/full-text"],
+        source_experiences=["search-source"],
+        shared=False,
+        confidence="high",
+        body="本文には別の内容を書く",
+    )
+
+    title_matches = search_documents(
+        project,
+        kind="experiences",
+        terms=["TITLE-ONLY-MARKER"],
+        project_ids=[],
+        tags=[],
+        statuses=[],
+        all_projects=False,
+        filters=None,
+    )
+    summary_matches = search_documents(
+        project,
+        kind="memory",
+        terms=["SUMMARY-ONLY-MARKER"],
+        project_ids=[],
+        tags=["domain/search"],
+        statuses=[],
+        all_projects=False,
+        filters=None,
+    )
+    root_tag_matches = search_documents(
+        project,
+        kind="memory",
+        terms=[],
+        project_ids=[],
+        tags=["domain"],
+        statuses=[],
+        all_projects=False,
+        filters=None,
+    )
+    tag_boundary_misses = search_documents(
+        project,
+        kind="memory",
+        terms=[],
+        project_ids=[],
+        tags=["domain/sea"],
+        statuses=[],
+        all_projects=False,
+        filters=None,
+    )
+
+    assert [entry.document_id for entry in title_matches] == ["search-source"]
+    assert [entry.document_id for entry in summary_matches] == ["search-memory"]
+    assert [entry.document_id for entry in root_tag_matches] == ["search-memory"]
+    assert tag_boundary_misses == []
+
+
+def test_schema_validation_rejects_tags_deeper_than_three_levels() -> None:
+    header: dict[str, object] = {
+        "schema_version": 2,
+        "experience_id": "trial",
+        "project_id": "pybr",
+        "title": "Trial",
+        "purpose": "Test",
+        "status": "completed",
+        "recorded_at": "2026-07-11T00:00:00+00:00",
+        "tags": ["domain/ml/feature-selection/boruta"],
+        "related_experiences": [],
+        "supersedes": [],
+        "evidence": [],
+        "confidence": "medium",
+    }
+
+    with pytest.raises(ValueError, match="one to three lowercase slug segments"):
+        validate_document_header(header, kind="experiences")
+
+
 def test_memory_requires_evidence_and_can_be_shared(tmp_path: Path) -> None:
     project, vault = configured_project(tmp_path)
     second = tmp_path / "vision"

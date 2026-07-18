@@ -13,5 +13,6 @@ Knowledge Refineryは、Codexで得た開発経験と再利用可能な原則を
 !!! important
     このリポジリ自身の作業記録にKnowledge Refineryは使いません。プロダクトGitと中央vault Gitのライフサイクルは常に分離します。
 
+ナレッジの昇華フローと検索方法は[ナレッジモデルと検索](knowledge-model.md)、
 初めて使う場合は[導入手順](getting-started.md)、継続的な保守を始める場合は
 [ナレッジ運用](knowledge-operations.md)へ進んでください。

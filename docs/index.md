@@ -1,6 +1,8 @@
 # Knowledge Refinery
 
-Knowledge Refineryは、Codexで得た開発経験と再利用可能な原則を、プロダクトGitから独立したローカルGit vaultで一元管理するCodex Pluginです。
+Knowledge Refineryは、Codexで得た開発経験と再利用可能な原則を、プロダクトrepoから
+独立したローカル中央vaultで一元管理するCodex Pluginです。vaultはfilesystem directoryで、
+必要に応じて独立したGit repositoryとして履歴管理します。
 
 ## 解決すること
 
@@ -13,6 +15,14 @@ Knowledge Refineryは、Codexで得た開発経験と再利用可能な原則を
 !!! important
     このリポジリ自身の作業記録にKnowledge Refineryは使いません。プロダクトGitと中央vault Gitのライフサイクルは常に分離します。
 
-ナレッジの昇華フローと検索方法は[ナレッジモデルと検索](knowledge-model.md)、
-初めて使う場合は[導入手順](getting-started.md)、継続的な保守を始める場合は
-[ナレッジ運用](knowledge-operations.md)へ進んでください。
+## 最初に読むページ
+
+1. [導入手順](getting-started.md)でPlugin、CLI、vault、repoを設定する。
+2. [エージェントへの頼み方](agent-workflow.md)で明示呼出と自動運用を選び、コピー可能な
+   依頼例と承認境界を確認する。
+3. [ナレッジモデルと検索](knowledge-model.md)でexperienceからmemoryへの昇華を理解する。
+4. 継続的に利用する場合は[ナレッジ運用](knowledge-operations.md)でGit、validation、backupを
+   設定する。
+
+CLIとMCPはvaultのGit初期化、commit、push、backupを自動実行しません。また、secret、
+credential、個人情報、顧客データをknowledgeへ保存しません。

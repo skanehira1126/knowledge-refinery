@@ -5,6 +5,7 @@ from datetime import UTC
 from datetime import datetime
 from pathlib import Path
 import re
+import secrets
 
 import yaml
 
@@ -15,8 +16,10 @@ from knowledge_refinery.storage_ops import interprocess_lock
 
 PROJECT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 PROJECT_TAG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+VAULT_ID_RE = re.compile(r"^[a-f0-9]{32}$")
 VAULT_MARKER = ".refinery-vault.yaml"
 PROJECT_CONFIG = ".refinery.yaml"
+PROJECT_LOCAL_CONFIG = ".refinery.local.yaml"
 PROJECT_LINK = ".refinery"
 PROJECT_METADATA = "project.yaml"
 PROJECT_METADATA_SCHEMA_VERSION = 1
@@ -36,6 +39,7 @@ class ProjectSetupResult:
     project_store: Path
     metadata_path: Path
     config_path: Path
+    local_config_path: Path
     link_path: Path | None
 
 
@@ -52,6 +56,7 @@ class ProjectConfig:
     schema_version: int
     project_id: str
     enabled: bool
+    vault_id: str | None
 
 
 @dataclass(frozen=True)
@@ -87,6 +92,9 @@ class ProjectStatus:
     config_error: str | None
     project_id: str | None
     enabled: bool | None
+    configured_vault_id: str | None
+    active_vault_id: str | None
+    vault_match: bool | None
     vault_root: Path | None
     vault_registered: bool
     project_store: Path | None
@@ -108,6 +116,7 @@ class ProjectStatus:
         return bool(
             self.config_valid
             and self.enabled
+            and self.vault_match is True
             and self.vault_root is not None
             and self.vault_registered
             and self.metadata_valid
@@ -127,12 +136,15 @@ def init_vault(root: Path, *, force: bool = False) -> VaultInitResult:
     root = root.expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     changed: list[Path] = []
+    marker = root / VAULT_MARKER
+    vault_id = _existing_vault_id(marker) or secrets.token_hex(16)
     files = {
-        root / VAULT_MARKER: yaml.safe_dump(
+        marker: yaml.safe_dump(
             {
                 "schema_version": VAULT_SCHEMA_VERSION,
                 "managed_by": VAULT_MANAGER,
                 "cli_version": get_version(),
+                "vault_id": vault_id,
             },
             sort_keys=False,
             allow_unicode=True,
@@ -143,7 +155,8 @@ def init_vault(root: Path, *, force: bool = False) -> VaultInitResult:
         root / "shared" / "memory" / "AGENTS.md": _shared_memory_agents(),
     }
     for path, content in files.items():
-        if _write_if_needed(path, content, force=force):
+        migrate_marker = path == marker and marker.is_file() and read_vault_id(root) is None
+        if _write_if_needed(path, content, force=force or migrate_marker):
             changed.append(path)
     return VaultInitResult(root=root, changed=tuple(changed))
 
@@ -154,10 +167,11 @@ def setup_project(
     *,
     project_id: str | None = None,
     project_name: str | None = None,
-    summary: str = "",
+    summary: str | None = None,
     tags: list[str] | None = None,
     technologies: list[str] | None = None,
     create_link: bool = False,
+    _allow_disabled: bool = False,
 ) -> ProjectSetupResult:
     target = target.expanduser().resolve()
     vault = vault.expanduser().resolve()
@@ -166,24 +180,25 @@ def setup_project(
     if target == vault or target in vault.parents or vault in target.parents:
         raise ValueError("Project repository and refinery vault must use separate directory trees")
     vault = validate_vault_root(vault)
-    resolved_id = project_id or target.name.lower().replace("_", "-")
+    vault_id = _ensure_vault_id(vault)
+    resolved_id = project_id or _project_id_from_directory(target.name)
     _validate_project_id(resolved_id)
 
     config_path = target / PROJECT_CONFIG
-    if config_path.is_file():
-        existing = read_project_config(target)
-        if existing.project_id != resolved_id:
-            raise ValueError(
-                f"Project is already configured as {existing.project_id}; "
-                "refusing to replace it with a different project_id"
-            )
+    _validate_setup_config(
+        target,
+        config_path,
+        project_id=resolved_id,
+        vault_id=vault_id,
+        allow_disabled=_allow_disabled,
+    )
 
     now = datetime.now(UTC).isoformat()
     metadata = ProjectMetadata(
         schema_version=PROJECT_METADATA_SCHEMA_VERSION,
         project_id=resolved_id,
         name=target.name if project_name is None else project_name,
-        summary=summary,
+        summary="" if summary is None else summary,
         tags=tuple(tags or []),
         technologies=tuple(technologies or []),
         created_at=now,
@@ -197,32 +212,128 @@ def setup_project(
             f"project_id is already registered in this vault: {resolved_id}. "
             f"Refusing to connect an unconfigured repository to {project_store}"
         )
-    for name in ("experiences", "evidence", "memory"):
+    metadata_path = project_store / PROJECT_METADATA
+    if metadata_path.is_file():
+        _validate_setup_metadata(
+            vault,
+            resolved_id,
+            project_name=project_name,
+            summary=summary,
+            tags=tags,
+            technologies=technologies,
+        )
+    for name in ("experiences", "memory"):
         (project_store / name).mkdir(parents=True, exist_ok=True)
     _write_if_needed(project_store / "AGENTS.md", _project_store_agents(resolved_id), force=False)
-    metadata_path = project_store / PROJECT_METADATA
-    _write_if_needed(metadata_path, _render_project_metadata(metadata), force=False)
+    if not metadata_path.is_file():
+        _write_if_needed(metadata_path, _render_project_metadata(metadata), force=False)
     read_project_metadata(vault, resolved_id)
 
     atomic_write_text(
         config_path,
         yaml.safe_dump(
-            {"schema_version": 2, "project_id": resolved_id, "enabled": True},
+            {
+                "schema_version": 2,
+                "project_id": resolved_id,
+                "enabled": True,
+            },
             sort_keys=False,
             allow_unicode=True,
         ),
     )
+    local_config_path = target / PROJECT_LOCAL_CONFIG
+    atomic_write_text(
+        local_config_path,
+        yaml.safe_dump(
+            {"schema_version": 1, "vault_id": vault_id},
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+    )
+    _ensure_gitignore(target / ".gitignore", f"/{PROJECT_LOCAL_CONFIG}")
     link_path = _ensure_optional_link(target, project_store) if create_link else None
     if link_path is not None:
         _ensure_gitignore(target / ".gitignore", f"/{PROJECT_LINK}")
-    return ProjectSetupResult(resolved_id, project_store, metadata_path, config_path, link_path)
+    return ProjectSetupResult(
+        resolved_id,
+        project_store,
+        metadata_path,
+        config_path,
+        local_config_path,
+        link_path,
+    )
+
+
+def _validate_setup_config(
+    target: Path,
+    config_path: Path,
+    *,
+    project_id: str,
+    vault_id: str,
+    allow_disabled: bool,
+) -> None:
+    if not config_path.is_file():
+        return
+    existing = read_project_config(target)
+    if existing.project_id != project_id:
+        raise ValueError(
+            f"Project is already configured as {existing.project_id}; "
+            "refusing to replace it with a different project_id"
+        )
+    if existing.vault_id is not None and existing.vault_id != vault_id:
+        raise ValueError(
+            "Project is bound to a different refinery vault; refusing to reuse the same "
+            "project_id from another vault"
+        )
+    if not existing.enabled and not allow_disabled:
+        raise ValueError(
+            "Project is disabled (intentional opt-out); setup will not enable it. "
+            "Re-enable only after an explicit user request with "
+            "`knowledge-refinery project enable --target <path>`."
+        )
+
+
+def _validate_setup_metadata(
+    vault: Path,
+    project_id: str,
+    *,
+    project_name: str | None,
+    summary: str | None,
+    tags: list[str] | None,
+    technologies: list[str] | None,
+) -> None:
+    current = read_project_metadata(vault, project_id)
+    candidates = {
+        "name": (project_name, current.name),
+        "summary": (summary, current.summary),
+        "tags": (tuple(tags) if tags is not None else None, current.tags),
+        "technologies": (
+            tuple(technologies) if technologies is not None else None,
+            current.technologies,
+        ),
+    }
+    changed_fields = [
+        field
+        for field, (requested, existing) in candidates.items()
+        if requested is not None and requested != existing
+    ]
+    if changed_fields:
+        fields = ", ".join(changed_fields)
+        raise ValueError(
+            f"Project metadata already exists and differs for: {fields}. "
+            "Read the current revision with `knowledge-refinery project metadata show` "
+            "and use `knowledge-refinery project metadata update`."
+        )
 
 
 def read_project_config(project: Path) -> ProjectConfig:
     config_path = project.expanduser().resolve() / PROJECT_CONFIG
     if not config_path.is_file():
         raise ValueError(f"Missing {PROJECT_CONFIG} in {project}")
-    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    try:
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as error:
+        raise ValueError(f"Invalid project config YAML: {config_path}: {error}") from error
     if not isinstance(raw, dict) or not isinstance(raw.get("project_id"), str):
         raise ValueError(f"Invalid project config: {config_path}")
     schema_version = raw.get("schema_version")
@@ -233,16 +344,26 @@ def read_project_config(project: Path) -> ProjectConfig:
     enabled = raw.get("enabled", True)
     if not isinstance(enabled, bool):
         raise ValueError(f"Invalid enabled flag in project config: {config_path}")
-    return ProjectConfig(schema_version=2, project_id=project_id, enabled=enabled)
+    vault_id = _read_project_vault_id(project.expanduser().resolve(), legacy=raw.get("vault_id"))
+    return ProjectConfig(
+        schema_version=2,
+        project_id=project_id,
+        enabled=enabled,
+        vault_id=vault_id,
+    )
 
 
-def resolve_project_id(project: Path) -> str:
+def resolve_project_id(project: Path, vault: Path | None = None) -> str:
     config = read_project_config(project)
     if not config.enabled:
         raise ValueError(
-            f"Knowledge Refinery is disabled for {project.expanduser().resolve()}. "
-            "Run `knowledge-refinery project enable --target <path>`."
+            f"Knowledge Refinery is disabled (intentional opt-out) for "
+            f"{project.expanduser().resolve()}. "
+            "Re-enable only after an explicit user request with "
+            "`knowledge-refinery project enable --target <path>`."
         )
+    if vault is not None:
+        _require_matching_vault(config, vault)
     return config.project_id
 
 
@@ -261,7 +382,27 @@ def set_project_enabled(project: Path, *, enabled: bool) -> ProjectConfig:
             allow_unicode=True,
         ),
     )
-    return ProjectConfig(config.schema_version, config.project_id, enabled)
+    return ProjectConfig(config.schema_version, config.project_id, enabled, config.vault_id)
+
+
+def _read_project_vault_id(project_root: Path, *, legacy: object = None) -> str | None:
+    path = project_root / PROJECT_LOCAL_CONFIG
+    if not path.is_file():
+        if legacy is None:
+            return None
+        if not isinstance(legacy, str) or not VAULT_ID_RE.fullmatch(legacy):
+            raise ValueError(f"Invalid legacy vault_id in project config: {project_root}")
+        return legacy
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as error:
+        raise ValueError(f"Invalid local project config YAML: {path}: {error}") from error
+    if not isinstance(raw, dict) or raw.get("schema_version") != 1:
+        raise ValueError(f"Invalid local project config: {path}")
+    vault_id = raw.get("vault_id")
+    if not isinstance(vault_id, str) or not VAULT_ID_RE.fullmatch(vault_id):
+        raise ValueError(f"Invalid vault_id in local project config: {path}")
+    return vault_id
 
 
 def enable_project(
@@ -276,6 +417,7 @@ def enable_project(
         vault,
         project_id=config.project_id,
         create_link=create_link,
+        _allow_disabled=True,
     )
 
 
@@ -302,6 +444,9 @@ def inspect_project(project: Path, vault: Path | None) -> ProjectStatus:
             config_error=str(error),
             project_id=None,
             enabled=None,
+            configured_vault_id=None,
+            active_vault_id=None,
+            vault_match=None,
             vault_root=vault,
             vault_registered=False,
             project_store=None,
@@ -312,6 +457,18 @@ def inspect_project(project: Path, vault: Path | None) -> ProjectStatus:
         )
 
     vault_root = vault.expanduser().resolve() if vault is not None else None
+    active_vault_id: str | None = None
+    vault_match: bool | None = None
+    if vault_root is not None:
+        try:
+            active_vault_id = read_vault_id(vault_root)
+        except (OSError, ValueError):
+            active_vault_id = None
+        vault_match = bool(
+            config.vault_id is not None
+            and active_vault_id is not None
+            and config.vault_id == active_vault_id
+        )
     project_store = vault_root / "projects" / config.project_id if vault_root is not None else None
     metadata_path = project_store / PROJECT_METADATA if project_store is not None else None
     metadata_valid = False
@@ -330,6 +487,9 @@ def inspect_project(project: Path, vault: Path | None) -> ProjectStatus:
         config_error=None,
         project_id=config.project_id,
         enabled=config.enabled,
+        configured_vault_id=config.vault_id,
+        active_vault_id=active_vault_id,
+        vault_match=vault_match,
         vault_root=vault_root,
         vault_registered=bool(project_store is not None and project_store.is_dir()),
         project_store=project_store,
@@ -362,16 +522,19 @@ def context_from_vault(vault: Path, project_id: str) -> ProjectContext:
 
 def resolve_project_context(project: Path, vault: Path | None = None) -> ProjectContext:
     project_root = project.expanduser().resolve()
-    project_id = resolve_project_id(project_root)
     if vault is not None:
+        project_id = resolve_project_id(project_root, vault)
         context = context_from_vault(vault, project_id)
         return ProjectContext(project_root, project_id, context.project_store, context.vault_root)
+
+    project_id = resolve_project_id(project_root)
 
     link_path = project_root / PROJECT_LINK
     if not link_path.is_symlink():
         raise ValueError("No vault supplied and optional .refinery symlink is missing")
     project_store = link_path.resolve()
     vault_root = project_store.parent.parent
+    project_id = resolve_project_id(project_root, vault_root)
     context = context_from_vault(vault_root, project_id)
     if context.project_store != project_store:
         raise ValueError("Project config and refinery symlink do not agree")
@@ -527,7 +690,52 @@ def validate_vault_root(vault: Path) -> Path:
         raise ValueError(
             f"Unsupported refinery vault schema in {marker}: {raw.get('schema_version')}"
         )
+    vault_id = raw.get("vault_id")
+    if vault_id is not None and (
+        not isinstance(vault_id, str) or not VAULT_ID_RE.fullmatch(vault_id)
+    ):
+        raise ValueError(f"Invalid refinery vault_id in {marker}: {vault_id}")
     return root
+
+
+def read_vault_id(vault: Path) -> str | None:
+    root = validate_vault_root(vault)
+    raw = yaml.safe_load((root / VAULT_MARKER).read_text(encoding="utf-8"))
+    assert isinstance(raw, dict)
+    value = raw.get("vault_id")
+    return str(value) if value is not None else None
+
+
+def _existing_vault_id(marker: Path) -> str | None:
+    if not marker.is_file():
+        return None
+    root = validate_vault_root(marker.parent)
+    return read_vault_id(root)
+
+
+def _ensure_vault_id(vault: Path) -> str:
+    root = validate_vault_root(vault)
+    current = read_vault_id(root)
+    if current is not None:
+        return current
+    marker = root / VAULT_MARKER
+    raw = yaml.safe_load(marker.read_text(encoding="utf-8"))
+    assert isinstance(raw, dict)
+    current = secrets.token_hex(16)
+    raw["vault_id"] = current
+    atomic_write_text(marker, yaml.safe_dump(raw, sort_keys=False, allow_unicode=True))
+    return current
+
+
+def _require_matching_vault(config: ProjectConfig, vault: Path) -> None:
+    active_vault_id = read_vault_id(vault)
+    if config.vault_id is None or active_vault_id is None:
+        raise ValueError(
+            "Project and vault are not identity-bound yet. Rerun `vault init` for the vault, "
+            "then explicitly rerun `project setup` or `project enable` for this repository."
+        )
+    if config.vault_id != active_vault_id:
+        raise ValueError("Project is bound to a different refinery vault")
 
 
 def _validate_project_id(project_id: str) -> None:
@@ -535,6 +743,16 @@ def _validate_project_id(project_id: str) -> None:
         raise ValueError(
             "project_id must be a lowercase slug containing letters, digits, and hyphens"
         )
+
+
+def _project_id_from_directory(name: str) -> str:
+    candidate = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    if not candidate:
+        raise ValueError(
+            "Cannot derive project_id from the repository directory; pass --project-id explicitly"
+        )
+    _validate_project_id(candidate)
+    return candidate
 
 
 def _ensure_optional_link(target: Path, project_store: Path) -> Path:
@@ -564,7 +782,6 @@ Personal, cross-project experience repository managed by knowledge-refinery.
 
 - `projects/<project_id>/project.yaml`: project identity and discovery metadata
 - `projects/<project_id>/experiences`: integrated attempt and outcome records
-- `projects/<project_id>/evidence`: small retained evidence and metadata
 - `projects/<project_id>/memory`: reusable project-specific principles
 - `shared/memory`: principles supported across projects
 - `knowledge-tags.yaml`: optional descriptions for the shared Knowledge tag taxonomy
@@ -590,7 +807,7 @@ def _project_store_agents(project_id: str) -> str:
 
 - `project.yaml` stores the project name, summary, tags, and technologies.
 - `experiences/` stores integrated attempts and conclusions.
-- `evidence/` stores only small snapshots or metadata.
+- Experience `evidence` entries store reference metadata only; do not copy source files or secrets.
 - `memory/` stores reusable principles supported by experiences.
 - Product implementation and refinery history have independent Git lifecycles.
 """

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
 from pathlib import Path
+from pathlib import PurePosixPath
+from pathlib import PureWindowsPath
 import re
 import secrets
 
@@ -23,9 +25,11 @@ EXPERIENCE_STATUS_CHOICES = ("completed", "inconclusive", "abandoned", "supersed
 CONFIDENCE_CHOICES = ("low", "medium", "high")
 MEMORY_SCOPE_CHOICES = ("project", "shared")
 EVIDENCE_TYPE_CHOICES = ("file", "git", "mlflow", "url", "external")
-EVIDENCE_RETENTION_CHOICES = ("reference", "snapshot", "external", "source")
+EVIDENCE_RETENTION_CHOICES = ("reference", "external", "source")
+EVIDENCE_GIT_STATE_CHOICES = ("tracked", "untracked", "modified", "staged", "ignored", "deleted")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 MAX_TAG_DEPTH = 3
+KNOWLEDGE_TAG_FACETS = ("domain", "artifact", "task", "tech", "issue")
 
 
 @dataclass(frozen=True)
@@ -34,6 +38,14 @@ class SearchEntry:
     project_id: str
     document_id: str
     title: str
+    kind: str
+    summary: str | None
+    status: str | None
+    scope: str | None
+    confidence: str | None
+    tags: tuple[str, ...]
+    recorded_at: str | None
+    updated_at: str
 
 
 @dataclass(frozen=True)
@@ -64,7 +76,72 @@ def _render(header: dict[str, object], body: str) -> str:
 
 
 def _default_experience_body() -> str:
-    return """## 試したこと\n\n- \n\n## 分かったこと\n\n- \n\n## 次の可能性\n\n- \n"""
+    return (
+        "## 試したこと\n\n- \n\n"
+        "## 分かったこと\n\n- \n\n"
+        "## 微妙だった点・限界\n\n- \n\n"
+        "## 次の可能性\n\n- \n"
+    )
+
+
+def _preserved_string_list(
+    current: dict[str, object] | None, field: str, supplied: list[str] | None
+) -> list[str]:
+    if current is not None and supplied is None:
+        value = current[field]
+        assert isinstance(value, list)
+        return [str(item) for item in value]
+    return list(supplied or [])
+
+
+def _effective_confidence(
+    current: dict[str, object] | None,
+    supplied: str | None,
+    *,
+    clear: bool,
+) -> str | None:
+    if clear:
+        return None
+    if current is not None and supplied is None:
+        value = current.get("confidence")
+        return str(value) if value is not None else None
+    return supplied
+
+
+def _preserved_evidence(
+    current: dict[str, object] | None,
+    supplied: Sequence[str | dict[str, str]] | None,
+) -> list[dict[str, str]]:
+    if current is not None and supplied is None:
+        value = current["evidence"]
+        assert isinstance(value, list)
+        return [dict(item) for item in value if isinstance(item, dict)]
+    return normalize_evidence(supplied or [])
+
+
+def _validate_experience_options(
+    *,
+    status: str,
+    document_id: str,
+    filename: str | None,
+    related_experiences: list[str] | None,
+    supersedes: list[str] | None,
+    confidence: str | None,
+    clear_confidence: bool,
+) -> None:
+    if status not in EXPERIENCE_STATUS_CHOICES:
+        raise ValueError(f"Unsupported experience status: {status}")
+    if not SLUG_RE.fullmatch(document_id):
+        raise ValueError("experience_id must be a lowercase slug")
+    if filename is not None and filename != f"{document_id}.md":
+        raise ValueError("experience filename must match experience_id")
+    if related_experiences is not None:
+        _validate_slugs(related_experiences, field="related_experiences")
+    if supersedes is not None:
+        _validate_slugs(supersedes, field="supersedes")
+    if clear_confidence and confidence is not None:
+        raise ValueError("confidence and clear_confidence cannot be used together")
+    _validate_confidence(confidence)
 
 
 def parse_evidence_reference(reference: str) -> dict[str, str]:
@@ -102,13 +179,14 @@ def upsert_experience(
     status: str,
     experience_id: str | None,
     filename: str | None,
-    tags: list[str],
-    evidence: list[str],
-    related_experiences: list[str],
-    supersedes: list[str],
+    tags: list[str] | None,
+    evidence: list[str] | None,
+    related_experiences: list[str] | None,
+    supersedes: list[str] | None,
     confidence: str | None,
     body: str | None,
     expected_updated_at: str | None = None,
+    clear_confidence: bool = False,
 ) -> Path:
     context = resolve_project_context(project)
     return _upsert_experience(
@@ -125,6 +203,7 @@ def upsert_experience(
         confidence=confidence,
         body=body,
         expected_updated_at=expected_updated_at,
+        clear_confidence=clear_confidence,
     )
 
 
@@ -137,13 +216,14 @@ def upsert_experience_at(
     status: str,
     experience_id: str | None,
     filename: str | None,
-    tags: list[str],
-    evidence: list[dict[str, str]],
-    related_experiences: list[str],
-    supersedes: list[str],
+    tags: list[str] | None,
+    evidence: list[dict[str, str]] | None,
+    related_experiences: list[str] | None,
+    supersedes: list[str] | None,
     confidence: str | None,
     body: str | None,
     expected_updated_at: str | None = None,
+    clear_confidence: bool = False,
 ) -> Path:
     context = context_from_vault(vault, project_id)
     return _upsert_experience(
@@ -160,6 +240,7 @@ def upsert_experience_at(
         confidence=confidence,
         body=body,
         expected_updated_at=expected_updated_at,
+        clear_confidence=clear_confidence,
     )
 
 
@@ -171,31 +252,35 @@ def _upsert_experience(
     status: str,
     experience_id: str | None,
     filename: str | None,
-    tags: list[str],
-    evidence: Sequence[str | dict[str, str]],
-    related_experiences: list[str],
-    supersedes: list[str],
+    tags: list[str] | None,
+    evidence: Sequence[str | dict[str, str]] | None,
+    related_experiences: list[str] | None,
+    supersedes: list[str] | None,
     confidence: str | None,
     body: str | None,
     expected_updated_at: str | None,
+    clear_confidence: bool,
 ) -> Path:
-    if status not in EXPERIENCE_STATUS_CHOICES:
-        raise ValueError(f"Unsupported experience status: {status}")
     document_id = experience_id or _new_id(title)
-    if not SLUG_RE.fullmatch(document_id):
-        raise ValueError("experience_id must be a lowercase slug")
     expected_filename = f"{document_id}.md"
-    if filename is not None and filename != expected_filename:
-        raise ValueError("experience filename must match experience_id")
-    _validate_slugs(related_experiences, field="related_experiences")
-    _validate_slugs(supersedes, field="supersedes")
-    _validate_confidence(confidence)
-    structured_evidence = normalize_evidence(evidence)
+    _validate_experience_options(
+        status=status,
+        document_id=document_id,
+        filename=filename,
+        related_experiences=related_experiences,
+        supersedes=supersedes,
+        confidence=confidence,
+        clear_confidence=clear_confidence,
+    )
     path = _document_path(context, "experiences", expected_filename)
     with interprocess_lock(path):
         created_at = datetime.now(UTC).isoformat()
+        current: dict[str, object] | None = None
         if path.exists():
-            current, current_body = split_front_matter(path.read_text(encoding="utf-8"))
+            current, current_body = split_front_matter(
+                path.read_text(encoding="utf-8"), source_path=path
+            )
+            validate_document_header(current, kind="experiences")
             current_updated_at = str(current.get("updated_at", ""))
             if expected_updated_at is None:
                 raise ValueError(
@@ -208,6 +293,13 @@ def _upsert_experience(
                 body = current_body
         elif expected_updated_at is not None:
             raise ValueError("experience does not exist; omit expected_updated_at to create it")
+        effective_tags = _preserved_string_list(current, "tags", tags)
+        structured_evidence = _preserved_evidence(current, evidence)
+        effective_related = _preserved_string_list(
+            current, "related_experiences", related_experiences
+        )
+        effective_supersedes = _preserved_string_list(current, "supersedes", supersedes)
+        effective_confidence = _effective_confidence(current, confidence, clear=clear_confidence)
         header: dict[str, object] = {
             "schema_version": 2,
             "experience_id": document_id,
@@ -217,13 +309,14 @@ def _upsert_experience(
             "status": status,
             "recorded_at": created_at,
             "updated_at": datetime.now(UTC).isoformat(),
-            "tags": tags,
+            "tags": effective_tags,
             "evidence": structured_evidence,
-            "related_experiences": related_experiences,
-            "supersedes": supersedes,
-            "confidence": confidence,
+            "related_experiences": effective_related,
+            "supersedes": effective_supersedes,
+            "confidence": effective_confidence,
         }
         validate_document_header(header, kind="experiences")
+        validate_experience_references(context.vault_root, header)
         atomic_write_text(path, _render(header, body or _default_experience_body()))
     return path
 
@@ -235,12 +328,13 @@ def upsert_memory(
     summary: str,
     memory_id: str | None,
     filename: str | None,
-    tags: list[str],
-    source_experiences: list[str],
+    tags: list[str] | None,
+    source_experiences: list[str] | None,
     shared: bool,
     confidence: str | None,
     body: str | None,
     expected_updated_at: str | None = None,
+    clear_confidence: bool = False,
 ) -> Path:
     context = resolve_project_context(project)
     return _upsert_memory(
@@ -255,6 +349,7 @@ def upsert_memory(
         confidence=confidence,
         body=body,
         expected_updated_at=expected_updated_at,
+        clear_confidence=clear_confidence,
     )
 
 
@@ -266,12 +361,13 @@ def upsert_memory_at(
     summary: str,
     memory_id: str | None,
     filename: str | None,
-    tags: list[str],
-    source_experiences: list[str],
+    tags: list[str] | None,
+    source_experiences: list[str] | None,
     shared: bool,
     confidence: str | None,
     body: str | None,
     expected_updated_at: str | None = None,
+    clear_confidence: bool = False,
 ) -> Path:
     context = context_from_vault(vault, project_id)
     return _upsert_memory(
@@ -286,6 +382,7 @@ def upsert_memory_at(
         confidence=confidence,
         body=body,
         expected_updated_at=expected_updated_at,
+        clear_confidence=clear_confidence,
     )
 
 
@@ -296,12 +393,13 @@ def _upsert_memory(
     summary: str,
     memory_id: str | None,
     filename: str | None,
-    tags: list[str],
-    source_experiences: list[str],
+    tags: list[str] | None,
+    source_experiences: list[str] | None,
     shared: bool,
     confidence: str | None,
     body: str | None,
     expected_updated_at: str | None,
+    clear_confidence: bool,
 ) -> Path:
     document_id = memory_id or _slug(title)
     if not SLUG_RE.fullmatch(document_id):
@@ -309,15 +407,18 @@ def _upsert_memory(
     expected_filename = f"{document_id}.md"
     if filename is not None and filename != expected_filename:
         raise ValueError("memory filename must match memory_id")
-    if not source_experiences:
-        raise ValueError("memory requires at least one --source-experience")
-    _validate_memory_sources(context, source_experiences, shared=shared)
+    if clear_confidence and confidence is not None:
+        raise ValueError("confidence and clear_confidence cannot be used together")
     _validate_confidence(confidence)
     root = context.vault_root / "shared" / "memory" if shared else context.project_store / "memory"
     path = _safe_child(root, expected_filename)
     with interprocess_lock(path):
+        current: dict[str, object] | None = None
         if path.exists():
-            current, current_body = split_front_matter(path.read_text(encoding="utf-8"))
+            current, current_body = split_front_matter(
+                path.read_text(encoding="utf-8"), source_path=path
+            )
+            validate_document_header(current, kind="memory")
             current_updated_at = str(current.get("updated_at", ""))
             if expected_updated_at is None:
                 raise ValueError(
@@ -329,6 +430,14 @@ def _upsert_memory(
                 body = current_body
         elif expected_updated_at is not None:
             raise ValueError("memory does not exist; omit expected_updated_at to create it")
+        effective_sources = _preserved_string_list(
+            current, "source_experiences", source_experiences
+        )
+        if not effective_sources:
+            raise ValueError("memory requires at least one --source-experience")
+        _validate_memory_sources(context, effective_sources, shared=shared)
+        effective_tags = _preserved_string_list(current, "tags", tags)
+        effective_confidence = _effective_confidence(current, confidence, clear=clear_confidence)
         header: dict[str, object] = {
             "schema_version": 2,
             "memory_id": document_id,
@@ -336,10 +445,10 @@ def _upsert_memory(
             "project_id": None if shared else context.project_id,
             "title": title,
             "summary": summary,
-            "source_experiences": source_experiences,
+            "source_experiences": effective_sources,
             "updated_at": datetime.now(UTC).isoformat(),
-            "tags": tags,
-            "confidence": confidence,
+            "tags": effective_tags,
+            "confidence": effective_confidence,
         }
         validate_document_header(header, kind="memory")
         atomic_write_text(path, _render(header, body or summary))
@@ -411,6 +520,16 @@ def _search_documents(
     if kind not in {"experiences", "memory"}:
         raise ValueError(f"Unsupported document kind: {kind}")
     active_filters = filters or SearchFilters()
+    _validate_search_inputs(
+        kind=kind,
+        project_ids=project_ids,
+        tags=tags,
+        statuses=statuses,
+        all_projects=all_projects,
+        filters=active_filters,
+    )
+    for selected_project_id in project_ids:
+        context_from_vault(context.vault_root, selected_project_id)
     selected = project_ids or ([context.project_id] if not all_projects else [])
     roots = _search_roots(context, kind, selected, all_projects=all_projects)
 
@@ -424,7 +543,7 @@ def _search_documents(
                 continue
             try:
                 text = path.read_text(encoding="utf-8")
-                header, _ = split_front_matter(text)
+                header, _ = split_front_matter(text, source_path=path)
                 validate_document_header(header, kind=kind)
             except (OSError, ValueError, RefineryCliError):
                 # Keep healthy knowledge searchable. refinery_validate reports the
@@ -442,15 +561,64 @@ def _search_documents(
             ):
                 continue
             id_key = "experience_id" if kind == "experiences" else "memory_id"
+            header_tags = header["tags"]
+            assert isinstance(header_tags, list)
             entries.append(
                 SearchEntry(
                     path=path,
                     project_id=project_id,
                     document_id=str(header.get(id_key, path.stem)),
                     title=str(header.get("title", path.stem)),
+                    kind="experience" if kind == "experiences" else "memory",
+                    summary=(
+                        str(header["summary"]) if kind == "memory" else str(header["purpose"])
+                    ),
+                    status=(str(header["status"]) if kind == "experiences" else None),
+                    scope=(str(header["scope"]) if kind == "memory" else None),
+                    confidence=(
+                        str(header["confidence"]) if header.get("confidence") is not None else None
+                    ),
+                    tags=tuple(str(tag) for tag in header_tags),
+                    recorded_at=(str(header["recorded_at"]) if kind == "experiences" else None),
+                    updated_at=str(header["updated_at"]),
                 )
             )
+    entries.sort(
+        key=lambda entry: parse_datetime_filter(entry.updated_at, end_of_day=False),
+        reverse=True,
+    )
     return entries
+
+
+def _validate_search_inputs(
+    *,
+    kind: str,
+    project_ids: list[str],
+    tags: list[str],
+    statuses: list[str],
+    all_projects: bool,
+    filters: SearchFilters,
+) -> None:
+    if all_projects and project_ids:
+        raise ValueError("project_ids and all_projects cannot be used together")
+    _validate_slugs(project_ids, field="project_ids")
+    _validate_knowledge_tags(tags)
+    if kind == "memory" and statuses:
+        raise ValueError("statuses can only filter experiences")
+    invalid_statuses = sorted(set(statuses).difference(EXPERIENCE_STATUS_CHOICES))
+    if invalid_statuses:
+        raise ValueError(f"Unsupported experience statuses: {', '.join(invalid_statuses)}")
+    _validate_slugs(list(filters.document_ids), field="document_ids")
+    _validate_slugs(list(filters.related_experiences), field="related_experiences")
+    invalid_evidence = sorted(set(filters.evidence_types).difference(EVIDENCE_TYPE_CHOICES))
+    if invalid_evidence:
+        raise ValueError(f"Unsupported evidence types: {', '.join(invalid_evidence)}")
+    invalid_scopes = sorted(set(filters.scopes).difference(MEMORY_SCOPE_CHOICES))
+    if invalid_scopes:
+        raise ValueError(f"Unsupported memory scopes: {', '.join(invalid_scopes)}")
+    invalid_confidences = sorted(set(filters.confidences).difference(CONFIDENCE_CHOICES))
+    if invalid_confidences:
+        raise ValueError(f"Unsupported confidences: {', '.join(invalid_confidences)}")
 
 
 def read_experience_at(
@@ -496,7 +664,7 @@ def read_memory_at(
 
 
 def _read_exact_document(path: Path, *, kind: str) -> tuple[dict[str, object], str]:
-    header, body = split_front_matter(path.read_text(encoding="utf-8"))
+    header, body = split_front_matter(path.read_text(encoding="utf-8"), source_path=path)
     validate_document_header(header, kind=kind)
     return header, body
 
@@ -616,9 +784,17 @@ def validate_document_header(header: dict[str, object], *, kind: str) -> None:
     if header.get("schema_version") != 2:
         raise ValueError("refinery document requires schema_version: 2")
     required = (
-        ("experience_id", "project_id", "title", "purpose", "status", "recorded_at")
+        (
+            "experience_id",
+            "project_id",
+            "title",
+            "purpose",
+            "status",
+            "recorded_at",
+            "updated_at",
+        )
         if kind == "experiences"
-        else ("memory_id", "scope", "title", "summary")
+        else ("memory_id", "scope", "title", "summary", "updated_at")
     )
     for field in required:
         if not isinstance(header.get(field), str) or not str(header[field]).strip():
@@ -626,15 +802,26 @@ def validate_document_header(header: dict[str, object], *, kind: str) -> None:
     _validate_string_list(header, "tags")
     _validate_knowledge_tags(header["tags"])
     if kind == "experiences":
+        _validate_slugs(
+            [str(header["experience_id"]), str(header["project_id"])],
+            field="experience_id and project_id",
+        )
         status = header["status"]
         if status not in EXPERIENCE_STATUS_CHOICES:
             raise ValueError(f"Unsupported experience status: {status}")
         _validate_string_list(header, "related_experiences")
         _validate_string_list(header, "supersedes")
+        related = header["related_experiences"]
+        supersedes = header["supersedes"]
+        assert isinstance(related, list)
+        assert isinstance(supersedes, list)
+        _validate_slugs([str(value) for value in related], field="related_experiences")
+        _validate_slugs([str(value) for value in supersedes], field="supersedes")
         _validate_evidence(header.get("evidence"))
-        parse_datetime_filter(str(header["recorded_at"]), end_of_day=False)
+        _validate_document_timestamp(header["recorded_at"], field="recorded_at")
     else:
         _validate_memory_header(header)
+    _validate_document_timestamp(header["updated_at"], field="updated_at")
     confidence = header.get("confidence")
     if confidence is not None and confidence not in CONFIDENCE_CHOICES:
         raise ValueError(f"Unsupported confidence: {confidence}")
@@ -648,6 +835,8 @@ def _validate_string_list(
         raise ValueError(f"{field} must be a list of strings")
     if require_nonempty and not value:
         raise ValueError(f"{field} must not be empty")
+    if len(value) != len(set(value)):
+        raise ValueError(f"{field} must not contain duplicates")
 
 
 def _validate_knowledge_tags(value: object) -> None:
@@ -661,9 +850,14 @@ def _validate_knowledge_tags(value: object) -> None:
             not SLUG_RE.fullmatch(segment) for segment in segments
         ):
             raise ValueError("tags must use one to three lowercase slug segments separated by /")
+        if segments[0] not in KNOWLEDGE_TAG_FACETS:
+            raise ValueError(
+                "tags must start with a standard facet: " + ", ".join(KNOWLEDGE_TAG_FACETS)
+            )
 
 
 def _validate_memory_header(header: dict[str, object]) -> None:
+    _validate_slugs([str(header["memory_id"])], field="memory_id")
     scope = header["scope"]
     if scope not in MEMORY_SCOPE_CHOICES:
         raise ValueError(f"Unsupported memory scope: {scope}")
@@ -687,19 +881,71 @@ def _validate_evidence(value: object) -> None:
     for item in value:
         if not isinstance(item, dict):
             raise ValueError("each evidence item must be a mapping")
-        evidence_type = item.get("type")
-        retention = item.get("retention")
-        if evidence_type not in EVIDENCE_TYPE_CHOICES:
-            raise ValueError(f"Unsupported evidence type: {evidence_type}")
-        if retention not in EVIDENCE_RETENTION_CHOICES:
-            raise ValueError(f"Unsupported evidence retention: {retention}")
-        location_key = "path" if evidence_type in {"file", "git"} else "uri"
-        if not isinstance(item.get(location_key), str) or not item[location_key]:
-            raise ValueError(f"evidence type {evidence_type} requires {location_key}")
-        if evidence_type == "git" and (
-            not isinstance(item.get("commit"), str) or not item["commit"]
-        ):
-            raise ValueError("evidence type git requires commit")
+        _validate_evidence_item(item)
+
+
+def _validate_evidence_item(item: dict[object, object]) -> None:
+    evidence_type = item.get("type")
+    retention = item.get("retention")
+    if evidence_type not in EVIDENCE_TYPE_CHOICES:
+        raise ValueError(f"Unsupported evidence type: {evidence_type}")
+    if retention not in EVIDENCE_RETENTION_CHOICES:
+        raise ValueError(f"Unsupported evidence retention: {retention}")
+
+    allowed_retentions = {
+        "file": {"reference"},
+        "git": {"source"},
+        "mlflow": {"external"},
+        "url": {"external"},
+        "external": {"external"},
+    }
+    if retention not in allowed_retentions[str(evidence_type)]:
+        raise ValueError(f"evidence type {evidence_type} does not support retention: {retention}")
+
+    location_key = "path" if evidence_type in {"file", "git"} else "uri"
+    if not isinstance(item.get(location_key), str) or not item[location_key]:
+        raise ValueError(f"evidence type {evidence_type} requires {location_key}")
+    _validate_evidence_fields(item, str(evidence_type))
+    if location_key == "path":
+        _validate_evidence_path(str(item[location_key]))
+    if evidence_type == "git" and (not isinstance(item.get("commit"), str) or not item["commit"]):
+        raise ValueError("evidence type git requires commit")
+    git_state = item.get("git_state")
+    if (
+        evidence_type == "file"
+        and git_state is not None
+        and (not isinstance(git_state, str) or git_state not in EVIDENCE_GIT_STATE_CHOICES)
+    ):
+        raise ValueError("file evidence git_state is unsupported")
+
+
+def _validate_evidence_fields(item: dict[object, object], evidence_type: str) -> None:
+    allowed_fields = {
+        "file": {"type", "path", "retention", "git_state"},
+        "git": {"type", "path", "commit", "retention"},
+        "mlflow": {"type", "uri", "retention"},
+        "url": {"type", "uri", "retention"},
+        "external": {"type", "uri", "retention"},
+    }
+    unexpected = sorted(
+        str(field) for field in set(item).difference(allowed_fields[evidence_type])
+    )
+    if unexpected:
+        raise ValueError(
+            f"evidence type {evidence_type} has unsupported fields: {', '.join(unexpected)}"
+        )
+
+
+def _validate_evidence_path(value: str) -> None:
+    posix = PurePosixPath(value)
+    windows = PureWindowsPath(value)
+    if (
+        posix.is_absolute()
+        or windows.is_absolute()
+        or ".." in posix.parts
+        or ".." in windows.parts
+    ):
+        raise ValueError("evidence path must be repository-relative and must not contain ..")
 
 
 def normalize_evidence(
@@ -716,6 +962,18 @@ def normalize_evidence(
 def _validate_slugs(values: list[str], *, field: str) -> None:
     if any(not SLUG_RE.fullmatch(value) for value in values):
         raise ValueError(f"{field} values must be lowercase slugs")
+
+
+def _validate_document_timestamp(value: object, *, field: str) -> None:
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be an ISO 8601 timestamp with timezone")
+    normalized = value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as error:
+        raise ValueError(f"{field} must be an ISO 8601 timestamp with timezone") from error
+    if parsed.tzinfo is None:
+        raise ValueError(f"{field} must be an ISO 8601 timestamp with timezone")
 
 
 def _split_source_reference(reference: str) -> tuple[str | None, str]:
@@ -774,7 +1032,7 @@ def _experience_exists(vault: Path, project_id: str, experience_id: str) -> bool
     candidates = [direct] if direct.is_file() else sorted(root.glob("*.md"))
     for path in candidates:
         try:
-            header, _ = split_front_matter(path.read_text(encoding="utf-8"))
+            header, _ = split_front_matter(path.read_text(encoding="utf-8"), source_path=path)
         except (OSError, ValueError):
             continue
         if header.get("project_id") == project_id and header.get("experience_id") == experience_id:
@@ -800,6 +1058,32 @@ def validate_memory_source_references(vault: Path, header: dict[str, object]) ->
             raise ValueError(f"Ambiguous source experience: {source}")
         if not _experience_exists(vault, project_id, experience_id):
             raise ValueError(f"Unknown source experience: {project_id}/{experience_id}")
+
+
+def validate_experience_references(vault: Path, header: dict[str, object]) -> None:
+    """Validate related and superseded experience references in the same project."""
+    validate_document_header(header, kind="experiences")
+    project_id = str(header["project_id"])
+    experience_id = str(header["experience_id"])
+    related = header["related_experiences"]
+    supersedes = header["supersedes"]
+    assert isinstance(related, list)
+    assert isinstance(supersedes, list)
+    overlapping = sorted(set(related).intersection(supersedes))
+    if overlapping:
+        raise ValueError(
+            "related_experiences and supersedes must not overlap: " + ", ".join(overlapping)
+        )
+    for field, references in (
+        ("related_experiences", related),
+        ("supersedes", supersedes),
+    ):
+        for reference in references:
+            assert isinstance(reference, str)
+            if reference == experience_id:
+                raise ValueError(f"{field} must not reference the experience itself")
+            if not _experience_exists(vault, project_id, reference):
+                raise ValueError(f"Unknown {field} experience: {project_id}/{reference}")
 
 
 def _validate_confidence(confidence: str | None) -> None:

@@ -1,4 +1,6 @@
 from pathlib import Path
+from typing import Any
+from typing import cast
 
 import pytest
 
@@ -20,6 +22,7 @@ from knowledge_refinery.mcp_server import refinery_validate
 from knowledge_refinery.tag_ops import TAG_TAXONOMY
 from knowledge_refinery.vault_ops import disable_project
 from knowledge_refinery.vault_ops import init_vault
+from knowledge_refinery.vault_ops import read_vault_id
 from knowledge_refinery.vault_ops import setup_project
 
 
@@ -37,7 +40,7 @@ def configured_mcp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def test_local_mcp_records_searches_and_validates(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    configured_mcp(tmp_path, monkeypatch)
+    vault = configured_mcp(tmp_path, monkeypatch)
     project = tmp_path / "pybr"
 
     recorded = refinery_record_experience(
@@ -86,6 +89,7 @@ def test_local_mcp_records_searches_and_validates(
         "schema_version": 2,
         "project_metadata_schema_version": 1,
         "tag_taxonomy_schema_version": 1,
+        "active_vault_id": read_vault_id(vault),
     }
     assert recorded["experience_id"] == "boruta-trial"
     assert recorded["updated_at"]
@@ -206,6 +210,11 @@ def test_mcp_reads_qualified_experience_and_shared_memory(
         "vision/second-trial",
     ]
     assert memory["header"]["updated_at"] == recorded["updated_at"]
+    shared_entry = refinery_search_memory(
+        str(first), memory_ids=["shared-rule"], scopes=["shared"]
+    )[0]
+    assert shared_entry["scope"] == "shared"
+    assert shared_entry["project_id"] is None
 
 
 def test_memory_update_requires_current_revision(
@@ -449,3 +458,159 @@ def test_validate_reports_memory_with_missing_source(
     assert result["checked"] == 1
     assert isinstance(result["errors"], list)
     assert "Unknown source experience" in result["errors"][0]["error"]
+
+
+def test_mcp_updates_preserve_omitted_fields_and_support_explicit_clear(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "pybr"
+    created = refinery_record_experience(
+        project_path=str(project),
+        title="保持対象",
+        purpose="patch semanticsを検証する",
+        status="completed",
+        body="original",
+        evidence=[{"type": "file", "path": "result.txt", "retention": "reference"}],
+        tags=["task/testing"],
+        confidence="high",
+        experience_id="preserved",
+    )
+
+    updated = refinery_record_experience(
+        project_path=str(project),
+        title="保持対象",
+        purpose="本文だけ更新する",
+        status="completed",
+        body="updated",
+        experience_id="preserved",
+        expected_updated_at=str(created["updated_at"]),
+    )
+    header = refinery_get_experience(str(project), "preserved")["header"]
+    assert header["tags"] == ["task/testing"]
+    assert header["evidence"] == [{"type": "file", "path": "result.txt", "retention": "reference"}]
+    assert header["confidence"] == "high"
+
+    cleared = refinery_record_experience(
+        project_path=str(project),
+        title="保持対象",
+        purpose="metadataを明示clearする",
+        status="completed",
+        body="cleared",
+        tags=[],
+        evidence=[],
+        clear_confidence=True,
+        experience_id="preserved",
+        expected_updated_at=str(updated["updated_at"]),
+    )
+    cleared_header = refinery_get_experience(str(project), "preserved")["header"]
+    assert cleared["updated_at"] == cleared_header["updated_at"]
+    assert cleared_header["tags"] == []
+    assert cleared_header["evidence"] == []
+    assert cleared_header["confidence"] is None
+
+    memory = refinery_record_memory(
+        project_path=str(project),
+        title="保持するmemory",
+        summary="最初の要約",
+        source_experiences=["preserved"],
+        tags=["task/testing"],
+        confidence="medium",
+        memory_id="preserved-memory",
+    )
+    revised_memory = refinery_record_memory(
+        project_path=str(project),
+        title="保持するmemory",
+        summary="更新した要約",
+        memory_id="preserved-memory",
+        expected_updated_at=str(memory["updated_at"]),
+    )
+    memory_header = refinery_get_memory(str(project), "preserved-memory")["header"]
+    assert memory_header["source_experiences"] == ["preserved"]
+    assert memory_header["tags"] == ["task/testing"]
+    assert memory_header["confidence"] == "medium"
+    assert revised_memory["scope"] == "project"
+    assert revised_memory["project_id"] == "pybr"
+
+
+def test_search_results_expose_fields_needed_for_deterministic_exact_get(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "pybr"
+    refinery_record_experience(
+        project_path=str(project),
+        title="検索候補",
+        purpose="候補選択に必要な情報を返す",
+        status="inconclusive",
+        body="body",
+        tags=["task/search"],
+        confidence="low",
+        experience_id="search-entry",
+    )
+    refinery_record_memory(
+        project_path=str(project),
+        title="検索memory",
+        summary="exact getへ進める",
+        source_experiences=["search-entry"],
+        tags=["task/search"],
+        confidence="low",
+        memory_id="search-memory",
+    )
+
+    experience = refinery_search_experiences(str(project), experience_ids=["search-entry"])[0]
+    memory = refinery_search_memory(str(project), memory_ids=["search-memory"])[0]
+
+    assert experience == {
+        "project_id": "pybr",
+        "id": "search-entry",
+        "title": "検索候補",
+        "kind": "experience",
+        "summary": "候補選択に必要な情報を返す",
+        "status": "inconclusive",
+        "scope": None,
+        "confidence": "low",
+        "tags": ["task/search"],
+        "recorded_at": experience["recorded_at"],
+        "updated_at": experience["updated_at"],
+        "path": "projects/pybr/experiences/search-entry.md",
+    }
+    assert memory["scope"] == "project"
+    assert memory["project_id"] == "pybr"
+    assert memory["summary"] == "exact getへ進める"
+    assert memory["updated_at"]
+
+
+def test_mcp_search_rejects_ambiguous_scope_and_invalid_filters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "pybr"
+
+    with pytest.raises(ValueError, match="cannot be used together"):
+        refinery_search_experiences(str(project), project_ids=["pybr"], all_projects=True)
+    with pytest.raises(ValueError, match="Unsupported experience statuses"):
+        refinery_search_experiences(str(project), statuses=cast(Any, ["complete"]))
+
+
+def test_repo_scoped_mcp_rejects_invalid_project_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "pybr"
+    metadata = vault / "projects" / "pybr" / "project.yaml"
+    metadata.write_text(
+        metadata.read_text(encoding="utf-8").replace("name: pybr", "name: ''"),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="non-empty name"):
+        refinery_record_experience(
+            project_path=str(project),
+            title="拒否対象",
+            purpose="invalid metadata gate",
+            status="completed",
+            body="write must not happen",
+            experience_id="must-not-exist",
+        )
+    assert not (vault / "projects" / "pybr" / "experiences" / "must-not-exist.md").exists()

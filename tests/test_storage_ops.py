@@ -5,6 +5,7 @@ import time
 
 import pytest
 
+from knowledge_refinery.errors import RefineryFormatError
 from knowledge_refinery.experience_ops import upsert_experience_at
 from knowledge_refinery.experience_ops import upsert_memory_at
 from knowledge_refinery.front_matter import split_front_matter
@@ -22,6 +23,16 @@ def test_atomic_write_replaces_content_without_temporary_files(tmp_path: Path) -
 
     assert path.read_text(encoding="utf-8") == "new\n"
     assert list(tmp_path.glob(".config.yaml.*.tmp")) == []
+
+
+def test_front_matter_error_reports_the_real_source_path(tmp_path: Path) -> None:
+    path = tmp_path / "broken.md"
+
+    with pytest.raises(RefineryFormatError) as captured:
+        split_front_matter("not front matter", source_path=path)
+
+    assert captured.value.path == path
+    assert f"path: {path.as_posix()}" in captured.value.render()
 
 
 def test_interprocess_lock_times_out_and_recovers_stale_lock(tmp_path: Path) -> None:

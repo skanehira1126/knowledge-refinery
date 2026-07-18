@@ -13,6 +13,9 @@ class RefineryCliError(Exception):
     suggested_action: str | None = None
     exit_code: int = 2
 
+    def __str__(self) -> str:
+        return self.summary
+
     def render(self) -> str:
         lines = [
             f"refinery_error: {self.code}",
@@ -49,7 +52,7 @@ class RefineryFormatError(RefineryCliError):
             path=path,
             detail=detail,
             expected=expected,
-            repair_skill="refinery-repair",
+            repair_skill="refinery-maintenance",
             suggested_action=suggested_action,
         )
 
@@ -70,7 +73,7 @@ class RefineryConflictError(RefineryCliError):
             path=path,
             detail=detail,
             expected=expected,
-            repair_skill="refinery-repair",
+            repair_skill="refinery-maintenance",
             suggested_action=suggested_action,
         )
 

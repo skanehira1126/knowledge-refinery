@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import anyio
 from mcp import ClientSession
 from mcp import StdioServerParameters
@@ -8,17 +11,15 @@ from mcp.client.stdio import stdio_client
 
 def test_stdio_server_lists_expected_tools() -> None:
     async def exercise_server() -> None:
+        root = Path(__file__).resolve().parent.parent
+        config = json.loads((root / ".mcp.json").read_text(encoding="utf-8"))
+        server = config["mcpServers"]["knowledge-refinery"]
+        assert isinstance(server["command"], str)
+        assert isinstance(server["args"], list)
         parameters = StdioServerParameters(
-            command="uv",
-            args=[
-                "run",
-                "--frozen",
-                "--project",
-                ".",
-                "knowledge-refinery",
-                "mcp",
-                "serve",
-            ],
+            command=server["command"],
+            args=server["args"],
+            cwd=str(root) if server.get("cwd") == "." else server.get("cwd"),
         )
         async with stdio_client(parameters) as (reader, writer):
             async with ClientSession(reader, writer) as session:
@@ -63,19 +64,19 @@ def test_stdio_server_lists_expected_tools() -> None:
                 "active vaultに登録されたprojectの識別・検索用metadataを一覧取得します。"
             ),
             "refinery_record_experience": (
-                "experienceを作成し、既存文書は直前に取得したrevisionを使って更新します。"
+                "experienceを作成・更新します。更新の省略fieldは保持し、空listはclearします。"
             ),
             "refinery_record_memory": (
-                "memoryを作成し、既存文書はrefinery_get_memoryのrevisionを使って更新します。"
+                "memoryを作成・更新します。更新の省略fieldは保持し、空listはclearします。"
             ),
             "refinery_search_experiences": (
-                "有効なrepositoryのexperienceを検索し、必要な場合はvault全体へ対象を広げます。"
+                "experienceを新しい順に検索します。project_idsとall_projectsは併用できません。"
             ),
             "refinery_search_knowledge_tags": (
                 "Knowledge tagのpathと説明をAND条件の語句で検索し、利用件数も取得します。"
             ),
             "refinery_search_memory": (
-                "有効なrepositoryからproject/shared memoryを構造化fieldと全文で検索します。"
+                "project/shared memoryを新しい順に検索します。結果のscopeをexact getへ渡します。"
             ),
             "refinery_update_project_metadata": (
                 "project metadataを部分更新します。省略fieldは保持し、"
@@ -93,6 +94,13 @@ def test_stdio_server_lists_expected_tools() -> None:
         )
         assert "expected_updated_at" in record_experience.inputSchema["properties"]
         assert "expected_updated_at" not in record_experience.inputSchema.get("required", [])
+        assert record_experience.inputSchema["properties"]["status"]["enum"] == [
+            "completed",
+            "inconclusive",
+            "abandoned",
+            "superseded",
+        ]
+        assert "clear_confidence" in record_experience.inputSchema["properties"]
         update_metadata = next(
             tool for tool in result.tools if tool.name == "refinery_update_project_metadata"
         )

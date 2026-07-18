@@ -39,7 +39,7 @@ def _skill_header(path: Path) -> dict[str, object]:
     return raw
 
 
-def validate() -> None:
+def _validate_plugin() -> None:
     plugin = _read_json(ROOT / ".codex-plugin" / "plugin.json")
     if plugin.get("name") != "knowledge-refinery":
         raise ValueError("Plugin name must be knowledge-refinery")
@@ -50,11 +50,28 @@ def validate() -> None:
     if plugin.get("skills") != "./skills/" or plugin.get("mcpServers") != "./.mcp.json":
         raise ValueError("Plugin skill or MCP path does not match the repository layout")
 
+
+def _validate_mcp() -> None:
     mcp = _read_json(ROOT / ".mcp.json")
     servers = mcp.get("mcpServers")
     if not isinstance(servers, dict) or "knowledge-refinery" not in servers:
         raise ValueError(".mcp.json must define the knowledge-refinery server")
+    server = servers["knowledge-refinery"]
+    if not isinstance(server, dict):
+        raise ValueError("knowledge-refinery MCP server config must be an object")
+    expected_server = {
+        "cwd": ".",
+        "command": "uv",
+        "args": ["run", "--frozen", "--project", ".", "knowledge-refinery", "mcp", "serve"],
+    }
+    for key, expected in expected_server.items():
+        if server.get(key) != expected:
+            raise ValueError(
+                f"MCP server {key} drift: expected={expected}, actual={server.get(key)}"
+            )
 
+
+def _validate_skills() -> None:
     skill_names = {path.parent.name for path in (ROOT / "skills").glob("*/SKILL.md")}
     if skill_names != EXPECTED_SKILLS:
         raise ValueError(
@@ -67,13 +84,32 @@ def validate() -> None:
             raise ValueError(f"Skill name does not match its directory: {name}")
         if not isinstance(header.get("description"), str) or not header["description"]:
             raise ValueError(f"Skill description is missing: {name}")
+        agent_path = ROOT / "skills" / name / "agents" / "openai.yaml"
+        if not agent_path.is_file():
+            raise ValueError(f"Skill agent interface is missing: {name}")
+        agent = yaml.safe_load(agent_path.read_text(encoding="utf-8"))
+        interface = agent.get("interface") if isinstance(agent, dict) else None
+        if not isinstance(interface, dict):
+            raise ValueError(f"Skill agent interface must be a mapping: {name}")
+        default_prompt = interface.get("default_prompt")
+        if not isinstance(default_prompt, str) or f"${name}" not in default_prompt:
+            raise ValueError(f"Skill default prompt must invoke ${name}")
 
+
+def _validate_marketplace() -> None:
     marketplace = _read_json(ROOT / ".agents" / "plugins" / "marketplace.json")
     plugins = marketplace.get("plugins")
     if not isinstance(plugins, list) or not any(
         isinstance(item, dict) and item.get("name") == "knowledge-refinery" for item in plugins
     ):
         raise ValueError("Personal marketplace is missing knowledge-refinery")
+
+
+def validate() -> None:
+    _validate_plugin()
+    _validate_mcp()
+    _validate_skills()
+    _validate_marketplace()
 
 
 if __name__ == "__main__":

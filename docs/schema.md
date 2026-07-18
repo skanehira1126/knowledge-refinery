@@ -6,9 +6,11 @@
 schema_version: 2
 managed_by: knowledge-refinery
 cli_version: 0.2.0
+vault_id: 0123456789abcdef0123456789abcdef
 ```
 
-`schema_version` または `managed_by` が未対応の場合、CLIとMCPはvaultへの接続と書き込みを拒否します。
+`schema_version`または`managed_by`が未対応の場合、CLIとMCPはvaultへの接続と書き込みを拒否します。
+`vault_id`はvault作成時に生成する不変の32桁hex IDです。
 
 ## repo設定
 
@@ -17,6 +19,18 @@ schema_version: 2
 project_id: my-project
 enabled: true
 ```
+
+`.refinery.yaml`はversion管理でき、clone間でproject IDを共有します。vault固有のbindingは
+version管理しない`.refinery.local.yaml`へ分離します。setupはこのfileを`.gitignore`へ追加します。
+
+```yaml
+schema_version: 1
+vault_id: 0123456789abcdef0123456789abcdef
+```
+
+local側の`vault_id`は、同じ`project_id`を持つ別vaultへの誤接続を防ぎます。status/doctor/MCPは
+active vaultとの一致を検証します。旧versionまたは新しいcloneでlocal bindingがない場合は、
+[移行・binding手順](troubleshooting.md#legacy-vault-id)で明示的にbindします。
 
 ## project metadata
 
@@ -60,7 +74,25 @@ supersedes: []
 confidence: medium
 ```
 
-`status` は `completed`、`inconclusive`、`abandoned`、`superseded`です。evidence typeは `file`、`git`、`mlflow`、`url`、`external` です。
+`status` は次の意味で使います。
+
+| 値 | 意味 |
+|---|---|
+| `completed` | 成否を問わず、試行が評価可能な結果へ到達した |
+| `inconclusive` | 試行したが、根拠不足、矛盾、測定不能により問いへ答えられない |
+| `abandoned` | blocker、cost、risk、前提崩壊により評価可能な結果の前に停止した |
+| `superseded` | 保存済みの後続experienceがこの結論を置き換えた |
+
+本文は「試したこと」「分かったこと」「微妙だった点・限界」「次の可能性」の4 headingを使い、
+事実、解釈、限界、仮説を区別します。evidence typeは `file`、`git`、`mlflow`、`url`、`external`です。
+Evidenceは参照だけを保存し、file内容を自動copyしません。`file`は`reference`、`git`は
+`source`、`mlflow`・`url`・`external`は`external` retentionだけを受け付けます。
+`file`と`git`のpathはrepository相対で`..`を含めません。fileの任意`git_state`は`tracked`、
+`untracked`、`modified`、`staged`、`ignored`、`deleted`のいずれかです。typeごとに定義されて
+いない追加fieldは拒否します。
+`related_experiences`と`supersedes`は同じprojectの実在IDだけを参照し、自己参照、重複、
+両listの重なりを拒否します。
+secret、credential、access token、PII（個人情報）、顧客data、未redactの機密logはevidenceや本文へ保存しません。
 
 ## project memory
 
@@ -96,10 +128,34 @@ confidence: high
 
 shared sourceは必ずqualified IDで2件以上、distinct projectが2つ以上で、参照experienceが実在する必要があります。
 
+Project memoryはschema上1件以上のsourceを受け付けますが、通常運用では反復または相補的な
+2件以上を要求します。1件だけのmemoryは利用者の明示依頼がある場合に限り、scopeと未検証の限界を
+本文へ書き、`confidence: high`を使用しません。Shared memoryはschema条件を満たしても自動作成せず、
+候補内容と根拠を提示して利用者の明示承認を得ます。
+
+## confidence
+
+`confidence`は省略可能で、省略時は未評価です。statusや試行の成否とは独立して選びます。
+
+| 値 | Experience | Memory |
+|---|---|---|
+| `high` | 条件を明記した直接根拠が再現可能で、重要な未解決矛盾がない | stated scopeで反復または独立した直接根拠があり、重要な未解決反例がない |
+| `medium` | 直接根拠はあるが、反復、coverage、適用範囲が限定的 | 複数の支持はあるが、coverage、独立性、適用範囲が限定的 |
+| `low` | 部分的・間接的・再確認不能な根拠、または重要な未解決点がある | 予備的な支持、明示承認された1 source、または重要な競合・不確実性がある |
+
+## revision付き更新
+
+Experienceとmemoryの更新では、現在の`updated_at`を`expected_updated_at`へ渡します。
+保存文書の`updated_at`とexperienceの`recorded_at`は必須で、timezone付きISO 8601にします。
+optional fieldを省略すると現在値を保持し、空listを明示したlist fieldだけをclearします。
+confidenceのclearは`clear_confidence: true`で明示します。作成前にstable IDを決め、結果不明の
+createをretryする前にexact getまたはID検索で保存済みか確認します。
+
 ## Knowledge tag
 
 Experienceとmemoryの`tags`は、`/`で区切った1〜3階層です。各segmentは
 lowercaseの英数字かhyphenを使い、空segment、重複tag、4階層以上は拒否します。
+先頭segmentは`domain`、`artifact`、`task`、`tech`、`issue`のいずれかに固定します。
 
 ```yaml
 tags:

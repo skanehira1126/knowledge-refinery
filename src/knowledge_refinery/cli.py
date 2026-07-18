@@ -9,6 +9,8 @@ import shutil
 import sys
 import tempfile
 
+import yaml
+
 from knowledge_refinery import get_version
 from knowledge_refinery.agents_ops import GUIDE_FILENAME_CHOICES
 from knowledge_refinery.agents_ops import LANG_CHOICES
@@ -24,6 +26,8 @@ from knowledge_refinery.experience_ops import EXPERIENCE_STATUS_CHOICES
 from knowledge_refinery.experience_ops import MEMORY_SCOPE_CHOICES
 from knowledge_refinery.experience_ops import SearchFilters
 from knowledge_refinery.experience_ops import parse_datetime_filter
+from knowledge_refinery.experience_ops import read_experience_at
+from knowledge_refinery.experience_ops import read_memory_at
 from knowledge_refinery.experience_ops import search_documents_at
 from knowledge_refinery.experience_ops import upsert_experience_at
 from knowledge_refinery.experience_ops import upsert_memory_at
@@ -55,7 +59,11 @@ def build_parser() -> argparse.ArgumentParser:
         "init", help="Initialize a central refinery repository"
     )
     vault_init.add_argument("--root", required=True, help="central refinery repository path")
-    vault_init.add_argument("--force", action="store_true", help="refresh managed template files")
+    vault_init.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite managed vault templates; preserves the immutable vault ID",
+    )
     vault_init.set_defaults(handler=run_vault_init)
     vault_configure = vault_subparsers.add_parser(
         "configure", help="Set the active vault used by the local MCP server"
@@ -68,14 +76,18 @@ def build_parser() -> argparse.ArgumentParser:
     project_setup = project_subparsers.add_parser(
         "setup", help="Create a project area, metadata, and optional .refinery link"
     )
-    project_setup.add_argument("--target", default=".", help="project repository path")
+    project_setup.add_argument(
+        "--target", "--project", dest="target", default=".", help="project repository path"
+    )
     project_setup.add_argument("--vault", required=True, help="central refinery repository path")
     project_setup.add_argument("--project-id", default=None, help="stable project slug")
     project_setup.add_argument("--project-name", default=None, help="human-readable project name")
-    project_setup.add_argument("--summary", default="", help="concise project summary")
-    project_setup.add_argument("--tag", action="append", default=[], help="project discovery tag")
+    project_setup.add_argument("--summary", default=None, help="concise project summary")
     project_setup.add_argument(
-        "--technology", action="append", default=[], help="technology used by the project"
+        "--tag", action="append", default=None, help="project discovery tag"
+    )
+    project_setup.add_argument(
+        "--technology", action="append", default=None, help="technology used by the project"
     )
     project_setup.add_argument(
         "--link",
@@ -93,7 +105,9 @@ def build_parser() -> argparse.ArgumentParser:
     project_enable = project_subparsers.add_parser(
         "enable", help="Re-enable Knowledge Refinery for a configured project"
     )
-    project_enable.add_argument("--target", default=".", help="project repository path")
+    project_enable.add_argument(
+        "--target", "--project", dest="target", default=".", help="project repository path"
+    )
     project_enable.add_argument(
         "--vault", default=None, help="central vault; defaults to the active vault"
     )
@@ -103,19 +117,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="optionally create a human-facing .refinery symlink",
     )
     add_guide_arguments(project_enable)
+    project_enable.add_argument(
+        "--agents",
+        action="store_true",
+        help="append the managed repository guidance block",
+    )
     project_enable.set_defaults(handler=run_project_enable)
 
     project_disable = project_subparsers.add_parser(
         "disable", help="Disable integration without deleting central knowledge"
     )
-    project_disable.add_argument("--target", default=".", help="project repository path")
+    project_disable.add_argument(
+        "--target", "--project", dest="target", default=".", help="project repository path"
+    )
     project_disable.add_argument("--filename", choices=GUIDE_FILENAME_CHOICES, default="AGENTS.md")
     project_disable.set_defaults(handler=run_project_disable)
 
     project_status = project_subparsers.add_parser(
         "status", help="Inspect repository integration and active-vault consistency"
     )
-    project_status.add_argument("--target", default=".", help="project repository path")
+    project_status.add_argument(
+        "--target", "--project", dest="target", default=".", help="project repository path"
+    )
     project_status.add_argument("--filename", choices=GUIDE_FILENAME_CHOICES, default="AGENTS.md")
     project_status.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     project_status.set_defaults(handler=run_project_status)
@@ -129,7 +152,9 @@ def build_parser() -> argparse.ArgumentParser:
     project_metadata_show = project_metadata_subparsers.add_parser(
         "show", help="Read project metadata"
     )
-    project_metadata_show.add_argument("--target", default=".", help="project repository path")
+    project_metadata_show.add_argument(
+        "--target", "--project", dest="target", default=".", help="project repository path"
+    )
     project_metadata_show.add_argument(
         "--json", action="store_true", help="emit machine-readable JSON"
     )
@@ -137,7 +162,9 @@ def build_parser() -> argparse.ArgumentParser:
     project_metadata_update = project_metadata_subparsers.add_parser(
         "update", help="Partially update project metadata using the current revision"
     )
-    project_metadata_update.add_argument("--target", default=".", help="project repository path")
+    project_metadata_update.add_argument(
+        "--target", "--project", dest="target", default=".", help="project repository path"
+    )
     project_metadata_update.add_argument("--name", default=None, help="human-readable name")
     project_metadata_update.add_argument("--summary", default=None, help="concise summary")
     tag_update = project_metadata_update.add_mutually_exclusive_group()
@@ -169,7 +196,9 @@ def build_parser() -> argparse.ArgumentParser:
     experience_upsert = experience_subparsers.add_parser(
         "upsert", help="Create or update one integrated experience document"
     )
-    experience_upsert.add_argument("--project", default=".", help="configured project path")
+    experience_upsert.add_argument(
+        "--project", "--target", dest="project", default=".", help="configured project path"
+    )
     experience_upsert.add_argument("--experience-id", default=None, help="stable experience ID")
     experience_upsert.add_argument("--title", required=True, help="experience title")
     experience_upsert.add_argument("--purpose", required=True, help="purpose of the attempt")
@@ -179,17 +208,39 @@ def build_parser() -> argparse.ArgumentParser:
         default="completed",
         help="experience outcome state",
     )
-    experience_upsert.add_argument("--tag", action="append", default=[], help="search tag")
-    experience_upsert.add_argument(
-        "--evidence", action="append", default=[], help="evidence reference; repeatable"
+    experience_tags = experience_upsert.add_mutually_exclusive_group()
+    experience_tags.add_argument("--tag", action="append", default=None, help="search tag")
+    experience_tags.add_argument(
+        "--clear-tags", action="store_true", help="remove every knowledge tag"
     )
-    experience_upsert.add_argument(
-        "--related-experience", action="append", default=[], help="related experience ID"
+    experience_evidence = experience_upsert.add_mutually_exclusive_group()
+    experience_evidence.add_argument(
+        "--evidence", action="append", default=None, help="evidence reference; repeatable"
     )
-    experience_upsert.add_argument(
-        "--supersedes", action="append", default=[], help="superseded experience ID"
+    experience_evidence.add_argument(
+        "--clear-evidence", action="store_true", help="remove every evidence reference"
     )
-    experience_upsert.add_argument("--confidence", choices=CONFIDENCE_CHOICES, default=None)
+    experience_related = experience_upsert.add_mutually_exclusive_group()
+    experience_related.add_argument(
+        "--related-experience", action="append", default=None, help="related experience ID"
+    )
+    experience_related.add_argument(
+        "--clear-related-experiences",
+        action="store_true",
+        help="remove every related experience",
+    )
+    experience_supersedes = experience_upsert.add_mutually_exclusive_group()
+    experience_supersedes.add_argument(
+        "--supersedes", action="append", default=None, help="superseded experience ID"
+    )
+    experience_supersedes.add_argument(
+        "--clear-supersedes", action="store_true", help="remove every superseded experience"
+    )
+    experience_confidence = experience_upsert.add_mutually_exclusive_group()
+    experience_confidence.add_argument("--confidence", choices=CONFIDENCE_CHOICES, default=None)
+    experience_confidence.add_argument(
+        "--clear-confidence", action="store_true", help="remove the confidence value"
+    )
     experience_upsert.add_argument(
         "--expected-updated-at",
         default=None,
@@ -197,6 +248,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_body_arguments(experience_upsert)
     experience_upsert.set_defaults(handler=run_experience_upsert)
+
+    experience_get = experience_subparsers.add_parser(
+        "get", help="Read one experience document as JSON"
+    )
+    experience_get.add_argument("source", help="experience ID or project-id/experience-id")
+    experience_get.add_argument(
+        "--project", "--target", dest="project", default=".", help="configured project path"
+    )
+    experience_get.set_defaults(handler=run_experience_get)
 
     experience_search = experience_subparsers.add_parser(
         "search", help="Search experiences across projects"
@@ -219,19 +279,29 @@ def build_parser() -> argparse.ArgumentParser:
     memory_upsert = memory_subparsers.add_parser(
         "upsert", help="Create or update a reusable memory document"
     )
-    memory_upsert.add_argument("--project", default=".", help="configured project path")
+    memory_upsert.add_argument(
+        "--project", "--target", dest="project", default=".", help="configured project path"
+    )
     memory_upsert.add_argument("--memory-id", default=None, help="stable memory ID")
     memory_upsert.add_argument("--title", required=True, help="memory title")
     memory_upsert.add_argument("--summary", required=True, help="reusable principle")
-    memory_upsert.add_argument("--tag", action="append", default=[], help="search tag")
+    memory_tags = memory_upsert.add_mutually_exclusive_group()
+    memory_tags.add_argument("--tag", action="append", default=None, help="search tag")
+    memory_tags.add_argument(
+        "--clear-tags", action="store_true", help="remove every knowledge tag"
+    )
     memory_upsert.add_argument(
         "--source-experience",
         action="append",
-        default=[],
+        default=None,
         help="experience ID supporting this memory",
     )
     memory_upsert.add_argument("--shared", action="store_true", help="write to shared/memory")
-    memory_upsert.add_argument("--confidence", choices=CONFIDENCE_CHOICES, default=None)
+    memory_confidence = memory_upsert.add_mutually_exclusive_group()
+    memory_confidence.add_argument("--confidence", choices=CONFIDENCE_CHOICES, default=None)
+    memory_confidence.add_argument(
+        "--clear-confidence", action="store_true", help="remove the confidence value"
+    )
     memory_upsert.add_argument(
         "--expected-updated-at",
         default=None,
@@ -239,6 +309,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_body_arguments(memory_upsert)
     memory_upsert.set_defaults(handler=run_memory_upsert)
+
+    memory_get = memory_subparsers.add_parser("get", help="Read one memory document as JSON")
+    memory_get.add_argument("memory_id", help="stable memory ID")
+    memory_get.add_argument(
+        "--project", "--target", dest="project", default=".", help="configured project path"
+    )
+    memory_get.add_argument("--scope", choices=MEMORY_SCOPE_CHOICES, default="project")
+    memory_get.add_argument("--project-id", default=None, help="project scope owner")
+    memory_get.set_defaults(handler=run_memory_get)
 
     memory_search = memory_subparsers.add_parser("search", help="Search project and shared memory")
     add_search_arguments(memory_search)
@@ -256,7 +335,9 @@ def build_parser() -> argparse.ArgumentParser:
     tag_browse = tag_subparsers.add_parser(
         "browse", help="List the immediate children of one Knowledge tag"
     )
-    tag_browse.add_argument("--project", default=".", help="configured project path")
+    tag_browse.add_argument(
+        "--project", "--target", dest="project", default=".", help="configured project path"
+    )
     tag_browse.add_argument("--parent", default=None, help="parent tag; omit for root tags")
     tag_browse.add_argument(
         "--all-projects", action="store_true", help="include usage from every project"
@@ -267,7 +348,9 @@ def build_parser() -> argparse.ArgumentParser:
         "search", help="Search Knowledge tag paths and descriptions"
     )
     tag_search.add_argument("terms", nargs="+", help="AND-matched search terms")
-    tag_search.add_argument("--project", default=".", help="configured project path")
+    tag_search.add_argument(
+        "--project", "--target", dest="project", default=".", help="configured project path"
+    )
     tag_search.add_argument(
         "--all-projects", action="store_true", help="include usage from every project"
     )
@@ -276,7 +359,9 @@ def build_parser() -> argparse.ArgumentParser:
     tag_describe = tag_subparsers.add_parser(
         "describe", help="Create or update one Knowledge tag description"
     )
-    tag_describe.add_argument("--project", default=".", help="configured project path")
+    tag_describe.add_argument(
+        "--project", "--target", dest="project", default=".", help="configured project path"
+    )
     tag_describe.add_argument("--tag", required=True, help="Knowledge tag path")
     tag_describe.add_argument("--description", required=True, help="stable tag description")
     tag_describe.add_argument(
@@ -289,7 +374,7 @@ def build_parser() -> argparse.ArgumentParser:
     agents_parser = subparsers.add_parser(
         "update-agents-md", help="Update the managed refinery guidance block"
     )
-    agents_parser.add_argument("--target", default=".")
+    agents_parser.add_argument("--target", "--project", dest="target", default=".")
     agents_parser.add_argument("--lang", choices=LANG_CHOICES, default="jp")
     agents_parser.add_argument("--filename", choices=GUIDE_FILENAME_CHOICES, default="AGENTS.md")
     agents_parser.set_defaults(handler=run_apply_agents_md)
@@ -333,7 +418,9 @@ def add_body_arguments(parser: argparse.ArgumentParser) -> None:
 
 def add_search_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("terms", nargs="*", default=[], help="AND-matched search terms")
-    parser.add_argument("--project", default=".", help="configured project path")
+    parser.add_argument(
+        "--project", "--target", dest="project", default=".", help="configured project path"
+    )
     parser.add_argument("--project-id", action="append", default=[], help="project filter")
     parser.add_argument("--tag", action="append", default=[], help="required tag")
     parser.add_argument("--all-projects", action="store_true", help="search every project")
@@ -353,37 +440,53 @@ def read_body(args: argparse.Namespace) -> str | None:
 
 
 def run_vault_init(args: argparse.Namespace) -> int:
+    previous, _ = _active_vault_or_error()
     result = init_vault(Path(args.root), force=bool(args.force))
     config = set_active_vault(result.root)
     print(f"Refinery initialized: {result.root}")
-    print(f"Active vault configured: {config}")
+    if previous is not None and previous != result.root:
+        print(f"Previous active vault: {previous}")
+    print(f"Active vault: {result.root}")
+    print(f"Config file: {config}")
     print(f"Created or updated files: {len(result.changed)}")
     return 0
 
 
 def run_vault_configure(args: argparse.Namespace) -> int:
-    path = set_active_vault(Path(args.root))
-    print(f"Active vault configured: {path}")
+    previous, _ = _active_vault_or_error()
+    root = Path(args.root).expanduser().resolve()
+    config = set_active_vault(root)
+    if previous is not None and previous != root:
+        print(f"Previous active vault: {previous}")
+    print(f"Active vault: {root}")
+    print(f"Config file: {config}")
     return 0
 
 
 def run_project_setup(args: argparse.Namespace) -> int:
     vault = Path(args.vault)
+    previous, _ = _active_vault_or_error()
     result = setup_project(
         Path(args.target),
         vault,
         project_id=args.project_id,
         project_name=args.project_name,
         summary=args.summary,
-        tags=list(args.tag),
-        technologies=list(args.technology),
+        tags=list(args.tag) if args.tag is not None else None,
+        technologies=list(args.technology) if args.technology is not None else None,
         create_link=bool(args.link),
     )
-    set_active_vault(vault)
+    config = set_active_vault(vault)
+    active = get_active_vault()
     print(f"Project configured: {result.project_id}")
     print(f"Project config: {result.config_path}")
+    print(f"Local vault binding: {result.local_config_path}")
     print(f"Refinery store: {result.project_store}")
     print(f"Project metadata: {result.metadata_path}")
+    if previous is not None and previous != active:
+        print(f"Previous active vault: {previous}")
+    print(f"Active vault: {active}")
+    print(f"Config file: {config}")
     if result.link_path is not None:
         print(f"Optional refinery link: {result.link_path}")
     if args.agents:
@@ -393,18 +496,27 @@ def run_project_setup(args: argparse.Namespace) -> int:
 
 
 def run_project_enable(args: argparse.Namespace) -> int:
+    previous, _ = _active_vault_or_error()
     vault = Path(args.vault) if args.vault is not None else get_active_vault()
     result = enable_project(Path(args.target), vault, create_link=bool(args.link))
     if args.vault is not None:
-        set_active_vault(vault)
-    agents_path = apply_agents_md(Path(args.target), lang=args.lang, filename=args.filename)
+        config = set_active_vault(vault)
+        active = get_active_vault()
     print(f"Project enabled: {result.project_id}")
     print(f"Project config: {result.config_path}")
+    print(f"Local vault binding: {result.local_config_path}")
     print(f"Refinery store: {result.project_store}")
     print(f"Project metadata: {result.metadata_path}")
+    if args.vault is not None:
+        if previous is not None and previous != active:
+            print(f"Previous active vault: {previous}")
+        print(f"Active vault: {active}")
+        print(f"Config file: {config}")
     if result.link_path is not None:
         print(f"Optional refinery link: {result.link_path}")
-    print(f"Managed repository guidance: {agents_path}")
+    if args.agents:
+        agents_path = apply_agents_md(Path(args.target), lang=args.lang, filename=args.filename)
+        print(f"Managed repository guidance: {agents_path}")
     return 0
 
 
@@ -436,9 +548,11 @@ def _project_status_payload(project: Path, filename: str) -> dict[str, object]:
             metadata = read_project_metadata(vault, status.project_id).as_dict()
         except (OSError, ValueError) as error:
             metadata_error = str(error)
+    ready_for_tools = status.ready and metadata is not None
     return {
         "state": status.state,
-        "ready": status.ready and metadata is not None,
+        "ready": ready_for_tools,
+        "ready_for_tools": ready_for_tools,
         "project_root": str(status.project_root),
         "config_path": str(status.config_path),
         "config_exists": status.config_exists,
@@ -446,6 +560,9 @@ def _project_status_payload(project: Path, filename: str) -> dict[str, object]:
         "config_error": status.config_error,
         "project_id": status.project_id,
         "enabled": status.enabled,
+        "configured_vault_id": status.configured_vault_id,
+        "active_vault_id": status.active_vault_id,
+        "vault_match": status.vault_match,
         "active_vault": str(status.vault_root) if status.vault_root is not None else None,
         "active_vault_error": vault_error,
         "vault_registered": status.vault_registered,
@@ -484,7 +601,7 @@ def run_project_status(args: argparse.Namespace) -> int:
 
 def run_project_metadata_show(args: argparse.Namespace) -> int:
     vault = get_active_vault()
-    metadata = read_project_metadata(vault, resolve_project_id(Path(args.target))).as_dict()
+    metadata = read_project_metadata(vault, resolve_project_id(Path(args.target), vault)).as_dict()
     if args.json:
         print(json.dumps(metadata, ensure_ascii=False, sort_keys=True))
     else:
@@ -494,7 +611,7 @@ def run_project_metadata_show(args: argparse.Namespace) -> int:
 
 def run_project_metadata_update(args: argparse.Namespace) -> int:
     vault = get_active_vault()
-    project_id = resolve_project_id(Path(args.target))
+    project_id = resolve_project_id(Path(args.target), vault)
     tags = [] if args.clear_tags else (list(args.tag) if args.tag is not None else None)
     technologies = (
         []
@@ -551,6 +668,7 @@ def _mcp_runtime_and_vault_check() -> tuple[dict[str, object], dict[str, object]
             "name": "vault_documents",
             "ok": False,
             "detail": "MCP runtime unavailable",
+            "errors": [],
         }
         return runtime, documents
     runtime = {
@@ -561,13 +679,19 @@ def _mcp_runtime_and_vault_check() -> tuple[dict[str, object], dict[str, object]
     try:
         validation = refinery_validate()
     except (OSError, ValueError, RefineryCliError) as error:
-        documents = {"name": "vault_documents", "ok": False, "detail": str(error)}
+        documents = {
+            "name": "vault_documents",
+            "ok": False,
+            "detail": str(error),
+            "errors": [],
+        }
         return runtime, documents
     errors = validation.get("errors", [])
     documents = {
         "name": "vault_documents",
         "ok": bool(validation.get("valid")),
         "detail": f"checked={validation.get('checked', 0)}, errors={len(errors)}",
+        "errors": errors if isinstance(errors, list) else [],
     }
     return runtime, documents
 
@@ -598,8 +722,12 @@ def run_doctor(args: argparse.Namespace) -> int:
         vault_documents,
         {
             "name": "project",
-            "ok": project["ready"],
-            "detail": project["state"],
+            "ok": project["state"] == "disabled" or project["ready_for_tools"],
+            "detail": (
+                "disabled (healthy opt-out; tools unavailable)"
+                if project["state"] == "disabled"
+                else project["state"]
+            ),
         },
     ]
     if args.mcp_version is not None:
@@ -630,43 +758,98 @@ def run_doctor(args: argparse.Namespace) -> int:
 
 def run_experience_upsert(args: argparse.Namespace) -> int:
     project = Path(args.project)
+    vault = get_active_vault()
+    tags = [] if args.clear_tags else args.tag
+    evidence = [] if args.clear_evidence else args.evidence
+    related_experiences = [] if args.clear_related_experiences else args.related_experience
+    supersedes = [] if args.clear_supersedes else args.supersedes
     path = upsert_experience_at(
-        get_active_vault(),
-        resolve_project_id(project),
+        vault,
+        resolve_project_id(project, vault),
         title=args.title,
         purpose=args.purpose,
         status=args.status,
         experience_id=args.experience_id,
         filename=None,
-        tags=list(args.tag),
-        evidence=list(args.evidence),
-        related_experiences=list(args.related_experience),
-        supersedes=list(args.supersedes),
+        tags=list(tags) if tags is not None else None,
+        evidence=list(evidence) if evidence is not None else None,
+        related_experiences=(
+            list(related_experiences) if related_experiences is not None else None
+        ),
+        supersedes=list(supersedes) if supersedes is not None else None,
         confidence=args.confidence,
         body=read_body(args),
         expected_updated_at=args.expected_updated_at,
+        clear_confidence=bool(args.clear_confidence),
     )
     print(path)
     return 0
 
 
+def run_experience_get(args: argparse.Namespace) -> int:
+    project = Path(args.project)
+    vault = get_active_vault()
+    current_project_id = resolve_project_id(project, vault)
+    source_project_id, separator, experience_id = args.source.partition("/")
+    if not separator:
+        source_project_id = current_project_id
+        experience_id = args.source
+    elif not source_project_id or not experience_id or "/" in experience_id:
+        raise ValueError("source must use experience-id or project-id/experience-id")
+    path, header, body = read_experience_at(vault, source_project_id, experience_id)
+    print(
+        json.dumps(
+            {"header": header, "body": body, "path": str(path.relative_to(vault))},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def run_memory_upsert(args: argparse.Namespace) -> int:
     project = Path(args.project)
+    vault = get_active_vault()
+    tags = [] if args.clear_tags else args.tag
     path = upsert_memory_at(
-        get_active_vault(),
-        resolve_project_id(project),
+        vault,
+        resolve_project_id(project, vault),
         title=args.title,
         summary=args.summary,
         memory_id=args.memory_id,
         filename=None,
-        tags=list(args.tag),
-        source_experiences=list(args.source_experience),
+        tags=list(tags) if tags is not None else None,
+        source_experiences=(
+            list(args.source_experience) if args.source_experience is not None else None
+        ),
         shared=bool(args.shared),
         confidence=args.confidence,
         body=read_body(args),
         expected_updated_at=args.expected_updated_at,
+        clear_confidence=bool(args.clear_confidence),
     )
     print(path)
+    return 0
+
+
+def run_memory_get(args: argparse.Namespace) -> int:
+    project = Path(args.project)
+    vault = get_active_vault()
+    current_project_id = resolve_project_id(project, vault)
+    path, header, body = read_memory_at(
+        vault,
+        current_project_id,
+        args.memory_id,
+        scope=args.scope,
+        project_id=args.project_id,
+    )
+    print(
+        json.dumps(
+            {"header": header, "body": body, "path": str(path.relative_to(vault))},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
     return 0
 
 
@@ -680,9 +863,10 @@ def run_memory_search(args: argparse.Namespace) -> int:
 
 def run_tag_browse(args: argparse.Namespace) -> int:
     project = Path(args.project)
+    vault = get_active_vault()
     payload = browse_knowledge_tags(
-        get_active_vault(),
-        resolve_project_id(project),
+        vault,
+        resolve_project_id(project, vault),
         parent_tag=args.parent,
         all_projects=bool(args.all_projects),
     )
@@ -692,9 +876,10 @@ def run_tag_browse(args: argparse.Namespace) -> int:
 
 def run_tag_search(args: argparse.Namespace) -> int:
     project = Path(args.project)
+    vault = get_active_vault()
     payload = search_knowledge_tags(
-        get_active_vault(),
-        resolve_project_id(project),
+        vault,
+        resolve_project_id(project, vault),
         terms=list(args.terms),
         all_projects=bool(args.all_projects),
     )
@@ -705,7 +890,7 @@ def run_tag_search(args: argparse.Namespace) -> int:
 def run_tag_describe(args: argparse.Namespace) -> int:
     project = Path(args.project)
     vault = get_active_vault()
-    project_id = resolve_project_id(project)
+    project_id = resolve_project_id(project, vault)
     context_from_vault(vault, project_id)
     taxonomy = update_tag_description(
         vault,
@@ -740,9 +925,10 @@ def run_document_search(args: argparse.Namespace, *, kind: str, statuses: list[s
         ),
     )
     project = Path(args.project)
+    vault = get_active_vault()
     entries = search_documents_at(
-        get_active_vault(),
-        resolve_project_id(project),
+        vault,
+        resolve_project_id(project, vault),
         kind=kind,
         terms=list(args.terms),
         project_ids=list(args.project_id),
@@ -781,7 +967,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except RefineryCliError as error:
         print(error.render(), file=sys.stderr)
         return error.exit_code
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, yaml.YAMLError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 

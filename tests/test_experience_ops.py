@@ -24,6 +24,20 @@ def configured_project(tmp_path: Path, project_id: str = "pybr") -> tuple[Path, 
 
 def test_upsert_experience_keeps_attempt_and_evaluation_together(tmp_path: Path) -> None:
     project, vault = configured_project(tmp_path)
+    upsert_experience(
+        project,
+        title="baseline",
+        purpose="比較元",
+        status="completed",
+        experience_id="feature-selection-baseline",
+        filename=None,
+        tags=[],
+        evidence=[],
+        related_experiences=[],
+        supersedes=[],
+        confidence="medium",
+        body="baseline",
+    )
     body = """## 試したこと
 
 - Boruta
@@ -209,6 +223,7 @@ def test_schema_validation_rejects_tags_deeper_than_three_levels() -> None:
         "purpose": "Test",
         "status": "completed",
         "recorded_at": "2026-07-11T00:00:00+00:00",
+        "updated_at": "2026-07-11T00:00:00+00:00",
         "tags": ["domain/ml/feature-selection/boruta"],
         "related_experiences": [],
         "supersedes": [],
@@ -217,6 +232,10 @@ def test_schema_validation_rejects_tags_deeper_than_three_levels() -> None:
     }
 
     with pytest.raises(ValueError, match="one to three lowercase slug segments"):
+        validate_document_header(header, kind="experiences")
+
+    header["tags"] = ["custom/search"]
+    with pytest.raises(ValueError, match="standard facet"):
         validate_document_header(header, kind="experiences")
 
 
@@ -301,6 +320,21 @@ def test_memory_rejects_missing_or_insufficient_source_experiences(tmp_path: Pat
 
 def test_search_supports_id_relationship_and_recorded_range(tmp_path: Path) -> None:
     project, _ = configured_project(tmp_path)
+    for experience_id in ("boruta-trial", "old-trial"):
+        upsert_experience(
+            project,
+            title=experience_id,
+            purpose="関係検証の参照元",
+            status="completed",
+            experience_id=experience_id,
+            filename=None,
+            tags=[],
+            evidence=[],
+            related_experiences=[],
+            supersedes=[],
+            confidence="medium",
+            body="reference",
+        )
     upsert_experience(
         project,
         title="後続検証",
@@ -345,6 +379,7 @@ def test_schema_validation_rejects_unstructured_evidence() -> None:
         "purpose": "Test",
         "status": "completed",
         "recorded_at": "2026-07-11T00:00:00+00:00",
+        "updated_at": "2026-07-11T00:00:00+00:00",
         "tags": [],
         "related_experiences": [],
         "supersedes": [],
@@ -358,3 +393,106 @@ def test_schema_validation_rejects_unstructured_evidence() -> None:
         assert "mapping" in str(error)
     else:
         raise AssertionError("unstructured evidence must be rejected")
+
+    header["evidence"] = [
+        {"type": "git", "commit": "abc123", "path": "src/app.py", "retention": "external"}
+    ]
+    with pytest.raises(ValueError, match="does not support retention"):
+        validate_document_header(header, kind="experiences")
+
+    header["evidence"] = [{"type": "file", "path": "../secret.log", "retention": "reference"}]
+    with pytest.raises(ValueError, match="repository-relative"):
+        validate_document_header(header, kind="experiences")
+
+    header["evidence"] = [
+        {
+            "type": "file",
+            "path": "logs/result.log",
+            "retention": "reference",
+            "git_state": "unknown",
+        }
+    ]
+    with pytest.raises(ValueError, match="git_state is unsupported"):
+        validate_document_header(header, kind="experiences")
+
+
+def test_default_experience_body_includes_the_skill_limitations_section(tmp_path: Path) -> None:
+    project, _ = configured_project(tmp_path)
+
+    path = upsert_experience(
+        project,
+        title="既定本文",
+        purpose="Skillと本文形式を揃える",
+        status="inconclusive",
+        experience_id="default-body",
+        filename=None,
+        tags=None,
+        evidence=None,
+        related_experiences=None,
+        supersedes=None,
+        confidence=None,
+        body=None,
+    )
+
+    _, body = split_front_matter(path.read_text(encoding="utf-8"))
+    assert "## 試したこと" in body
+    assert "## 分かったこと" in body
+    assert "## 微妙だった点・限界" in body
+    assert "## 次の可能性" in body
+
+
+def test_document_header_requires_timezone_aware_revisions() -> None:
+    header: dict[str, object] = {
+        "schema_version": 2,
+        "memory_id": "rule",
+        "scope": "project",
+        "project_id": "pybr",
+        "title": "Rule",
+        "summary": "Summary",
+        "source_experiences": ["trial"],
+        "updated_at": "2026-07-11T00:00:00",
+        "tags": [],
+        "confidence": None,
+    }
+
+    with pytest.raises(ValueError, match="updated_at.*timezone"):
+        validate_document_header(header, kind="memory")
+
+    del header["updated_at"]
+    with pytest.raises(ValueError, match="updated_at"):
+        validate_document_header(header, kind="memory")
+
+
+def test_experience_relationships_require_existing_non_self_references(tmp_path: Path) -> None:
+    project, _ = configured_project(tmp_path)
+
+    with pytest.raises(ValueError, match="Unknown related_experiences experience"):
+        upsert_experience(
+            project,
+            title="dangling",
+            purpose="存在しない関係を拒否する",
+            status="completed",
+            experience_id="dangling",
+            filename=None,
+            tags=[],
+            evidence=[],
+            related_experiences=["missing"],
+            supersedes=[],
+            confidence=None,
+            body="body",
+        )
+    with pytest.raises(ValueError, match="must not reference the experience itself"):
+        upsert_experience(
+            project,
+            title="self",
+            purpose="自己参照を拒否する",
+            status="completed",
+            experience_id="self-reference",
+            filename=None,
+            tags=[],
+            evidence=[],
+            related_experiences=[],
+            supersedes=["self-reference"],
+            confidence=None,
+            body="body",
+        )

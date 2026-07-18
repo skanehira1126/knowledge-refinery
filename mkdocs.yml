@@ -1,5 +1,5 @@
 site_name: Knowledge Refinery
-site_description: Central, Git-backed development knowledge for Codex
+site_description: Central development knowledge for Codex with optional Git history
 site_url: https://skanehira1126.github.io/knowledge-refinery/
 repo_url: https://github.com/skanehira1126/knowledge-refinery
 repo_name: skanehira1126/knowledge-refinery
@@ -37,6 +37,7 @@ extra_javascript:
 nav:
   - 概要: index.md
   - 導入: getting-started.md
+  - エージェントへの頼み方: agent-workflow.md
   - AGENTS.md追記サンプル: agents-guidance-examples.md
   - repoの有効・無効: project-lifecycle.md
   - ナレッジモデルと検索: knowledge-model.md

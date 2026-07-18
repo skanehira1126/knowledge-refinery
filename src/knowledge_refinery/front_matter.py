@@ -31,7 +31,8 @@ def _split_front_matter_block(text: str) -> tuple[str, str] | None:
     return block, body
 
 
-def parse_front_matter(text: str) -> dict[str, object]:
+def parse_front_matter(text: str, *, source_path: Path | None = None) -> dict[str, object]:
+    error_path = source_path or Path("<memory>")
     split = _split_front_matter_block(text)
     if split is None:
         return {}
@@ -46,7 +47,7 @@ def parse_front_matter(text: str) -> dict[str, object]:
     except yaml.YAMLError as exc:
         raise RefineryFormatError(
             summary="Markdown knowledge file has invalid YAML front matter.",
-            path=Path("<memory>"),
+            path=error_path,
             detail=str(exc),
             expected="Valid YAML syntax inside the `---` front matter block.",
         ) from exc
@@ -55,29 +56,32 @@ def parse_front_matter(text: str) -> dict[str, object]:
     if not isinstance(data, dict):
         raise RefineryFormatError(
             summary="Markdown knowledge file has invalid YAML front matter.",
-            path=Path("<memory>"),
+            path=error_path,
             detail="front matter must contain a YAML mapping",
             expected="A `---` block at the top of the Markdown file that parses to a mapping.",
         )
     return data
 
 
-def split_front_matter(text: str) -> tuple[dict[str, object], str]:
+def split_front_matter(
+    text: str, *, source_path: Path | None = None
+) -> tuple[dict[str, object], str]:
+    error_path = source_path or Path("<memory>")
     split = _split_front_matter_block(text)
     if split is None:
         raise RefineryFormatError(
             summary="Markdown knowledge file is missing YAML front matter.",
-            path=Path("<memory>"),
+            path=error_path,
             detail="markdown file must start with YAML front matter",
             expected="A `---` block at the top of the Markdown file.",
         )
 
     block, body = split
-    header = parse_front_matter(text)
+    header = parse_front_matter(text, source_path=source_path)
     if not header:
         raise RefineryFormatError(
             summary="Markdown knowledge file has empty YAML front matter.",
-            path=Path("<memory>"),
+            path=error_path,
             detail="markdown file must contain a YAML mapping in front matter",
             expected="A non-empty YAML mapping with fields such as `title` and `description`.",
         )

@@ -13,8 +13,10 @@ Resolve the current repository to an absolute path and refer to that value as `P
 
 1. Run `knowledge-refinery project status --target "$PROJECT_ROOT"`.
 2. Run `knowledge-refinery doctor --target "$PROJECT_ROOT"` when status is unhealthy or the MCP tools are unavailable.
-3. Report the active vault, project ID, enabled state, and failed checks before applying a repair.
+3. Report the active vault, project ID, enabled state, `vault_match`, and failed checks before applying a repair. Never hand-edit `vault_id` to bypass a mismatch.
 4. When MCP is available, set `MCP_VERSION` to `refinery_info.version` and pass it to `knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"`. Stop and report version drift before writing.
+
+For Knowledge Refinery configuration repair, use only this `refinery-project` skill and the documented CLI commands. Do not invent or recommend a repair skill or command that is not present in this plugin.
 
 `state=disabled` is a healthy, intentional opt-out state, not damage to repair. Never run `project enable` merely to satisfy a search or recording request. Enable only when the user explicitly asks to re-enable the repository or explicitly confirms that transition after you report the disabled state.
 
@@ -22,11 +24,11 @@ Resolve the current repository to an absolute path and refer to that value as `P
 
 1. Require an initialized central vault. If none exists, run `knowledge-refinery vault init --root "$VAULT_ROOT"` with the user-selected absolute vault path.
 2. Inspect stable repo-owned sources such as README files and package manifests. Derive a human-readable name, a one-sentence summary, focused lowercase kebab-case discovery tags for purpose or domain, and the principal technologies. Keep technology names out of tags. Never include secrets, local absolute paths, temporary task state, or unsupported guesses.
-3. Run `knowledge-refinery project setup --target "$PROJECT_ROOT" --vault "$VAULT_ROOT" --project-id "$PROJECT_ID" --project-name "$PROJECT_NAME" --summary "$SUMMARY"`, repeating `--tag` and `--technology` for the derived values.
-   Treat `PROJECT_ID` as immutable. The CLI rejects connecting an unconfigured repository to an ID already registered in the vault.
-4. Add `--link` only when a human explicitly wants a `.refinery` browsing symlink.
-5. `project setup` does not change repository guidance by default. Add `--agents` only when a human explicitly wants the managed guidance block appended.
-6. Verify with `knowledge-refinery doctor --target "$PROJECT_ROOT"`.
+3. For an unconfigured repository, present the proposed immutable `PROJECT_ID`, `VAULT_ROOT`, derived metadata, and whether setup will switch the user-wide active vault. Wait for explicit user confirmation of the ID and vault transition before writing.
+4. Run `knowledge-refinery project setup --target "$PROJECT_ROOT" --vault "$VAULT_ROOT" --project-id "$PROJECT_ID" --project-name "$PROJECT_NAME" --summary "$SUMMARY"`, repeating `--tag` and `--technology` for the confirmed values. The CLI rejects connecting an unconfigured repository to an ID already registered in the vault.
+5. Add `--link` only when a human explicitly wants a `.refinery` browsing symlink.
+6. `project setup` does not change repository guidance by default. Add `--agents` only when a human explicitly wants the managed guidance block appended.
+7. Verify with `knowledge-refinery doctor --target "$PROJECT_ROOT"`.
 
 ## Maintain project metadata
 
@@ -37,7 +39,7 @@ Resolve the current repository to an absolute path and refer to that value as `P
 
 ## Toggle use
 
-- Enable with `knowledge-refinery project enable --target "$PROJECT_ROOT"` only after the explicit authorization above.
+- Enable with `knowledge-refinery project enable --target "$PROJECT_ROOT"` only after the explicit authorization above. Add `--agents` only to resume automatic mode; without it, enable must not create managed guidance.
 - Disable with `knowledge-refinery project disable --target "$PROJECT_ROOT"`.
 - Verify either transition with `knowledge-refinery project status --target "$PROJECT_ROOT"`.
 

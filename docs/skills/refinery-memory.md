@@ -1,3 +1,5 @@
 # refinery-memory
 
-複数のexperienceから繰り返し使える判断原則を抽出します。project固有memoryとcross-projectなshared memoryを使い分け、根拠experience IDを必須とします。shared memoryは `project-id/experience-id` 形式の実在する根拠を2 project以上から指定し、全根拠を本文取得してから作成します。既存memoryの更新は直前に読んだ `updated_at` を要求し、競合上書きを拒否します。
+反復または相補的な複数experienceから、繰り返し使える判断原則を抽出します。Project memoryは原則2件以上を根拠とし、利用者が明示依頼した1件の例外はscopeを狭め、limitsを記載し、confidenceをhighにしません。
+
+Shared memoryは`project-id/experience-id`形式の実在する独立根拠を2 project以上から読み、候補の原則、scope、限界、反例、confidence、source IDを提示して、利用者の明示承認後だけ作成・昇格します。既存memoryの更新は直前の`updated_at`を要求し、optional fieldの省略は保持、空listはclear、confidenceは`clear_confidence: true`でclearします。機密情報と未redact logは保存しません。詳細なsource of truthは`skills/refinery-memory/SKILL.md`です。

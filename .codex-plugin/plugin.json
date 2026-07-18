@@ -1,7 +1,7 @@
 {
   "name": "knowledge-refinery",
   "version": "0.2.0",
-  "description": "複数projectのexperienceとmemoryをローカルGitで管理するrefinery",
+  "description": "複数projectのexperienceとmemoryをローカル中央vaultで管理するrefinery",
   "author": {
     "name": "Shinichi Kanehira",
     "email": "shinichi.kanehira@gmail.com",
@@ -15,15 +15,17 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Knowledge Refinery",
-    "shortDescription": "再利用可能なexperienceをローカルGit vaultに保存します。",
-    "longDescription": "Knowledge Refineryは、productとknowledgeのGit履歴を分離しながら、ローカルMCP serverを通じて統合された開発experienceと再利用可能なmemoryを記録します。",
+    "shortDescription": "再利用可能なexperienceをローカル中央vaultに保存します。",
+    "longDescription": "Knowledge Refineryは、product repoと独立したローカル中央vaultを、必要に応じて別のGit repositoryとして運用しながら、ローカルMCP serverを通じて統合された開発experienceと再利用可能なmemoryを検索・記録します。",
     "developerName": "Shinichi Kanehira",
     "category": "Productivity",
     "capabilities": ["Search", "Write", "Local MCP"],
     "defaultPrompt": [
-      "このrepositoryにKnowledge Refineryを設定してください。",
-      "このrepositoryでKnowledge Refineryが有効か確認してください。",
-      "有効なrepositoryを確認し、再利用可能なmemoryを探してください。"
+      "このrepositoryにKnowledge Refineryを設定してください。変更できないproject IDとactive vaultの切り替えを先に確認してください。",
+      "このrepositoryでKnowledge Refineryが有効か、設定を変更せずに診断してください。",
+      "この判断に関係するmemoryとexperienceを検索してください。今回はvaultへ書き込まないでください。",
+      "今回の有用な試行を一つのexperienceとして記録してください。secretや個人情報は保存しないでください。",
+      "既存experienceからmemory候補を提案してください。shared memoryへ書き込む前に根拠と適用範囲を確認してください。"
     ]
   }
 }

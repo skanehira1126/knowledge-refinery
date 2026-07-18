@@ -252,7 +252,7 @@ def _collect_tag_usage(
             if path.name == "AGENTS.md":
                 continue
             try:
-                header, _ = split_front_matter(path.read_text(encoding="utf-8"))
+                header, _ = split_front_matter(path.read_text(encoding="utf-8"), source_path=path)
                 validate_document_header(header, kind=kind)
             except (OSError, ValueError, RefineryCliError):
                 continue

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+from typing import Literal
+from typing import TypeVar
 
 from mcp.server.fastmcp import FastMCP
 import yaml
@@ -17,6 +20,7 @@ from knowledge_refinery.experience_ops import search_documents_at
 from knowledge_refinery.experience_ops import upsert_experience_at
 from knowledge_refinery.experience_ops import upsert_memory_at
 from knowledge_refinery.experience_ops import validate_document_header
+from knowledge_refinery.experience_ops import validate_experience_references
 from knowledge_refinery.experience_ops import validate_memory_source_references
 from knowledge_refinery.front_matter import split_front_matter
 from knowledge_refinery.tag_ops import TAG_TAXONOMY
@@ -32,6 +36,7 @@ from knowledge_refinery.vault_ops import PROJECT_METADATA_SCHEMA_VERSION
 from knowledge_refinery.vault_ops import context_from_vault
 from knowledge_refinery.vault_ops import list_project_metadata
 from knowledge_refinery.vault_ops import read_project_metadata
+from knowledge_refinery.vault_ops import read_vault_id
 from knowledge_refinery.vault_ops import resolve_project_id
 from knowledge_refinery.vault_ops import update_project_metadata
 
@@ -41,20 +46,43 @@ mcp = FastMCP(
     instructions=(
         "ローカルの中央refinery vaultから開発経験と再利用可能なmemoryを検索・記録します。"
         "project単位のtoolには現在のrepository pathを渡してください。serverは"
-        ".refinery.yamlを読み、連携が無効なrepositoryを拒否します。"
+        ".refinery.yamlと中央project metadataを検証し、連携が無効または不正な"
+        "repositoryを拒否します。"
+        "判断前はcurrent projectとshared memoryを先に検索し、必要な場合だけselected projectsまたは"
+        "vault全体へ広げてください。更新では省略fieldを保持し、空listは明示clearです。"
     ),
 )
 
+ExperienceStatus = Literal["completed", "inconclusive", "abandoned", "superseded"]
+Confidence = Literal["low", "medium", "high"]
+MemoryScope = Literal["project", "shared"]
+EvidenceType = Literal["file", "git", "mlflow", "url", "external"]
+StringValue = TypeVar("StringValue", bound=str)
 
-def _list(value: list[str] | None) -> list[str]:
-    return value or []
+
+def _list(value: Sequence[StringValue] | None) -> list[StringValue]:
+    return list(value or [])
 
 
-def _entry(entry: Any, vault: Path) -> dict[str, str]:
+def _validated_project_id(vault: Path, project_path: str) -> str:
+    project_id = resolve_project_id(Path(project_path), vault)
+    read_project_metadata(vault, project_id)
+    return project_id
+
+
+def _entry(entry: Any, vault: Path) -> dict[str, object]:
     return {
-        "project_id": entry.project_id,
+        "project_id": None if entry.scope == "shared" else entry.project_id,
         "id": entry.document_id,
         "title": entry.title,
+        "kind": entry.kind,
+        "summary": entry.summary,
+        "status": entry.status,
+        "scope": entry.scope,
+        "confidence": entry.confidence,
+        "tags": list(entry.tags),
+        "recorded_at": entry.recorded_at,
+        "updated_at": entry.updated_at,
         "path": str(entry.path.relative_to(vault)),
     }
 
@@ -69,7 +97,7 @@ def refinery_list_projects() -> list[dict[str, object]]:
 def refinery_get_project_metadata(project_path: str) -> dict[str, object]:
     """有効なrepositoryに対応する中央project metadataを取得します。"""
     vault = get_active_vault()
-    project_id = resolve_project_id(Path(project_path))
+    project_id = _validated_project_id(vault, project_path)
     return read_project_metadata(vault, project_id).as_dict()
 
 
@@ -84,7 +112,7 @@ def refinery_update_project_metadata(
 ) -> dict[str, object]:
     """project metadataを部分更新します。省略fieldは保持し、空listは対象listを消去します。"""
     vault = get_active_vault()
-    project_id = resolve_project_id(Path(project_path))
+    project_id = _validated_project_id(vault, project_path)
     return update_project_metadata(
         vault,
         project_id,
@@ -99,11 +127,16 @@ def refinery_update_project_metadata(
 @mcp.tool()
 def refinery_info() -> dict[str, object]:
     """MCP packageと文書schemaのversionを返し、CLIとのずれを確認できるようにします。"""
+    try:
+        active_vault_id = read_vault_id(get_active_vault())
+    except (OSError, ValueError):
+        active_vault_id = None
     return {
         "version": get_version(),
         "schema_version": 2,
         "project_metadata_schema_version": PROJECT_METADATA_SCHEMA_VERSION,
         "tag_taxonomy_schema_version": TAG_TAXONOMY_SCHEMA_VERSION,
+        "active_vault_id": active_vault_id,
     }
 
 
@@ -115,7 +148,7 @@ def refinery_browse_knowledge_tags(
 ) -> TagBrowseResult:
     """Knowledge tagを指定階層の直下だけ、説明と利用件数を付けて取得します。"""
     vault = get_active_vault()
-    project_id = resolve_project_id(Path(project_path))
+    project_id = _validated_project_id(vault, project_path)
     return browse_knowledge_tags(
         vault,
         project_id,
@@ -132,7 +165,7 @@ def refinery_search_knowledge_tags(
 ) -> TagSearchResult:
     """Knowledge tagのpathと説明をAND条件の語句で検索し、利用件数も取得します。"""
     vault = get_active_vault()
-    project_id = resolve_project_id(Path(project_path))
+    project_id = _validated_project_id(vault, project_path)
     return search_knowledge_tags(
         vault,
         project_id,
@@ -150,7 +183,7 @@ def refinery_update_tag_description(
 ) -> dict[str, object]:
     """Knowledge tagの説明をtaxonomyの現在revisionを使って登録・更新します。"""
     vault = get_active_vault()
-    project_id = resolve_project_id(Path(project_path))
+    project_id = _validated_project_id(vault, project_path)
     context_from_vault(vault, project_id)
     taxonomy = update_tag_description(
         vault,
@@ -171,18 +204,18 @@ def refinery_search_experiences(
     terms: list[str] | None = None,
     project_ids: list[str] | None = None,
     tags: list[str] | None = None,
-    statuses: list[str] | None = None,
+    statuses: list[ExperienceStatus] | None = None,
     experience_ids: list[str] | None = None,
     related_experiences: list[str] | None = None,
-    evidence_types: list[str] | None = None,
-    confidences: list[str] | None = None,
+    evidence_types: list[EvidenceType] | None = None,
+    confidences: list[Confidence] | None = None,
     recorded_from: str | None = None,
     recorded_to: str | None = None,
     all_projects: bool = False,
-) -> list[dict[str, str]]:
-    """有効なrepositoryのexperienceを検索し、必要な場合はvault全体へ対象を広げます。"""
+) -> list[dict[str, object]]:
+    """experienceを新しい順に検索します。project_idsとall_projectsは併用できません。"""
     vault = get_active_vault()
-    project_id = resolve_project_id(Path(project_path))
+    project_id = _validated_project_id(vault, project_path)
     filters = SearchFilters(
         document_ids=tuple(_list(experience_ids)),
         related_experiences=tuple(_list(related_experiences)),
@@ -211,7 +244,7 @@ def refinery_search_experiences(
 def refinery_get_experience(project_path: str, source: str) -> dict[str, object]:
     """experience IDまたはproject-id/experience-idを指定してexperienceを取得します。"""
     vault = get_active_vault()
-    current_project_id = resolve_project_id(Path(project_path))
+    current_project_id = _validated_project_id(vault, project_path)
     source_project_id, separator, experience_id = source.partition("/")
     if not separator:
         source_project_id = current_project_id
@@ -227,19 +260,20 @@ def refinery_record_experience(
     project_path: str,
     title: str,
     purpose: str,
-    status: str,
+    status: ExperienceStatus,
     body: str,
     evidence: list[dict[str, str]] | None = None,
     tags: list[str] | None = None,
     related_experiences: list[str] | None = None,
     supersedes: list[str] | None = None,
-    confidence: str | None = None,
+    confidence: Confidence | None = None,
     experience_id: str | None = None,
     expected_updated_at: str | None = None,
+    clear_confidence: bool = False,
 ) -> dict[str, str]:
-    """experienceを作成し、既存文書は直前に取得したrevisionを使って更新します。"""
+    """experienceを作成・更新します。更新の省略fieldは保持し、空listはclearします。"""
     vault = get_active_vault()
-    project_id = resolve_project_id(Path(project_path))
+    project_id = _validated_project_id(vault, project_path)
     path = upsert_experience_at(
         vault,
         project_id,
@@ -248,17 +282,20 @@ def refinery_record_experience(
         status=status,
         experience_id=experience_id,
         filename=None,
-        tags=_list(tags),
-        evidence=evidence or [],
-        related_experiences=_list(related_experiences),
-        supersedes=_list(supersedes),
+        tags=tags,
+        evidence=evidence,
+        related_experiences=related_experiences,
+        supersedes=supersedes,
         confidence=confidence,
         body=body,
         expected_updated_at=expected_updated_at,
+        clear_confidence=clear_confidence,
     )
-    header, _ = split_front_matter(path.read_text(encoding="utf-8"))
+    header, _ = split_front_matter(path.read_text(encoding="utf-8"), source_path=path)
     return {
         "experience_id": str(header["experience_id"]),
+        "project_id": str(header["project_id"]),
+        "kind": "experience",
         "updated_at": str(header["updated_at"]),
         "path": str(path.relative_to(vault)),
     }
@@ -272,13 +309,13 @@ def refinery_search_memory(
     tags: list[str] | None = None,
     memory_ids: list[str] | None = None,
     source_experiences: list[str] | None = None,
-    scopes: list[str] | None = None,
-    confidences: list[str] | None = None,
+    scopes: list[MemoryScope] | None = None,
+    confidences: list[Confidence] | None = None,
     all_projects: bool = False,
-) -> list[dict[str, str]]:
-    """有効なrepositoryからproject/shared memoryを構造化fieldと全文で検索します。"""
+) -> list[dict[str, object]]:
+    """project/shared memoryを新しい順に検索します。結果のscopeをexact getへ渡します。"""
     vault = get_active_vault()
-    project_id = resolve_project_id(Path(project_path))
+    project_id = _validated_project_id(vault, project_path)
     entries = search_documents_at(
         vault,
         project_id,
@@ -302,12 +339,12 @@ def refinery_search_memory(
 def refinery_get_memory(
     project_path: str,
     memory_id: str,
-    scope: str = "project",
+    scope: MemoryScope = "project",
     project_id: str | None = None,
 ) -> dict[str, object]:
     """memory IDとscopeを指定してprojectまたはshared memoryを取得します。"""
     vault = get_active_vault()
-    current_project_id = resolve_project_id(Path(project_path))
+    current_project_id = _validated_project_id(vault, project_path)
     path, header, body = read_memory_at(
         vault,
         current_project_id,
@@ -323,17 +360,18 @@ def refinery_record_memory(
     project_path: str,
     title: str,
     summary: str,
-    source_experiences: list[str],
+    source_experiences: list[str] | None = None,
     body: str | None = None,
     tags: list[str] | None = None,
-    confidence: str | None = None,
+    confidence: Confidence | None = None,
     shared: bool = False,
     memory_id: str | None = None,
     expected_updated_at: str | None = None,
-) -> dict[str, str]:
-    """memoryを作成し、既存文書はrefinery_get_memoryのrevisionを使って更新します。"""
+    clear_confidence: bool = False,
+) -> dict[str, object]:
+    """memoryを作成・更新します。更新の省略fieldは保持し、空listはclearします。"""
     vault = get_active_vault()
-    project_id = resolve_project_id(Path(project_path))
+    project_id = _validated_project_id(vault, project_path)
     path = upsert_memory_at(
         vault,
         project_id,
@@ -341,16 +379,19 @@ def refinery_record_memory(
         summary=summary,
         memory_id=memory_id,
         filename=None,
-        tags=_list(tags),
+        tags=tags,
         source_experiences=source_experiences,
         shared=shared,
         confidence=confidence,
         body=body,
         expected_updated_at=expected_updated_at,
+        clear_confidence=clear_confidence,
     )
-    header, _ = split_front_matter(path.read_text(encoding="utf-8"))
+    header, _ = split_front_matter(path.read_text(encoding="utf-8"), source_path=path)
     return {
         "memory_id": str(header["memory_id"]),
+        "scope": str(header["scope"]),
+        "project_id": header.get("project_id"),
         "updated_at": str(header["updated_at"]),
         "path": str(path.relative_to(vault)),
     }
@@ -391,10 +432,12 @@ def refinery_validate() -> dict[str, object]:
             continue
         kind = "experiences" if is_experience else "memory"
         try:
-            header, _ = split_front_matter(path.read_text(encoding="utf-8"))
+            header, _ = split_front_matter(path.read_text(encoding="utf-8"), source_path=path)
             validate_document_header(header, kind=kind)
             _validate_document_location(path, vault, header, kind=kind, seen_ids=seen_ids)
-            if kind == "memory":
+            if kind == "experiences":
+                validate_experience_references(vault, header)
+            else:
                 validate_memory_source_references(vault, header)
             checked += 1
         except (OSError, ValueError, RefineryCliError) as error:

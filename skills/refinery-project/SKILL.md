@@ -1,6 +1,6 @@
 ---
 name: refinery-project
-description: Set up, describe, enable, disable, inspect, or diagnose Knowledge Refinery for a repository while preserving the central vault. Use when onboarding or offboarding a repository, creating or updating central project metadata, selecting its vault, repairing `.refinery.yaml`, updating the managed AGENTS block, or troubleshooting the local MCP connection.
+description: 中央vaultを保持したまま、repositoryのKnowledge Refineryを設定、説明、有効化、無効化、検査、診断する。repositoryの導入・解除、中央project metadataの作成・更新、vaultの選択、`.refinery.yaml`の修復、managed AGENTS blockの更新、ローカルMCP接続のトラブルシューティングに使用する。
 ---
 
 # Refinery project

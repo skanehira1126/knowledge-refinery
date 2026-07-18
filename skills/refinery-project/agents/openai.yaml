@@ -1,4 +1,4 @@
 interface:
   display_name: "Refinery Project"
-  short_description: "Set up, describe, and diagnose knowledge access."
-  default_prompt: "Use $refinery-project to safely set up, describe, diagnose, enable, or disable Knowledge Refinery for this repository."
+  short_description: "repositoryのナレッジアクセスを設定・診断します。"
+  default_prompt: "$refinery-projectを使い、このrepositoryのKnowledge Refineryを安全に設定、説明、診断、有効化、または無効化してください。"

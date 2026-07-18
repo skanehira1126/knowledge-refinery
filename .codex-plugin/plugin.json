@@ -1,7 +1,7 @@
 {
   "name": "knowledge-refinery",
   "version": "0.2.0",
-  "description": "Local, Git-backed cross-project experience and memory refinery",
+  "description": "複数projectのexperienceとmemoryをローカルGitで管理するrefinery",
   "author": {
     "name": "Shinichi Kanehira",
     "email": "shinichi.kanehira@gmail.com",
@@ -15,15 +15,15 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Knowledge Refinery",
-    "shortDescription": "Keep reusable experience in a local Git-backed vault.",
-    "longDescription": "Knowledge Refinery records integrated development experiences and reusable memory through a local MCP server while keeping product and knowledge Git histories separate.",
+    "shortDescription": "再利用可能なexperienceをローカルGit vaultに保存します。",
+    "longDescription": "Knowledge Refineryは、productとknowledgeのGit履歴を分離しながら、ローカルMCP serverを通じて統合された開発experienceと再利用可能なmemoryを記録します。",
     "developerName": "Shinichi Kanehira",
     "category": "Productivity",
     "capabilities": ["Search", "Write", "Local MCP"],
     "defaultPrompt": [
-      "Set up Knowledge Refinery for this repository.",
-      "Check whether Knowledge Refinery is enabled here.",
-      "Review enabled repositories for reusable memory."
+      "このrepositoryにKnowledge Refineryを設定してください。",
+      "このrepositoryでKnowledge Refineryが有効か確認してください。",
+      "有効なrepositoryを確認し、再利用可能なmemoryを探してください。"
     ]
   }
 }

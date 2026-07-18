@@ -1,4 +1,4 @@
 interface:
   display_name: "Refinery Memory"
-  short_description: "Distill supported experiences into reusable memory."
-  default_prompt: "Use $refinery-memory to distill supported experiences into project or shared memory."
+  short_description: "根拠のあるexperienceから再利用可能なmemoryを抽出します。"
+  default_prompt: "$refinery-memoryを使い、根拠のあるexperienceからprojectまたはshared memoryを抽出してください。"

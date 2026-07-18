@@ -1,4 +1,4 @@
 interface:
   display_name: "Refinery Experience"
-  short_description: "Record findings from meaningful development attempts."
-  default_prompt: "Use $refinery-experience to search related knowledge and record the reusable findings from this work."
+  short_description: "意味のある開発上の試行と発見を記録します。"
+  default_prompt: "$refinery-experienceを使い、関連ナレッジを検索して、この作業から得た再利用可能な発見を記録してください。"

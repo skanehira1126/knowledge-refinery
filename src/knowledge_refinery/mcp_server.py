@@ -29,9 +29,9 @@ from knowledge_refinery.vault_ops import update_project_metadata
 mcp = FastMCP(
     "knowledge-refinery",
     instructions=(
-        "Search and record integrated development experiences in a local central refinery vault. "
-        "Pass the current repository path to project-scoped tools; the server reads "
-        ".refinery.yaml and rejects repositories where integration is disabled."
+        "ローカルの中央refinery vaultから開発経験と再利用可能なmemoryを検索・記録します。"
+        "project単位のtoolには現在のrepository pathを渡してください。serverは"
+        ".refinery.yamlを読み、連携が無効なrepositoryを拒否します。"
     ),
 )
 
@@ -51,13 +51,13 @@ def _entry(entry: Any, vault: Path) -> dict[str, str]:
 
 @mcp.tool()
 def refinery_list_projects() -> list[dict[str, object]]:
-    """List project identity and discovery metadata from the active local vault."""
+    """active vaultに登録されたprojectの識別・検索用metadataを一覧取得します。"""
     return [metadata.as_dict() for metadata in list_project_metadata(get_active_vault())]
 
 
 @mcp.tool()
 def refinery_get_project_metadata(project_path: str) -> dict[str, object]:
-    """Read central metadata for an enabled repository."""
+    """有効なrepositoryに対応する中央project metadataを取得します。"""
     vault = get_active_vault()
     project_id = resolve_project_id(Path(project_path))
     return read_project_metadata(vault, project_id).as_dict()
@@ -72,7 +72,7 @@ def refinery_update_project_metadata(
     tags: list[str] | None = None,
     technologies: list[str] | None = None,
 ) -> dict[str, object]:
-    """Partially update metadata; omitted fields are preserved and empty lists clear lists."""
+    """project metadataを部分更新します。省略fieldは保持し、空listは対象listを消去します。"""
     vault = get_active_vault()
     project_id = resolve_project_id(Path(project_path))
     return update_project_metadata(
@@ -88,7 +88,7 @@ def refinery_update_project_metadata(
 
 @mcp.tool()
 def refinery_info() -> dict[str, object]:
-    """Return the MCP package and document schema versions for drift checks."""
+    """MCP packageと文書schemaのversionを返し、CLIとのずれを確認できるようにします。"""
     return {
         "version": get_version(),
         "schema_version": 2,
@@ -111,7 +111,7 @@ def refinery_search_experiences(
     recorded_to: str | None = None,
     all_projects: bool = False,
 ) -> list[dict[str, str]]:
-    """Search experiences for an enabled repository, optionally across the local vault."""
+    """有効なrepositoryのexperienceを検索し、必要な場合はvault全体へ対象を広げます。"""
     vault = get_active_vault()
     project_id = resolve_project_id(Path(project_path))
     filters = SearchFilters(
@@ -140,7 +140,7 @@ def refinery_search_experiences(
 
 @mcp.tool()
 def refinery_get_experience(project_path: str, source: str) -> dict[str, object]:
-    """Read an exact local or project-id/experience-id source from an enabled repository."""
+    """experience IDまたはproject-id/experience-idを指定してexperienceを取得します。"""
     vault = get_active_vault()
     current_project_id = resolve_project_id(Path(project_path))
     source_project_id, separator, experience_id = source.partition("/")
@@ -168,7 +168,7 @@ def refinery_record_experience(
     experience_id: str | None = None,
     expected_updated_at: str | None = None,
 ) -> dict[str, str]:
-    """Create an experience, or update it with the revision returned by a prior read."""
+    """experienceを作成し、既存文書は直前に取得したrevisionを使って更新します。"""
     vault = get_active_vault()
     project_id = resolve_project_id(Path(project_path))
     path = upsert_experience_at(
@@ -207,7 +207,7 @@ def refinery_search_memory(
     confidences: list[str] | None = None,
     all_projects: bool = False,
 ) -> list[dict[str, str]]:
-    """Search memory from an enabled repository by typed fields and full text."""
+    """有効なrepositoryからproject/shared memoryを構造化fieldと全文で検索します。"""
     vault = get_active_vault()
     project_id = resolve_project_id(Path(project_path))
     entries = search_documents_at(
@@ -236,7 +236,7 @@ def refinery_get_memory(
     scope: str = "project",
     project_id: str | None = None,
 ) -> dict[str, object]:
-    """Read exact project or shared memory from an enabled repository."""
+    """memory IDとscopeを指定してprojectまたはshared memoryを取得します。"""
     vault = get_active_vault()
     current_project_id = resolve_project_id(Path(project_path))
     path, header, body = read_memory_at(
@@ -262,7 +262,7 @@ def refinery_record_memory(
     memory_id: str | None = None,
     expected_updated_at: str | None = None,
 ) -> dict[str, str]:
-    """Create memory, or update it with the revision returned by refinery_get_memory."""
+    """memoryを作成し、既存文書はrefinery_get_memoryのrevisionを使って更新します。"""
     vault = get_active_vault()
     project_id = resolve_project_id(Path(project_path))
     path = upsert_memory_at(
@@ -289,7 +289,7 @@ def refinery_record_memory(
 
 @mcp.tool()
 def refinery_validate() -> dict[str, object]:
-    """Validate project metadata, experience, and memory documents in the active vault."""
+    """active vaultのproject metadata、experience、memoryを検証します。"""
     vault = get_active_vault()
     errors: list[dict[str, str]] = []
     checked = 0

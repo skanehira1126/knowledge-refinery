@@ -1,6 +1,6 @@
 ---
 name: refinery-memory
-description: Distill repeatedly useful principles from validated Knowledge Refinery experiences into project or shared memory with explicit provenance. Use when several experiences support a reusable rule, when existing memory needs refinement, or when deciding whether knowledge is project-specific or cross-project.
+description: 検証済みのKnowledge Refinery experienceから繰り返し役立つ原則を抽出し、根拠を明示したprojectまたはshared memoryとして記録する。複数のexperienceが再利用可能な原則を支持するとき、既存memoryを改善するとき、ナレッジがproject固有かproject横断か判断するときに使用する。
 ---
 
 # Refinery memory

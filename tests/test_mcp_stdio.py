@@ -39,6 +39,43 @@ def test_stdio_server_lists_expected_tools() -> None:
             "refinery_update_project_metadata",
             "refinery_validate",
         }
+        descriptions = {tool.name: tool.description for tool in result.tools}
+        assert descriptions == {
+            "refinery_get_experience": (
+                "experience IDまたはproject-id/experience-idを指定してexperienceを取得します。"
+            ),
+            "refinery_get_memory": (
+                "memory IDとscopeを指定してprojectまたはshared memoryを取得します。"
+            ),
+            "refinery_get_project_metadata": (
+                "有効なrepositoryに対応する中央project metadataを取得します。"
+            ),
+            "refinery_info": (
+                "MCP packageと文書schemaのversionを返し、CLIとのずれを確認できるようにします。"
+            ),
+            "refinery_list_projects": (
+                "active vaultに登録されたprojectの識別・検索用metadataを一覧取得します。"
+            ),
+            "refinery_record_experience": (
+                "experienceを作成し、既存文書は直前に取得したrevisionを使って更新します。"
+            ),
+            "refinery_record_memory": (
+                "memoryを作成し、既存文書はrefinery_get_memoryのrevisionを使って更新します。"
+            ),
+            "refinery_search_experiences": (
+                "有効なrepositoryのexperienceを検索し、必要な場合はvault全体へ対象を広げます。"
+            ),
+            "refinery_search_memory": (
+                "有効なrepositoryからproject/shared memoryを構造化fieldと全文で検索します。"
+            ),
+            "refinery_update_project_metadata": (
+                "project metadataを部分更新します。省略fieldは保持し、"
+                "空listは対象listを消去します。"
+            ),
+            "refinery_validate": (
+                "active vaultのproject metadata、experience、memoryを検証します。"
+            ),
+        }
         record_experience = next(
             tool for tool in result.tools if tool.name == "refinery_record_experience"
         )

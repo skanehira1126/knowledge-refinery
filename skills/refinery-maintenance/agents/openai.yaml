@@ -1,4 +1,4 @@
 interface:
   display_name: "Refinery Maintenance"
-  short_description: "Validate and reconcile the central knowledge vault."
-  default_prompt: "Use $refinery-maintenance to validate the vault and review recent knowledge for maintenance actions."
+  short_description: "中央knowledge vaultを検証し、整合します。"
+  default_prompt: "$refinery-maintenanceを使い、vaultを検証して最近のナレッジに必要な保守作業を確認してください。"

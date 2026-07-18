@@ -1,6 +1,6 @@
 ---
 name: refinery-experience
-description: Search prior knowledge and record a meaningful development attempt as one integrated experience with purpose, evidence, findings, limitations, and future possibilities. Use after experiments, comparisons, debugging, rejected approaches, inconclusive work, or useful failures, including when evidence is untracked.
+description: 過去のナレッジを検索し、意味のある開発上の試行を、目的、根拠、発見、限界、次の可能性を含む一つのexperienceとして記録する。実験、比較、デバッグ、不採用案、結論が出なかった作業、有用な失敗の後に使用し、evidenceが未追跡でも対象にする。
 ---
 
 # Refinery experience

@@ -1,6 +1,6 @@
 ---
 name: refinery-maintenance
-description: Validate and reconcile the central Knowledge Refinery vault by checking schemas, evidence references, recent experiences, duplicate or stale memory, and cross-project promotion candidates. Use for scheduled maintenance, daily review, explicit vault audits, or knowledge quality checks.
+description: schema、evidence参照、最近のexperience、重複・陳腐化したmemory、project横断の昇格候補を確認し、中央Knowledge Refinery vaultを検証・整合する。定期保守、日次レビュー、明示的なvault監査、ナレッジ品質確認に使用する。
 ---
 
 # Refinery maintenance

@@ -57,11 +57,25 @@ knowledge-refinery vault configure --root "$REFINERY_VAULT"
 
 ## 4. repoを登録
 
-`project-id`は登録後に変更できません。エージェントへsetupを依頼する場合も、候補IDと
-active vaultの切り替え有無を先に提示させ、確認してから実行します。
+通常はproject IDと表示名をrepository directory名から自動設定できます。
 
 ```bash
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"  # 導入対象repoで実行
+knowledge-refinery project setup \
+  --target "$PROJECT_ROOT" \
+  --vault "$REFINERY_VAULT" \
+  --agents
+```
+
+`--agents`はKnowledge Refineryの共通ルールを`AGENTS.md`へ追記し、通常の開発taskでも利用する
+自動運用モードを有効にします。既存の内容は保持され、管理対象のblockだけが追加または更新されます。
+
+project IDはrepository directory名を小文字、数字、hyphenのslugにして生成され、登録後は
+変更されません。表示名もdirectory名が初期値です。別の値を指定する必要がある場合だけ、
+`--project-id`と`--project-name`を使います。概要、検索用tag、利用技術もsetup時または後から
+metadataへ追加できます。
+
+```bash
 knowledge-refinery project setup \
   --target "$PROJECT_ROOT" \
   --vault "$REFINERY_VAULT" \
@@ -69,41 +83,43 @@ knowledge-refinery project setup \
   --project-name "My Project" \
   --summary "プロジェクトの目的を一文で記述" \
   --tag backend \
-  --technology Python
+  --technology Python \
+  --agents
 ```
 
-`project-id`は小文字、数字、hyphenの安定したslugにします。省略時はrepository directory名から
-候補をslug化しますが、不変IDなのでエージェント任せにせず確認することを推奨します。このコマンドは
+project IDを自動生成できないdirectory名や、vault内の既存IDと重複する場合は、
+`--project-id`で一意なslugを指定します。このコマンドは
 `.refinery.yaml`と中央vaultのproject領域、`project.yaml`を整備し、`--vault`で指定した
 vaultをactive vaultへ設定します。project metadataには名前、概要、検索用tag、利用技術が入り、
 cross-project検索の範囲判断に使われます。vault markerとgitignore済みの
 `.refinery.local.yaml`には同じ不変`vault_id`が保存され、version管理可能な`.refinery.yaml`へ
-個人のvault identityを混ぜずに誤接続を拒否します。デフォルトでは`AGENTS.md`を作成・変更しません。
+個人のvault identityを混ぜずに誤接続を拒否します。`--agents`を省略した場合は
+`AGENTS.md`を作成・変更しません。
 
-設定済みrepoでsetupを再実行し、明示した名前、概要、tag、technologyが現在値と異なる場合は、
+自動生成されたproject IDも不変です。設定済みrepoでsetupを再実行し、明示した名前、概要、
+tag、technologyが現在値と異なる場合は、
 指定値を黙って無視せずエラーになります。案内に従って、現在revisionを取得してから
 `project metadata update`を使います。
 
-Knowledge Refineryの共通ルールを`AGENTS.md`に追記し、自動運用モードにする場合は
-`--agents`を指定します。既存の内容は保持され、管理対象のblockだけが追加または更新されます。
+`AGENTS.md`を変更せず、必要なtaskだけでSkillを呼ぶ明示呼出モードにする場合は、
+`--agents`を省略します。
 
 ```bash
 knowledge-refinery project setup \
   --target "$PROJECT_ROOT" \
-  --vault "$REFINERY_VAULT" \
-  --project-id my-project \
-  --agents
+  --vault "$REFINERY_VAULT"
 ```
 
 作業領域に固有のルールも追加したい場合は、[AGENTS.md追記サンプル](agents-guidance-examples.md)から必要なものを選んでください。
 
-`--agents`を指定しない明示呼出モードでは、通常の開発taskが自動的にKnowledge Refineryを
-使うとは限りません。必要なときにSkill名または目的を明示します。2つのモードと依頼例は
+明示呼出モードでは、通常の開発taskが自動的にKnowledge Refineryを使うとは限りません。
+必要なときにSkill名または目的を明示します。2つのモードと依頼例は
 [エージェントへの頼み方](agent-workflow.md)を参照してください。
 
 ```text
 $refinery-projectを使って、このrepoをKnowledge Refineryへ登録してください。
-変更できないproject IDとactive vaultの切り替えを先に確認し、AGENTS.mdは変更しないでください。
+project IDは通常どおり自動設定し、active vaultが切り替わる場合は先に確認してください。
+AGENTS.mdは変更しないでください。
 ```
 
 ## 5. 検証

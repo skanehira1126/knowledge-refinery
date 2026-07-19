@@ -412,7 +412,13 @@ def test_schema_validation_rejects_unstructured_evidence() -> None:
             "git_state": "unknown",
         }
     ]
-    with pytest.raises(ValueError, match="git_state is unsupported"):
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Unsupported file evidence git_state: 'unknown'; expected one of: "
+            "tracked, untracked, modified, staged, ignored, deleted"
+        ),
+    ):
         validate_document_header(header, kind="experiences")
 
 

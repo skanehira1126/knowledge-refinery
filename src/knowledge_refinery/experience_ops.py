@@ -916,7 +916,10 @@ def _validate_evidence_item(item: dict[object, object]) -> None:
         and git_state is not None
         and (not isinstance(git_state, str) or git_state not in EVIDENCE_GIT_STATE_CHOICES)
     ):
-        raise ValueError("file evidence git_state is unsupported")
+        expected = ", ".join(EVIDENCE_GIT_STATE_CHOICES)
+        raise ValueError(
+            f"Unsupported file evidence git_state: {git_state!r}; expected one of: {expected}"
+        )
 
 
 def _validate_evidence_fields(item: dict[object, object], evidence_type: str) -> None:

@@ -46,7 +46,7 @@ Omit confidence only when it has not yet been assessed. A failed attempt may sti
 
 Pass evidence as structured mappings:
 
-- Local or untracked file: `type: file`, `path`, `retention: reference`, and optional `git_state`.
+- Local or untracked file: `type: file`, `path`, `retention: reference`, and optional `git_state`. When present, `git_state` must be one of `tracked`, `untracked`, `modified`, `staged`, `ignored`, or `deleted`.
 - Committed source: `type: git`, `commit`, `path`, `retention: source`.
 - Remote evidence: `type: mlflow`, `url`, or `external`, with `uri` and `retention: external`.
 

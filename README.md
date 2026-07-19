@@ -17,6 +17,15 @@ uv tool install git+https://github.com/skanehira1126/knowledge-refinery.git
 
 CodexのPlugin画面で`knowledge-refinery`をインストールし、新しいtask/sessionを開きます。
 
+すでにインストール済みのPluginとCLIを更新する場合は、次を実行します。
+
+```bash
+codex plugin marketplace upgrade knowledge-refinery
+uv tool upgrade knowledge-refinery
+```
+
+CodexのPlugin画面で`knowledge-refinery`を再インストールし、新しいtask/sessionを開きます。
+
 次に、knowledgeの保存先となる中央vaultを一度だけ作ります。
 
 ```bash

@@ -29,6 +29,8 @@ def test_stdio_server_lists_expected_tools() -> None:
         names = {tool.name for tool in result.tools}
         assert names == {
             "refinery_browse_knowledge_tags",
+            "refinery_delete_experience",
+            "refinery_delete_memory",
             "refinery_get_experience",
             "refinery_get_memory",
             "refinery_get_project_metadata",
@@ -47,6 +49,12 @@ def test_stdio_server_lists_expected_tools() -> None:
         assert descriptions == {
             "refinery_browse_knowledge_tags": (
                 "Knowledge tagを指定階層の直下だけ、説明と利用件数を付けて取得します。"
+            ),
+            "refinery_delete_experience": (
+                "experience削除の影響を確認し、参照がなくconfirm済みの場合だけ削除します。"
+            ),
+            "refinery_delete_memory": (
+                "memory削除の影響を確認し、参照がなくconfirm済みの場合だけ削除します。"
             ),
             "refinery_get_experience": (
                 "experience IDまたはproject-id/experience-idを指定してexperienceを取得します。"
@@ -67,7 +75,7 @@ def test_stdio_server_lists_expected_tools() -> None:
                 "experienceを作成・更新します。更新の省略fieldは保持し、空listはclearします。"
             ),
             "refinery_record_memory": (
-                "memoryを作成・更新します。更新の省略fieldは保持し、空listはclearします。"
+                "memoryを作成・更新し、statusと同一scopeの後継memoryを管理します。"
             ),
             "refinery_search_experiences": (
                 "experienceを新しい順に検索します。project_idsとall_projectsは併用できません。"
@@ -76,7 +84,7 @@ def test_stdio_server_lists_expected_tools() -> None:
                 "Knowledge tagのpathと説明をAND条件の語句で検索し、利用件数も取得します。"
             ),
             "refinery_search_memory": (
-                "project/shared memoryを新しい順に検索します。結果のscopeをexact getへ渡します。"
+                "active memoryを既定に検索します。statusesを指定すると廃止済みも検索できます。"
             ),
             "refinery_update_project_metadata": (
                 "project metadataを部分更新します。省略fieldは保持し、"
@@ -101,6 +109,20 @@ def test_stdio_server_lists_expected_tools() -> None:
             "superseded",
         ]
         assert "clear_confidence" in record_experience.inputSchema["properties"]
+        delete_experience = next(
+            tool for tool in result.tools if tool.name == "refinery_delete_experience"
+        )
+        assert "expected_updated_at" in delete_experience.inputSchema.get("required", [])
+        assert "confirm" not in delete_experience.inputSchema.get("required", [])
+        record_memory = next(
+            tool for tool in result.tools if tool.name == "refinery_record_memory"
+        )
+        assert record_memory.inputSchema["properties"]["status"]["anyOf"][0]["enum"] == [
+            "active",
+            "superseded",
+            "retracted",
+        ]
+        assert "superseded_by" in record_memory.inputSchema["properties"]
         update_metadata = next(
             tool for tool in result.tools if tool.name == "refinery_update_project_metadata"
         )

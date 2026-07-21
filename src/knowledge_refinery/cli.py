@@ -24,7 +24,10 @@ from knowledge_refinery.experience_ops import CONFIDENCE_CHOICES
 from knowledge_refinery.experience_ops import EVIDENCE_TYPE_CHOICES
 from knowledge_refinery.experience_ops import EXPERIENCE_STATUS_CHOICES
 from knowledge_refinery.experience_ops import MEMORY_SCOPE_CHOICES
+from knowledge_refinery.experience_ops import MEMORY_STATUS_CHOICES
 from knowledge_refinery.experience_ops import SearchFilters
+from knowledge_refinery.experience_ops import delete_experience_at
+from knowledge_refinery.experience_ops import delete_memory_at
 from knowledge_refinery.experience_ops import parse_datetime_filter
 from knowledge_refinery.experience_ops import read_experience_at
 from knowledge_refinery.experience_ops import read_memory_at
@@ -258,6 +261,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     experience_get.set_defaults(handler=run_experience_get)
 
+    experience_delete = experience_subparsers.add_parser(
+        "delete", help="Inspect or delete one unreferenced experience"
+    )
+    experience_delete.add_argument("experience_id", help="stable experience ID")
+    experience_delete.add_argument(
+        "--project", "--target", dest="project", default=".", help="configured project path"
+    )
+    experience_delete.add_argument("--expected-updated-at", required=True)
+    experience_delete.add_argument(
+        "--confirm", action="store_true", help="delete after the dry-run checks pass"
+    )
+    experience_delete.set_defaults(handler=run_experience_delete)
+
     experience_search = experience_subparsers.add_parser(
         "search", help="Search experiences across projects"
     )
@@ -297,6 +313,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="experience ID supporting this memory",
     )
     memory_upsert.add_argument("--shared", action="store_true", help="write to shared/memory")
+    memory_upsert.add_argument(
+        "--status", choices=MEMORY_STATUS_CHOICES, default=None, help="memory lifecycle state"
+    )
+    memory_successor = memory_upsert.add_mutually_exclusive_group()
+    memory_successor.add_argument(
+        "--superseded-by", default=None, help="active successor memory ID in the same scope"
+    )
+    memory_successor.add_argument(
+        "--clear-superseded-by", action="store_true", help="clear the successor memory ID"
+    )
     memory_confidence = memory_upsert.add_mutually_exclusive_group()
     memory_confidence.add_argument("--confidence", choices=CONFIDENCE_CHOICES, default=None)
     memory_confidence.add_argument(
@@ -319,6 +345,21 @@ def build_parser() -> argparse.ArgumentParser:
     memory_get.add_argument("--project-id", default=None, help="project scope owner")
     memory_get.set_defaults(handler=run_memory_get)
 
+    memory_delete = memory_subparsers.add_parser(
+        "delete", help="Inspect or delete one unreferenced memory"
+    )
+    memory_delete.add_argument("memory_id", help="stable memory ID")
+    memory_delete.add_argument(
+        "--project", "--target", dest="project", default=".", help="configured project path"
+    )
+    memory_delete.add_argument("--scope", choices=MEMORY_SCOPE_CHOICES, default="project")
+    memory_delete.add_argument("--project-id", default=None, help="project scope owner")
+    memory_delete.add_argument("--expected-updated-at", required=True)
+    memory_delete.add_argument(
+        "--confirm", action="store_true", help="delete after the dry-run checks pass"
+    )
+    memory_delete.set_defaults(handler=run_memory_delete)
+
     memory_search = memory_subparsers.add_parser("search", help="Search project and shared memory")
     add_search_arguments(memory_search)
     memory_search.add_argument(
@@ -326,6 +367,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     memory_search.add_argument(
         "--scope", action="append", choices=MEMORY_SCOPE_CHOICES, default=[]
+    )
+    memory_search.add_argument(
+        "--status", action="append", choices=MEMORY_STATUS_CHOICES, default=[]
     )
     add_typed_search_arguments(memory_search)
     memory_search.set_defaults(handler=run_memory_search)
@@ -807,6 +851,20 @@ def run_experience_get(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_experience_delete(args: argparse.Namespace) -> int:
+    project = Path(args.project)
+    vault = get_active_vault()
+    payload = delete_experience_at(
+        vault,
+        resolve_project_id(project, vault),
+        args.experience_id,
+        expected_updated_at=args.expected_updated_at,
+        confirm=bool(args.confirm),
+    )
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0 if payload["deleted"] or not args.confirm else 1
+
+
 def run_memory_upsert(args: argparse.Namespace) -> int:
     project = Path(args.project)
     vault = get_active_vault()
@@ -827,6 +885,9 @@ def run_memory_upsert(args: argparse.Namespace) -> int:
         body=read_body(args),
         expected_updated_at=args.expected_updated_at,
         clear_confidence=bool(args.clear_confidence),
+        status=args.status,
+        superseded_by=args.superseded_by,
+        clear_superseded_by=bool(args.clear_superseded_by),
     )
     print(path)
     return 0
@@ -853,12 +914,29 @@ def run_memory_get(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_memory_delete(args: argparse.Namespace) -> int:
+    project = Path(args.project)
+    vault = get_active_vault()
+    current_project_id = resolve_project_id(project, vault)
+    payload = delete_memory_at(
+        vault,
+        current_project_id,
+        args.memory_id,
+        scope=args.scope,
+        project_id=args.project_id,
+        expected_updated_at=args.expected_updated_at,
+        confirm=bool(args.confirm),
+    )
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0 if payload["deleted"] or not args.confirm else 1
+
+
 def run_experience_search(args: argparse.Namespace) -> int:
     return run_document_search(args, kind="experiences", statuses=list(args.status))
 
 
 def run_memory_search(args: argparse.Namespace) -> int:
-    return run_document_search(args, kind="memory", statuses=[])
+    return run_document_search(args, kind="memory", statuses=list(args.status))
 
 
 def run_tag_browse(args: argparse.Namespace) -> int:

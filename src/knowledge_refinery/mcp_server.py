@@ -13,6 +13,8 @@ from knowledge_refinery import get_version
 from knowledge_refinery.config_ops import get_active_vault
 from knowledge_refinery.errors import RefineryCliError
 from knowledge_refinery.experience_ops import SearchFilters
+from knowledge_refinery.experience_ops import delete_experience_at
+from knowledge_refinery.experience_ops import delete_memory_at
 from knowledge_refinery.experience_ops import parse_datetime_filter
 from knowledge_refinery.experience_ops import read_experience_at
 from knowledge_refinery.experience_ops import read_memory_at
@@ -50,12 +52,14 @@ mcp = FastMCP(
         "repositoryを拒否します。"
         "判断前はcurrent projectとshared memoryを先に検索し、必要な場合だけselected projectsまたは"
         "vault全体へ広げてください。更新では省略fieldを保持し、空listは明示clearです。"
+        "memory検索はactiveが既定です。削除はconfirmなしで影響を確認し、利用者確認後だけ実行してください。"
     ),
 )
 
 ExperienceStatus = Literal["completed", "inconclusive", "abandoned", "superseded"]
 Confidence = Literal["low", "medium", "high"]
 MemoryScope = Literal["project", "shared"]
+MemoryStatus = Literal["active", "superseded", "retracted"]
 EvidenceType = Literal["file", "git", "mlflow", "url", "external"]
 StringValue = TypeVar("StringValue", bound=str)
 
@@ -302,6 +306,25 @@ def refinery_record_experience(
 
 
 @mcp.tool()
+def refinery_delete_experience(
+    project_path: str,
+    experience_id: str,
+    expected_updated_at: str,
+    confirm: bool = False,
+) -> dict[str, object]:
+    """experience削除の影響を確認し、参照がなくconfirm済みの場合だけ削除します。"""
+    vault = get_active_vault()
+    project_id = _validated_project_id(vault, project_path)
+    return delete_experience_at(
+        vault,
+        project_id,
+        experience_id,
+        expected_updated_at=expected_updated_at,
+        confirm=confirm,
+    )
+
+
+@mcp.tool()
 def refinery_search_memory(
     project_path: str,
     terms: list[str] | None = None,
@@ -311,9 +334,10 @@ def refinery_search_memory(
     source_experiences: list[str] | None = None,
     scopes: list[MemoryScope] | None = None,
     confidences: list[Confidence] | None = None,
+    statuses: list[MemoryStatus] | None = None,
     all_projects: bool = False,
 ) -> list[dict[str, object]]:
-    """project/shared memoryを新しい順に検索します。結果のscopeをexact getへ渡します。"""
+    """active memoryを既定に検索します。statusesを指定すると廃止済みも検索できます。"""
     vault = get_active_vault()
     project_id = _validated_project_id(vault, project_path)
     entries = search_documents_at(
@@ -323,7 +347,7 @@ def refinery_search_memory(
         terms=_list(terms),
         project_ids=_list(project_ids),
         tags=_list(tags),
-        statuses=[],
+        statuses=_list(statuses),
         all_projects=all_projects,
         filters=SearchFilters(
             document_ids=tuple(_list(memory_ids)),
@@ -368,8 +392,11 @@ def refinery_record_memory(
     memory_id: str | None = None,
     expected_updated_at: str | None = None,
     clear_confidence: bool = False,
+    status: MemoryStatus | None = None,
+    superseded_by: str | None = None,
+    clear_superseded_by: bool = False,
 ) -> dict[str, object]:
-    """memoryを作成・更新します。更新の省略fieldは保持し、空listはclearします。"""
+    """memoryを作成・更新し、statusと同一scopeの後継memoryを管理します。"""
     vault = get_active_vault()
     project_id = _validated_project_id(vault, project_path)
     path = upsert_memory_at(
@@ -386,15 +413,43 @@ def refinery_record_memory(
         body=body,
         expected_updated_at=expected_updated_at,
         clear_confidence=clear_confidence,
+        status=status,
+        superseded_by=superseded_by,
+        clear_superseded_by=clear_superseded_by,
     )
     header, _ = split_front_matter(path.read_text(encoding="utf-8"), source_path=path)
     return {
         "memory_id": str(header["memory_id"]),
         "scope": str(header["scope"]),
         "project_id": header.get("project_id"),
+        "status": str(header.get("status", "active")),
+        "superseded_by": header.get("superseded_by"),
         "updated_at": str(header["updated_at"]),
         "path": str(path.relative_to(vault)),
     }
+
+
+@mcp.tool()
+def refinery_delete_memory(
+    project_path: str,
+    memory_id: str,
+    expected_updated_at: str,
+    scope: MemoryScope = "project",
+    project_id: str | None = None,
+    confirm: bool = False,
+) -> dict[str, object]:
+    """memory削除の影響を確認し、参照がなくconfirm済みの場合だけ削除します。"""
+    vault = get_active_vault()
+    current_project_id = _validated_project_id(vault, project_path)
+    return delete_memory_at(
+        vault,
+        current_project_id,
+        memory_id,
+        scope=scope,
+        project_id=project_id,
+        expected_updated_at=expected_updated_at,
+        confirm=confirm,
+    )
 
 
 @mcp.tool()

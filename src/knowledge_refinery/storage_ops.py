@@ -38,6 +38,12 @@ def atomic_write_text(path: Path, content: str, *, encoding: str = "utf-8") -> N
             pass
 
 
+def durable_unlink(path: Path) -> None:
+    """Remove one file and durably record the directory entry change."""
+    path.unlink()
+    _fsync_directory(path.parent)
+
+
 def _fsync_directory(directory: Path) -> None:
     try:
         descriptor = os.open(directory, os.O_RDONLY)

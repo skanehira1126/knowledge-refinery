@@ -11,12 +11,15 @@ description: 検証済みのKnowledge Refinery experienceから繰り返し役�
 4. Keep project-specific principles in project memory. Normally require at least two experiences that show repetition or complementary validation, and use unqualified experience IDs. A single source is allowed only when the user explicitly asks to preserve it as memory; narrow the scope, state the unverified limits in the body, and do not assign high confidence.
 5. Treat shared memory as a user-approved promotion. Independent experiences from at least two projects must support the same principle and every source must use `project-id/experience-id`, but satisfying that schema is not approval. Present the candidate principle, scope, limits, counterexamples, confidence, and source IDs, and call `refinery_record_memory(shared: true)` only after explicit user approval.
 6. Record with `refinery_record_memory`, include every supporting experience ID, and read the result back with `refinery_get_memory`. Use the returned `scope`: for project memory pass its returned `project_id`; for shared memory use `scope: shared` and omit `project_id`. When updating shared memory, keep `shared: true`.
+7. Normal search returns active memory only. When a saved principle is replaced, create or update the active successor first, then update the old record with `status: superseded` and its same-scope `superseded_by`. Use `status: retracted` only when the principle must no longer be used and there is no successor. Search explicit statuses when auditing inactive memory.
 
 Creating a new memory omits `expected_updated_at`. Updating an existing memory requires the exact `updated_at` returned by `refinery_get_memory`; pass it as `expected_updated_at`. On update, omitted optional fields are preserved, an explicit empty list clears a list field, and `clear_confidence: true` explicitly clears confidence. If the server reports a stale revision, read the current memory again and reconcile the competing change instead of retrying blindly.
 
 Write the reusable principle in `summary`. Put conditions, limits, counterexamples, and operational guidance in the body. Keep detailed attempt history in the source experiences.
 
 Never create memory without `source_experiences`. Do not promote a one-off observation to shared memory, and do not silently overwrite a conflicting principle; preserve the conflict or ask for a decision.
+
+Do not physically delete memory as routine cleanup. When deletion is explicitly requested, exact-get the target, call `refinery_delete_memory` without `confirm`, present its revision, references, and validation errors, and obtain explicit user confirmation. Retry with the same `expected_updated_at` and `confirm: true` only when `can_delete` is true. If the target is blocked, retire or update its references instead of forcing deletion.
 
 Choose confidence from the evidence supporting the reusable principle:
 

@@ -15,6 +15,8 @@
 - confidenceは、条件を明記した再現可能な直接根拠なら`high`、直接根拠はあるが反復や適用範囲が限定的なら`medium`、部分的・間接的な根拠または重要な未解決点があるなら`low`とする。
 - 新規experienceは安定したlowercase slugの`experience_id`を先に決める。結果不明のcreateをretryする前にexact getまたはID検索で保存済みか確認する。
 - 既存experience/memoryの更新は現在revisionを使う。optional fieldの省略は保持、空listは明示clear、confidenceのclearは`clear_confidence: true`とする。
+- memoryの通常検索はactiveだけを対象にする。置換時はactiveな後継を先に保存し、旧memoryを`superseded`として同一scopeの`superseded_by`へ結ぶ。後継なしの撤回は`retracted`とする。
+- knowledge文書を物理削除するときは、confirmなしのdeleteでrevision、参照、validation errorを提示し、利用者の明示確認後、`can_delete: true`の場合だけ同じrevisionへconfirmを付ける。
 - 実装へ採用しなかったことや、evidenceがuntrackedであることを理由に記録を捨てない。
 - evidenceを保存するためだけにプロダクトrepoへcommitしない。
 - 複数experienceから繰り返し使える原則を抽出するときは `refinery-memory` skillを使う。

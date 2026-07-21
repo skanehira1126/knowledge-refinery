@@ -6,6 +6,8 @@ import pytest
 
 from knowledge_refinery.config_ops import set_active_vault
 from knowledge_refinery.mcp_server import refinery_browse_knowledge_tags
+from knowledge_refinery.mcp_server import refinery_delete_experience
+from knowledge_refinery.mcp_server import refinery_delete_memory
 from knowledge_refinery.mcp_server import refinery_get_experience
 from knowledge_refinery.mcp_server import refinery_get_memory
 from knowledge_refinery.mcp_server import refinery_get_project_metadata
@@ -114,6 +116,8 @@ def test_local_mcp_records_searches_and_validates(
         memory_id="feature-selection",
     )
     assert memory["memory_id"] == "feature-selection"
+    assert memory["status"] == "active"
+    assert memory["superseded_by"] is None
     assert memory["updated_at"]
     read_memory = refinery_get_memory(str(project), "feature-selection")
     assert read_memory["header"]["summary"] == "相関グループも確認する"
@@ -533,6 +537,131 @@ def test_mcp_updates_preserve_omitted_fields_and_support_explicit_clear(
     assert revised_memory["project_id"] == "pybr"
 
 
+def test_memory_lifecycle_hides_inactive_entries_and_links_active_successor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "pybr"
+    refinery_record_experience(
+        project_path=str(project),
+        title="根拠",
+        purpose="memory lifecycleを検証する",
+        status="completed",
+        body="根拠",
+        experience_id="lifecycle-source",
+    )
+    old = refinery_record_memory(
+        project_path=str(project),
+        title="旧原則",
+        summary="古い原則",
+        source_experiences=["lifecycle-source"],
+        memory_id="old-rule",
+    )
+    successor = refinery_record_memory(
+        project_path=str(project),
+        title="新原則",
+        summary="新しい原則",
+        source_experiences=["lifecycle-source"],
+        memory_id="new-rule",
+    )
+    refinery_record_memory(
+        project_path=str(project),
+        title="旧原則",
+        summary="新原則に置換済み",
+        status="superseded",
+        superseded_by="new-rule",
+        memory_id="old-rule",
+        expected_updated_at=str(old["updated_at"]),
+    )
+
+    assert [entry["id"] for entry in refinery_search_memory(str(project))] == ["new-rule"]
+    retired = refinery_search_memory(str(project), statuses=["superseded"])
+    assert [entry["id"] for entry in retired] == ["old-rule"]
+    assert retired[0]["status"] == "superseded"
+    old_header = refinery_get_memory(str(project), "old-rule")["header"]
+    assert old_header["superseded_by"] == "new-rule"
+    blocked_successor = refinery_delete_memory(
+        str(project), "new-rule", str(successor["updated_at"])
+    )
+    assert blocked_successor["can_delete"] is False
+    assert blocked_successor["references"][0]["field"] == "superseded_by"
+
+
+def test_safe_delete_requires_revision_confirmation_and_zero_references(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "pybr"
+    source = refinery_record_experience(
+        project_path=str(project),
+        title="参照される根拠",
+        purpose="安全削除を検証する",
+        status="completed",
+        body="根拠",
+        experience_id="referenced-source",
+    )
+    memory = refinery_record_memory(
+        project_path=str(project),
+        title="参照memory",
+        summary="削除を防ぐ",
+        source_experiences=["referenced-source"],
+        memory_id="reference-rule",
+    )
+
+    blocked = refinery_delete_experience(
+        str(project), "referenced-source", str(source["updated_at"])
+    )
+    assert blocked["can_delete"] is False
+    assert blocked["deleted"] is False
+    assert blocked["references"][0]["field"] == "source_experiences"
+    still_blocked = refinery_delete_experience(
+        str(project), "referenced-source", str(source["updated_at"]), confirm=True
+    )
+    assert still_blocked["deleted"] is False
+    assert (vault / "projects" / "pybr" / "experiences" / "referenced-source.md").exists()
+
+    preview = refinery_delete_memory(str(project), "reference-rule", str(memory["updated_at"]))
+    assert preview["can_delete"] is True
+    assert preview["confirmation_required"] is True
+    assert preview["deleted"] is False
+    deleted = refinery_delete_memory(
+        str(project), "reference-rule", str(memory["updated_at"]), confirm=True
+    )
+    assert deleted["deleted"] is True
+    assert not (vault / "projects" / "pybr" / "memory" / "reference-rule.md").exists()
+
+    removed_source = refinery_delete_experience(
+        str(project), "referenced-source", str(source["updated_at"]), confirm=True
+    )
+    assert removed_source["deleted"] is True
+    assert refinery_validate()["valid"] is True
+
+
+def test_safe_delete_blocks_when_vault_references_cannot_be_validated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "pybr"
+    source = refinery_record_experience(
+        project_path=str(project),
+        title="削除候補",
+        purpose="validation blockerを検証する",
+        status="completed",
+        body="根拠",
+        experience_id="delete-candidate",
+    )
+    broken = vault / "projects" / "pybr" / "memory" / "broken.md"
+    broken.write_text("not front matter", encoding="utf-8")
+
+    impact = refinery_delete_experience(
+        str(project), "delete-candidate", str(source["updated_at"]), confirm=True
+    )
+
+    assert impact["can_delete"] is False
+    assert impact["deleted"] is False
+    assert impact["validation_errors"][0]["path"].endswith("memory/broken.md")
+
+
 def test_search_results_expose_fields_needed_for_deterministic_exact_get(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -591,6 +720,8 @@ def test_mcp_search_rejects_ambiguous_scope_and_invalid_filters(
         refinery_search_experiences(str(project), project_ids=["pybr"], all_projects=True)
     with pytest.raises(ValueError, match="Unsupported experience statuses"):
         refinery_search_experiences(str(project), statuses=cast(Any, ["complete"]))
+    with pytest.raises(ValueError, match="Unsupported memory statuses"):
+        refinery_search_memory(str(project), statuses=cast(Any, ["archived"]))
 
 
 def test_repo_scoped_mcp_rejects_invalid_project_metadata(

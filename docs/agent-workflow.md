@@ -66,6 +66,8 @@ active vault、project ID、enabled状態、失敗した検査だけを報告し
   `--agents`で自動運用を選んだ場合に記録対象となります。
 - shared memoryの新規作成、memoryの大幅な書き換え、knowledge文書の削除は、候補、根拠、
   影響を提示し、利用者が確認してから行います。
+- memory置換はactiveな後継を先に保存してから旧memoryを`superseded`へ更新します。物理削除は
+  confirmなしのdry-runでrevision・参照・validationを確認し、同じrevisionへ明示confirmします。
 - `enabled: false`は意図的な停止です。検索や記録のために暗黙で再有効化しません。
 - CLIとMCPはvaultのGit commit、push、backupを自動実行しません。Git履歴が必要な場合は
   vaultで`git init`し、差分確認後にvault Gitだけをcommitします。

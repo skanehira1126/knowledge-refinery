@@ -58,6 +58,8 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 
 - 成功、失敗、不採用案をexperienceとして記録する
 - experienceから再利用可能なproject memoryとshared memoryを抽出する
+- 古いmemoryを後継へ紐付けて廃止し、通常検索から除外する
+- revision・参照・validation・明示確認で保護された安全な削除を行う
 - 現在のrepoから、必要に応じて他repoのknowledgeまで検索する
 - repoごとに利用を無効化・再有効化する
 - 中央vaultを独立したGit repositoryとして履歴管理する

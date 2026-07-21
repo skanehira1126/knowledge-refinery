@@ -15,6 +15,7 @@ import yaml
 from knowledge_refinery.errors import RefineryCliError
 from knowledge_refinery.front_matter import split_front_matter
 from knowledge_refinery.storage_ops import atomic_write_text
+from knowledge_refinery.storage_ops import durable_unlink
 from knowledge_refinery.storage_ops import interprocess_lock
 from knowledge_refinery.vault_ops import ProjectContext
 from knowledge_refinery.vault_ops import context_from_vault
@@ -24,6 +25,7 @@ from knowledge_refinery.vault_ops import resolve_project_context
 EXPERIENCE_STATUS_CHOICES = ("completed", "inconclusive", "abandoned", "superseded")
 CONFIDENCE_CHOICES = ("low", "medium", "high")
 MEMORY_SCOPE_CHOICES = ("project", "shared")
+MEMORY_STATUS_CHOICES = ("active", "superseded", "retracted")
 EVIDENCE_TYPE_CHOICES = ("file", "git", "mlflow", "url", "external")
 EVIDENCE_RETENTION_CHOICES = ("reference", "external", "source")
 EVIDENCE_GIT_STATE_CHOICES = ("tracked", "untracked", "modified", "staged", "ignored", "deleted")
@@ -106,6 +108,25 @@ def _effective_confidence(
         value = current.get("confidence")
         return str(value) if value is not None else None
     return supplied
+
+
+def _effective_optional_string(
+    current: dict[str, object] | None,
+    field: str,
+    supplied: str | None,
+    *,
+    clear: bool,
+) -> str | None:
+    if clear:
+        return None
+    if current is not None and supplied is None:
+        value = current.get(field)
+        return str(value) if value is not None else None
+    return supplied
+
+
+def _memory_status(header: dict[str, object]) -> str:
+    return str(header.get("status", "active"))
 
 
 def _preserved_evidence(
@@ -273,51 +294,56 @@ def _upsert_experience(
         clear_confidence=clear_confidence,
     )
     path = _document_path(context, "experiences", expected_filename)
-    with interprocess_lock(path):
-        created_at = datetime.now(UTC).isoformat()
-        current: dict[str, object] | None = None
-        if path.exists():
-            current, current_body = split_front_matter(
-                path.read_text(encoding="utf-8"), source_path=path
-            )
-            validate_document_header(current, kind="experiences")
-            current_updated_at = str(current.get("updated_at", ""))
-            if expected_updated_at is None:
-                raise ValueError(
-                    "experience already exists; read it and pass expected_updated_at to update"
+    with interprocess_lock(context.vault_root / "knowledge-documents"):
+        with interprocess_lock(path):
+            created_at = datetime.now(UTC).isoformat()
+            current: dict[str, object] | None = None
+            if path.exists():
+                current, current_body = split_front_matter(
+                    path.read_text(encoding="utf-8"), source_path=path
                 )
-            if expected_updated_at != current_updated_at:
-                raise ValueError("experience update conflict: expected_updated_at is stale")
-            created_at = str(current.get("recorded_at", created_at))
-            if body is None:
-                body = current_body
-        elif expected_updated_at is not None:
-            raise ValueError("experience does not exist; omit expected_updated_at to create it")
-        effective_tags = _preserved_string_list(current, "tags", tags)
-        structured_evidence = _preserved_evidence(current, evidence)
-        effective_related = _preserved_string_list(
-            current, "related_experiences", related_experiences
-        )
-        effective_supersedes = _preserved_string_list(current, "supersedes", supersedes)
-        effective_confidence = _effective_confidence(current, confidence, clear=clear_confidence)
-        header: dict[str, object] = {
-            "schema_version": 2,
-            "experience_id": document_id,
-            "project_id": context.project_id,
-            "title": title,
-            "purpose": purpose,
-            "status": status,
-            "recorded_at": created_at,
-            "updated_at": datetime.now(UTC).isoformat(),
-            "tags": effective_tags,
-            "evidence": structured_evidence,
-            "related_experiences": effective_related,
-            "supersedes": effective_supersedes,
-            "confidence": effective_confidence,
-        }
-        validate_document_header(header, kind="experiences")
-        validate_experience_references(context.vault_root, header)
-        atomic_write_text(path, _render(header, body or _default_experience_body()))
+                validate_document_header(current, kind="experiences")
+                current_updated_at = str(current.get("updated_at", ""))
+                if expected_updated_at is None:
+                    raise ValueError(
+                        "experience already exists; read it and pass expected_updated_at to update"
+                    )
+                if expected_updated_at != current_updated_at:
+                    raise ValueError("experience update conflict: expected_updated_at is stale")
+                created_at = str(current.get("recorded_at", created_at))
+                if body is None:
+                    body = current_body
+            elif expected_updated_at is not None:
+                raise ValueError(
+                    "experience does not exist; omit expected_updated_at to create it"
+                )
+            effective_tags = _preserved_string_list(current, "tags", tags)
+            structured_evidence = _preserved_evidence(current, evidence)
+            effective_related = _preserved_string_list(
+                current, "related_experiences", related_experiences
+            )
+            effective_supersedes = _preserved_string_list(current, "supersedes", supersedes)
+            effective_confidence = _effective_confidence(
+                current, confidence, clear=clear_confidence
+            )
+            header: dict[str, object] = {
+                "schema_version": 2,
+                "experience_id": document_id,
+                "project_id": context.project_id,
+                "title": title,
+                "purpose": purpose,
+                "status": status,
+                "recorded_at": created_at,
+                "updated_at": datetime.now(UTC).isoformat(),
+                "tags": effective_tags,
+                "evidence": structured_evidence,
+                "related_experiences": effective_related,
+                "supersedes": effective_supersedes,
+                "confidence": effective_confidence,
+            }
+            validate_document_header(header, kind="experiences")
+            validate_experience_references(context.vault_root, header)
+            atomic_write_text(path, _render(header, body or _default_experience_body()))
     return path
 
 
@@ -335,6 +361,9 @@ def upsert_memory(
     body: str | None,
     expected_updated_at: str | None = None,
     clear_confidence: bool = False,
+    status: str | None = None,
+    superseded_by: str | None = None,
+    clear_superseded_by: bool = False,
 ) -> Path:
     context = resolve_project_context(project)
     return _upsert_memory(
@@ -350,6 +379,9 @@ def upsert_memory(
         body=body,
         expected_updated_at=expected_updated_at,
         clear_confidence=clear_confidence,
+        status=status,
+        superseded_by=superseded_by,
+        clear_superseded_by=clear_superseded_by,
     )
 
 
@@ -368,6 +400,9 @@ def upsert_memory_at(
     body: str | None,
     expected_updated_at: str | None = None,
     clear_confidence: bool = False,
+    status: str | None = None,
+    superseded_by: str | None = None,
+    clear_superseded_by: bool = False,
 ) -> Path:
     context = context_from_vault(vault, project_id)
     return _upsert_memory(
@@ -383,7 +418,35 @@ def upsert_memory_at(
         body=body,
         expected_updated_at=expected_updated_at,
         clear_confidence=clear_confidence,
+        status=status,
+        superseded_by=superseded_by,
+        clear_superseded_by=clear_superseded_by,
     )
+
+
+def _validate_memory_options(
+    *,
+    document_id: str,
+    filename: str | None,
+    confidence: str | None,
+    clear_confidence: bool,
+    status: str | None,
+    superseded_by: str | None,
+    clear_superseded_by: bool,
+) -> None:
+    if not SLUG_RE.fullmatch(document_id):
+        raise ValueError("memory_id must be a lowercase slug")
+    if filename is not None and filename != f"{document_id}.md":
+        raise ValueError("memory filename must match memory_id")
+    if clear_confidence and confidence is not None:
+        raise ValueError("confidence and clear_confidence cannot be used together")
+    if clear_superseded_by and superseded_by is not None:
+        raise ValueError("superseded_by and clear_superseded_by cannot be used together")
+    if status is not None and status not in MEMORY_STATUS_CHOICES:
+        raise ValueError(f"Unsupported memory status: {status}")
+    if superseded_by is not None:
+        _validate_slugs([superseded_by], field="superseded_by")
+    _validate_confidence(confidence)
 
 
 def _upsert_memory(
@@ -400,58 +463,76 @@ def _upsert_memory(
     body: str | None,
     expected_updated_at: str | None,
     clear_confidence: bool,
+    status: str | None,
+    superseded_by: str | None,
+    clear_superseded_by: bool,
 ) -> Path:
     document_id = memory_id or _slug(title)
-    if not SLUG_RE.fullmatch(document_id):
-        raise ValueError("memory_id must be a lowercase slug")
+    _validate_memory_options(
+        document_id=document_id,
+        filename=filename,
+        confidence=confidence,
+        clear_confidence=clear_confidence,
+        status=status,
+        superseded_by=superseded_by,
+        clear_superseded_by=clear_superseded_by,
+    )
     expected_filename = f"{document_id}.md"
-    if filename is not None and filename != expected_filename:
-        raise ValueError("memory filename must match memory_id")
-    if clear_confidence and confidence is not None:
-        raise ValueError("confidence and clear_confidence cannot be used together")
-    _validate_confidence(confidence)
     root = context.vault_root / "shared" / "memory" if shared else context.project_store / "memory"
     path = _safe_child(root, expected_filename)
-    with interprocess_lock(path):
-        current: dict[str, object] | None = None
-        if path.exists():
-            current, current_body = split_front_matter(
-                path.read_text(encoding="utf-8"), source_path=path
-            )
-            validate_document_header(current, kind="memory")
-            current_updated_at = str(current.get("updated_at", ""))
-            if expected_updated_at is None:
-                raise ValueError(
-                    "memory already exists; read it and pass expected_updated_at to update"
+    with interprocess_lock(context.vault_root / "knowledge-documents"):
+        with interprocess_lock(path):
+            current: dict[str, object] | None = None
+            if path.exists():
+                current, current_body = split_front_matter(
+                    path.read_text(encoding="utf-8"), source_path=path
                 )
-            if expected_updated_at != current_updated_at:
-                raise ValueError("memory update conflict: expected_updated_at is stale")
-            if body is None:
-                body = current_body
-        elif expected_updated_at is not None:
-            raise ValueError("memory does not exist; omit expected_updated_at to create it")
-        effective_sources = _preserved_string_list(
-            current, "source_experiences", source_experiences
-        )
-        if not effective_sources:
-            raise ValueError("memory requires at least one --source-experience")
-        _validate_memory_sources(context, effective_sources, shared=shared)
-        effective_tags = _preserved_string_list(current, "tags", tags)
-        effective_confidence = _effective_confidence(current, confidence, clear=clear_confidence)
-        header: dict[str, object] = {
-            "schema_version": 2,
-            "memory_id": document_id,
-            "scope": "shared" if shared else "project",
-            "project_id": None if shared else context.project_id,
-            "title": title,
-            "summary": summary,
-            "source_experiences": effective_sources,
-            "updated_at": datetime.now(UTC).isoformat(),
-            "tags": effective_tags,
-            "confidence": effective_confidence,
-        }
-        validate_document_header(header, kind="memory")
-        atomic_write_text(path, _render(header, body or summary))
+                validate_document_header(current, kind="memory")
+                current_updated_at = str(current.get("updated_at", ""))
+                if expected_updated_at is None:
+                    raise ValueError(
+                        "memory already exists; read it and pass expected_updated_at to update"
+                    )
+                if expected_updated_at != current_updated_at:
+                    raise ValueError("memory update conflict: expected_updated_at is stale")
+                if body is None:
+                    body = current_body
+            elif expected_updated_at is not None:
+                raise ValueError("memory does not exist; omit expected_updated_at to create it")
+            effective_sources = _preserved_string_list(
+                current, "source_experiences", source_experiences
+            )
+            if not effective_sources:
+                raise ValueError("memory requires at least one --source-experience")
+            _validate_memory_sources(context, effective_sources, shared=shared)
+            effective_tags = _preserved_string_list(current, "tags", tags)
+            effective_confidence = _effective_confidence(
+                current, confidence, clear=clear_confidence
+            )
+            effective_status = status or (_memory_status(current) if current else "active")
+            effective_superseded_by = _effective_optional_string(
+                current,
+                "superseded_by",
+                superseded_by,
+                clear=clear_superseded_by,
+            )
+            header: dict[str, object] = {
+                "schema_version": 2,
+                "memory_id": document_id,
+                "scope": "shared" if shared else "project",
+                "project_id": None if shared else context.project_id,
+                "title": title,
+                "summary": summary,
+                "status": effective_status,
+                "superseded_by": effective_superseded_by,
+                "source_experiences": effective_sources,
+                "updated_at": datetime.now(UTC).isoformat(),
+                "tags": effective_tags,
+                "confidence": effective_confidence,
+            }
+            validate_document_header(header, kind="memory")
+            validate_memory_source_references(context.vault_root, header)
+            atomic_write_text(path, _render(header, body or summary))
     return path
 
 
@@ -532,6 +613,7 @@ def _search_documents(
         context_from_vault(context.vault_root, selected_project_id)
     selected = project_ids or ([context.project_id] if not all_projects else [])
     roots = _search_roots(context, kind, selected, all_projects=all_projects)
+    effective_statuses = statuses or (["active"] if kind == "memory" else [])
 
     entries: list[SearchEntry] = []
     lowered_terms = [term.casefold() for term in terms]
@@ -555,7 +637,7 @@ def _search_documents(
             if not _matches_filters(
                 header,
                 tags=tags,
-                statuses=statuses,
+                statuses=effective_statuses,
                 filters=active_filters,
                 kind=kind,
             ):
@@ -573,7 +655,9 @@ def _search_documents(
                     summary=(
                         str(header["summary"]) if kind == "memory" else str(header["purpose"])
                     ),
-                    status=(str(header["status"]) if kind == "experiences" else None),
+                    status=(
+                        str(header["status"]) if kind == "experiences" else _memory_status(header)
+                    ),
                     scope=(str(header["scope"]) if kind == "memory" else None),
                     confidence=(
                         str(header["confidence"]) if header.get("confidence") is not None else None
@@ -603,11 +687,11 @@ def _validate_search_inputs(
         raise ValueError("project_ids and all_projects cannot be used together")
     _validate_slugs(project_ids, field="project_ids")
     _validate_knowledge_tags(tags)
-    if kind == "memory" and statuses:
-        raise ValueError("statuses can only filter experiences")
-    invalid_statuses = sorted(set(statuses).difference(EXPERIENCE_STATUS_CHOICES))
+    status_choices = EXPERIENCE_STATUS_CHOICES if kind == "experiences" else MEMORY_STATUS_CHOICES
+    invalid_statuses = sorted(set(statuses).difference(status_choices))
     if invalid_statuses:
-        raise ValueError(f"Unsupported experience statuses: {', '.join(invalid_statuses)}")
+        label = "experience" if kind == "experiences" else "memory"
+        raise ValueError(f"Unsupported {label} statuses: {', '.join(invalid_statuses)}")
     _validate_slugs(list(filters.document_ids), field="document_ids")
     _validate_slugs(list(filters.related_experiences), field="related_experiences")
     invalid_evidence = sorted(set(filters.evidence_types).difference(EVIDENCE_TYPE_CHOICES))
@@ -663,6 +747,251 @@ def read_memory_at(
     return path, header, body
 
 
+def delete_experience_at(
+    vault: Path,
+    project_id: str,
+    experience_id: str,
+    *,
+    expected_updated_at: str,
+    confirm: bool = False,
+) -> dict[str, object]:
+    """Inspect or delete an experience only when no structured references remain."""
+    context = context_from_vault(vault, project_id)
+    _validate_slugs([experience_id], field="experience_id")
+    path = _safe_child(context.project_store / "experiences", f"{experience_id}.md")
+    return _delete_document_at(
+        vault,
+        path,
+        kind="experience",
+        document_id=experience_id,
+        project_id=project_id,
+        scope=None,
+        expected_updated_at=expected_updated_at,
+        confirm=confirm,
+    )
+
+
+def delete_memory_at(
+    vault: Path,
+    current_project_id: str,
+    memory_id: str,
+    *,
+    scope: str,
+    project_id: str | None,
+    expected_updated_at: str,
+    confirm: bool = False,
+) -> dict[str, object]:
+    """Inspect or delete a memory only when no predecessor references it."""
+    path, header, _ = read_memory_at(
+        vault,
+        current_project_id,
+        memory_id,
+        scope=scope,
+        project_id=project_id,
+    )
+    owner = header.get("project_id")
+    return _delete_document_at(
+        vault,
+        path,
+        kind="memory",
+        document_id=memory_id,
+        project_id=str(owner) if owner is not None else None,
+        scope=scope,
+        expected_updated_at=expected_updated_at,
+        confirm=confirm,
+    )
+
+
+def _delete_document_at(
+    vault: Path,
+    path: Path,
+    *,
+    kind: str,
+    document_id: str,
+    project_id: str | None,
+    scope: str | None,
+    expected_updated_at: str,
+    confirm: bool,
+) -> dict[str, object]:
+    validation_kind = "experiences" if kind == "experience" else "memory"
+    with interprocess_lock(vault / "knowledge-documents"):
+        with interprocess_lock(path):
+            header, _ = _read_exact_document(path, kind=validation_kind)
+            _validate_delete_target(
+                header,
+                kind=kind,
+                document_id=document_id,
+                project_id=project_id,
+                scope=scope,
+            )
+            if str(header.get("updated_at", "")) != expected_updated_at:
+                raise ValueError(f"{kind} delete conflict: expected_updated_at is stale")
+            references, validation_errors = _scan_delete_dependencies(
+                vault,
+                target_path=path,
+                kind=kind,
+                document_id=document_id,
+                project_id=project_id,
+                scope=scope,
+            )
+            can_delete = not references and not validation_errors
+            deleted = bool(confirm and can_delete)
+            if deleted:
+                durable_unlink(path)
+            return {
+                "kind": kind,
+                "id": document_id,
+                "project_id": project_id,
+                "scope": scope,
+                "path": str(path.relative_to(vault)),
+                "updated_at": str(header["updated_at"]),
+                "can_delete": can_delete,
+                "confirmation_required": bool(can_delete and not confirm),
+                "deleted": deleted,
+                "references": references,
+                "validation_errors": validation_errors,
+            }
+
+
+def _validate_delete_target(
+    header: dict[str, object],
+    *,
+    kind: str,
+    document_id: str,
+    project_id: str | None,
+    scope: str | None,
+) -> None:
+    if kind == "experience":
+        if header.get("experience_id") != document_id or header.get("project_id") != project_id:
+            raise ValueError("experience ID and project_id must match its delete target")
+        return
+    if header.get("memory_id") != document_id or header.get("scope") != scope:
+        raise ValueError("memory ID and scope must match its delete target")
+    if header.get("project_id") != project_id:
+        raise ValueError("memory project_id must match its delete target")
+
+
+def _scan_delete_dependencies(
+    vault: Path,
+    *,
+    target_path: Path,
+    kind: str,
+    document_id: str,
+    project_id: str | None,
+    scope: str | None,
+) -> tuple[list[dict[str, object]], list[dict[str, str]]]:
+    references: list[dict[str, object]] = []
+    validation_errors: list[dict[str, str]] = []
+    for path, document_kind in _iter_knowledge_documents(vault):
+        if path == target_path:
+            continue
+        try:
+            header, _ = _read_exact_document(path, kind=document_kind)
+            if document_kind == "experiences":
+                validate_experience_references(vault, header)
+            else:
+                validate_memory_source_references(vault, header)
+        except (OSError, ValueError, RefineryCliError) as error:
+            validation_errors.append({"path": str(path.relative_to(vault)), "error": str(error)})
+            continue
+        fields = _dependency_fields(
+            header,
+            document_kind=document_kind,
+            target_kind=kind,
+            document_id=document_id,
+            project_id=project_id,
+            scope=scope,
+        )
+        for field in fields:
+            references.append(
+                {
+                    "kind": "experience" if document_kind == "experiences" else "memory",
+                    "id": header.get(
+                        "experience_id" if document_kind == "experiences" else "memory_id"
+                    ),
+                    "project_id": header.get("project_id"),
+                    "scope": header.get("scope"),
+                    "field": field,
+                    "path": str(path.relative_to(vault)),
+                }
+            )
+    return references, validation_errors
+
+
+def _dependency_fields(
+    header: dict[str, object],
+    *,
+    document_kind: str,
+    target_kind: str,
+    document_id: str,
+    project_id: str | None,
+    scope: str | None,
+) -> list[str]:
+    if target_kind == "memory":
+        is_same_scope = (
+            document_kind == "memory"
+            and header.get("scope") == scope
+            and header.get("project_id") == project_id
+        )
+        has_successor = header.get("superseded_by") == document_id
+        return ["superseded_by"] if is_same_scope and has_successor else []
+    if document_kind == "memory":
+        return (
+            ["source_experiences"]
+            if _memory_uses_experience(header, project_id, document_id)
+            else []
+        )
+    if header.get("project_id") != project_id:
+        return []
+    fields: list[str] = []
+    for field in ("related_experiences", "supersedes"):
+        values = header.get(field)
+        if isinstance(values, list) and document_id in values:
+            fields.append(field)
+    return fields
+
+
+def _iter_knowledge_documents(vault: Path) -> list[tuple[Path, str]]:
+    documents: list[tuple[Path, str]] = []
+    projects_root = vault / "projects"
+    if projects_root.is_dir():
+        for project in sorted(projects_root.iterdir()):
+            if not project.is_dir():
+                continue
+            for directory, kind in (("experiences", "experiences"), ("memory", "memory")):
+                root = project / directory
+                if root.is_dir():
+                    documents.extend(
+                        (path, kind)
+                        for path in sorted(root.rglob("*.md"))
+                        if path.name != "AGENTS.md"
+                    )
+    shared_root = vault / "shared" / "memory"
+    if shared_root.is_dir():
+        documents.extend(
+            (path, "memory")
+            for path in sorted(shared_root.rglob("*.md"))
+            if path.name != "AGENTS.md"
+        )
+    return documents
+
+
+def _memory_uses_experience(
+    header: dict[str, object], project_id: str | None, experience_id: str
+) -> bool:
+    sources = header.get("source_experiences", [])
+    if not isinstance(sources, list):
+        return False
+    for source in sources:
+        if not isinstance(source, str):
+            continue
+        qualified_project, source_id = _split_source_reference(source)
+        owner = qualified_project or header.get("project_id")
+        if owner == project_id and source_id == experience_id:
+            return True
+    return False
+
+
 def _read_exact_document(path: Path, *, kind: str) -> tuple[dict[str, object], str]:
     header, body = split_front_matter(path.read_text(encoding="utf-8"), source_path=path)
     validate_document_header(header, kind=kind)
@@ -707,7 +1036,8 @@ def _matches_filters(
         not any(_tag_matches(current, requested) for current in current_tags) for requested in tags
     ):
         return False
-    if statuses and header.get("status") not in statuses:
+    current_status = header.get("status") if kind == "experiences" else _memory_status(header)
+    if statuses and current_status not in statuses:
         return False
     id_key = "experience_id" if kind == "experiences" else "memory_id"
     if filters.document_ids and header.get(id_key) not in filters.document_ids:
@@ -858,6 +1188,7 @@ def _validate_knowledge_tags(value: object) -> None:
 
 def _validate_memory_header(header: dict[str, object]) -> None:
     _validate_slugs([str(header["memory_id"])], field="memory_id")
+    _validate_memory_lifecycle(header)
     scope = header["scope"]
     if scope not in MEMORY_SCOPE_CHOICES:
         raise ValueError(f"Unsupported memory scope: {scope}")
@@ -873,6 +1204,23 @@ def _validate_memory_header(header: dict[str, object]) -> None:
     if not isinstance(project_id, str) or not project_id:
         raise ValueError("project memory requires non-empty project_id")
     _validate_project_source_format(source_experiences, project_id)
+
+
+def _validate_memory_lifecycle(header: dict[str, object]) -> None:
+    status = _memory_status(header)
+    if status not in MEMORY_STATUS_CHOICES:
+        raise ValueError(f"Unsupported memory status: {status}")
+    superseded_by = header.get("superseded_by")
+    if superseded_by is not None:
+        if not isinstance(superseded_by, str):
+            raise ValueError("superseded_by must be a lowercase memory slug or null")
+        _validate_slugs([superseded_by], field="superseded_by")
+        if superseded_by == header["memory_id"]:
+            raise ValueError("superseded_by must not reference the memory itself")
+    if status == "superseded" and superseded_by is None:
+        raise ValueError("superseded memory requires superseded_by")
+    if status != "superseded" and superseded_by is not None:
+        raise ValueError("superseded_by is only valid when memory status is superseded")
 
 
 def _validate_evidence(value: object) -> None:
@@ -1044,7 +1392,7 @@ def _experience_exists(vault: Path, project_id: str, experience_id: str) -> bool
 
 
 def validate_memory_source_references(vault: Path, header: dict[str, object]) -> None:
-    """Validate that every syntactically valid memory source still exists."""
+    """Validate source experiences and an optional same-scope active successor."""
     validate_document_header(header, kind="memory")
     sources = header["source_experiences"]
     assert isinstance(sources, list)
@@ -1061,6 +1409,23 @@ def validate_memory_source_references(vault: Path, header: dict[str, object]) ->
             raise ValueError(f"Ambiguous source experience: {source}")
         if not _experience_exists(vault, project_id, experience_id):
             raise ValueError(f"Unknown source experience: {project_id}/{experience_id}")
+    successor_id = header.get("superseded_by")
+    if successor_id is None:
+        return
+    assert isinstance(successor_id, str)
+    if scope == "shared":
+        successor_root = vault / "shared" / "memory"
+    else:
+        assert isinstance(current_project_id, str)
+        successor_root = vault / "projects" / current_project_id / "memory"
+    successor_path = _safe_child(successor_root, f"{successor_id}.md")
+    if not successor_path.is_file():
+        raise ValueError(f"Unknown superseded_by memory: {successor_id}")
+    successor, _ = _read_exact_document(successor_path, kind="memory")
+    if successor.get("scope") != scope or successor.get("project_id") != current_project_id:
+        raise ValueError("superseded_by must reference a memory in the same scope")
+    if _memory_status(successor) != "active":
+        raise ValueError("superseded_by must reference an active memory")
 
 
 def validate_experience_references(vault: Path, header: dict[str, object]) -> None:

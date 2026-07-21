@@ -28,7 +28,8 @@ Product repo
   active vaultの`vault_id`一致を検証します。
 - symlinkは人間の閲覧用であり、MCPとCLIの必須依存ではありません。
 - vault markerのmanagerとschemaを利用前に検証し、未対応schemaへの書き込みを拒否します。
-- 中央vaultの書き込みはatomic replaceとpath lockで破損を防ぎ、project metadata、experience、memory、tag taxonomyの更新は`expected_updated_at`による楽観的排他で競合上書きを拒否します。
+- 中央vaultの書き込みはatomic replace、knowledge全体lock、path lockで破損と参照検査中の競合を防ぎ、project metadata、experience、memory、tag taxonomyの更新は`expected_updated_at`による楽観的排他で競合上書きを拒否します。
+- Knowledge削除はdry-runを既定とし、revision一致、構造化参照ゼロ、validation可能、明示confirmを満たす場合だけdirectory entryをdurableに削除します。
 - 検索は不正文書を隔離し、exact getは対象IDの正規pathを直接検証します。不正文書の一覧は `refinery_validate` が返します。
 
 ## データフロー

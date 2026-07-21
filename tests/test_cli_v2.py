@@ -40,6 +40,19 @@ def test_parser_exposes_v2_commands(tmp_path: Path) -> None:
         ["experience", "search", "--target", str(project)]
     )
     assert experience_alias.project == str(project)
+    memory_delete = build_parser().parse_args(
+        [
+            "memory",
+            "delete",
+            "old-rule",
+            "--target",
+            str(project),
+            "--expected-updated-at",
+            "2026-07-21T00:00:00+00:00",
+        ]
+    )
+    assert memory_delete.confirm is False
+    assert memory_delete.scope == "project"
 
 
 def test_project_status_returns_nonzero_when_unconfigured(

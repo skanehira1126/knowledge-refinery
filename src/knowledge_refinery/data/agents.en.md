@@ -15,6 +15,8 @@ Use Knowledge Refinery to preserve reusable experience from this repository.
 - Use high confidence for reproducible direct evidence under stated conditions, medium for direct but limited evidence, and low for partial or indirect evidence or important unresolved uncertainty.
 - Choose a stable lowercase-slug `experience_id` before creation. After an ambiguous create outcome, exact-get or search that ID before retrying.
 - Update existing experience or memory with the current revision. Omitted optional fields are preserved, an empty list explicitly clears a list, and `clear_confidence: true` clears confidence.
+- Normal memory search includes active records only. When replacing one, save the active successor first, then mark the old memory `superseded` and link its same-scope `superseded_by`; use `retracted` when there is no successor.
+- Before physically deleting knowledge, run delete without confirmation and present its revision, references, and validation errors. After explicit user confirmation, confirm the same revision only when `can_delete` is true.
 - Do not discard an experience because its implementation was rejected or its evidence is untracked.
 - Do not commit product files merely to preserve evidence.
 - Use `refinery-memory` to distill repeatedly useful principles from experiences.

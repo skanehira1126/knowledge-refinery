@@ -46,7 +46,9 @@ git -C "$REFINERY_VAULT" init
 
 `vault init` はfilesystem上にvault markerと必要なディレクトリを作成し、そのvaultを
 ローカルMCPのactive vaultにします。Git repositoryの初期化、commit、push、backupは
-自動実行しません。Git履歴が必要な場合だけ、上の`git init`も実行します。
+自動実行しません。Git履歴が必要な場合だけ、上の`git init`も実行します。vaultをObsidianで
+開いたときのローカル設定をknowledge履歴へ混ぜないよう、`/.obsidian/`は`.gitignore`へ
+自動追加します。既存のignore設定は保持します。
 
 既存vaultへ切り替えるときは次を使います。active vaultはユーザー全体で1つのため、
 切り替えると他repoや別taskのMCP検索先も変わります。

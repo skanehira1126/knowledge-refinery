@@ -28,6 +28,7 @@ def test_init_vault_creates_central_layout(tmp_path: Path) -> None:
 
     assert result.root == root.resolve()
     assert (root / VAULT_MARKER).is_file()
+    assert (root / ".gitignore").read_text(encoding="utf-8") == "/.obsidian/\n"
     assert (root / "projects" / ".gitkeep").is_file()
     assert (root / "shared" / "memory" / "AGENTS.md").is_file()
     marker = yaml.safe_load((root / VAULT_MARKER).read_text(encoding="utf-8"))
@@ -44,6 +45,25 @@ def test_init_vault_preserves_user_files_without_force(tmp_path: Path) -> None:
 
     assert readme.read_text(encoding="utf-8") == "personal\n"
     assert readme not in result.changed
+
+
+def test_init_vault_appends_obsidian_ignore_without_replacing_existing_entries(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "refinery"
+    root.mkdir()
+    gitignore = root / ".gitignore"
+    gitignore.write_text(".DS_Store", encoding="utf-8")
+
+    result = init_vault(root)
+
+    assert gitignore.read_text(encoding="utf-8") == ".DS_Store\n/.obsidian/\n"
+    assert gitignore in result.changed
+
+    second_result = init_vault(root)
+
+    assert gitignore.read_text(encoding="utf-8") == ".DS_Store\n/.obsidian/\n"
+    assert gitignore not in second_result.changed
 
 
 def test_init_vault_force_preserves_immutable_vault_id(tmp_path: Path) -> None:

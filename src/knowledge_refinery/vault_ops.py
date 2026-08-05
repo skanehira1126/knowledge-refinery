@@ -158,6 +158,9 @@ def init_vault(root: Path, *, force: bool = False) -> VaultInitResult:
         migrate_marker = path == marker and marker.is_file() and read_vault_id(root) is None
         if _write_if_needed(path, content, force=force or migrate_marker):
             changed.append(path)
+    gitignore = root / ".gitignore"
+    if _ensure_gitignore(gitignore, "/.obsidian/"):
+        changed.append(gitignore)
     return VaultInitResult(root=root, changed=tuple(changed))
 
 
@@ -767,12 +770,13 @@ def _ensure_optional_link(target: Path, project_store: Path) -> Path:
     return link_path
 
 
-def _ensure_gitignore(path: Path, entry: str) -> None:
+def _ensure_gitignore(path: Path, entry: str) -> bool:
     current = path.read_text(encoding="utf-8") if path.exists() else ""
     if entry in current.splitlines():
-        return
+        return False
     separator = "" if not current or current.endswith("\n") else "\n"
     atomic_write_text(path, f"{current}{separator}{entry}\n")
+    return True
 
 
 def _vault_readme() -> str:

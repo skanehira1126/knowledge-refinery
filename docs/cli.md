@@ -9,6 +9,7 @@ knowledge-refinery vault configure --root PATH
 
 `init` はmarkerと基本layoutを作成し、active vaultも更新します。`configure` は既存vaultをactiveにします。
 vaultはfilesystem directoryであり、どちらも`git init`、commit、push、backupを実行しません。
+`init`はvaultの`.gitignore`へ`/.obsidian/`を追加し、既存のignore設定は保持します。
 active vaultはユーザー全体で1つなので、切り替えると他repoや別taskのMCP検索先も変わります。
 `vault init --force`は不変`vault_id`を保持しますが、vault直下のmanaged README/AGENTS templateを
 file単位で上書きします。local editsとGit差分を確認したうえで明示的に使います。

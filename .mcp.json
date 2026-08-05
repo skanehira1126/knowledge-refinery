@@ -5,7 +5,7 @@
       "description": "ローカルGitで履歴管理するexperience vaultを検索・更新します。",
       "cwd": ".",
       "command": "uv",
-      "args": ["run", "--frozen", "--project", ".", "knowledge-refinery", "mcp", "serve"]
+      "args": ["run", "--project", ".", "knowledge-refinery", "mcp", "serve"]
     }
   }
 }

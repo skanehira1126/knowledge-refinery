@@ -62,7 +62,7 @@ def _validate_mcp() -> None:
     expected_server = {
         "cwd": ".",
         "command": "uv",
-        "args": ["run", "--frozen", "--project", ".", "knowledge-refinery", "mcp", "serve"],
+        "args": ["run", "--project", ".", "knowledge-refinery", "mcp", "serve"],
     }
     for key, expected in expected_server.items():
         if server.get(key) != expected:

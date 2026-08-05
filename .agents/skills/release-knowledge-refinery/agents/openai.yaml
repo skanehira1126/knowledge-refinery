@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Knowledge Refinery"
+  short_description: "Knowledge Refineryの検証済みReleaseを作成"
+  default_prompt: "Use $release-knowledge-refinery to prepare and publish the next Knowledge Refinery release."

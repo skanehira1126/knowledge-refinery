@@ -8,6 +8,7 @@ Codex surfaces
              │
              ├─ REFINERY_CONFIG or XDG config directory → active vault
              └─ central filesystem vault（必要に応じて独立Git化）
+                 ├─ .gitignore（Obsidianのlocal設定を除外）
                  ├─ knowledge-tags.yaml（説明を追加した場合）
                  ├─ projects/<project_id>/project.yaml
                  ├─ projects/<project_id>/experiences

@@ -16,13 +16,15 @@ bash scripts/validate.sh
 
 `CODEX_HOME` が未設定の場合は `~/.codex` を使います。
 
-## lock更新
+## dependency更新
 
-dependencyを変更したときは次を実行し、`uv.lock` をcommit対象に含めます。
+このrepositoryはlibrary/pluginとして複数のPython環境で解決できることを優先し、`uv.lock`を
+version管理しません。dependencyを変更したときは次を実行し、宣言されたversion範囲から
+環境を再構築して検証します。
 
 ```bash
-uv lock
-uv run --frozen tox
+uv sync --extra dev --extra docs
+uv run tox
 ```
 
 ## Plugin更新の確認

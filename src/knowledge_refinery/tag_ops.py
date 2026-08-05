@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
 from pathlib import Path
-from typing import TypedDict
 
+from typing_extensions import TypedDict
 import yaml
 
 from knowledge_refinery.errors import RefineryCliError

@@ -5,7 +5,7 @@
 ```yaml
 schema_version: 2
 managed_by: knowledge-refinery
-cli_version: 0.2.0
+cli_version: 0.2.1
 vault_id: 0123456789abcdef0123456789abcdef
 ```
 

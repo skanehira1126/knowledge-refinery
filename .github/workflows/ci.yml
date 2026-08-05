@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - run: uv sync --frozen --extra dev --extra docs
+      - run: uv sync --extra dev --extra docs
       - run: uv run pytest
       - run: uv run mypy
       - run: uv run ruff check .

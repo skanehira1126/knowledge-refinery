@@ -1,25 +1,47 @@
 # アーキテクチャ
 
-```text
-Codex surfaces
-  └─ Global Plugin
-      ├─ refinery-project / experience / memory / maintenance Skills
-      └─ local stdio MCP (uv, frozen lock)
-             │
-             ├─ REFINERY_CONFIG or XDG config directory → active vault
-             └─ central filesystem vault（必要に応じて独立Git化）
-                 ├─ .gitignore（Obsidianのlocal設定を除外）
-                 ├─ knowledge-tags.yaml（説明を追加した場合）
-                 ├─ projects/<project_id>/project.yaml
-                 ├─ projects/<project_id>/experiences
-                 ├─ projects/<project_id>/memory
-                 └─ shared/memory
+Knowledge Refineryは、利用repo、グローバルPlugin、ローカルMCP、中央vaultを分離します。
+プロダクトのsourceとknowledgeの履歴を混ぜず、repo側には接続情報だけを置きます。
 
-Product repo
-  ├─ .refinery.yaml → project_id + enabled（version管理可能）
-  ├─ .refinery.local.yaml → vault_id（gitignoreするlocal binding）
-  └─ AGENTS.md → optional managed workflow block (`project setup --agents`)
+```mermaid
+flowchart TB
+    subgraph Repo["Product repo"]
+        RC[".refinery.yaml<br/>project_id + enabled"]
+        RL[".refinery.local.yaml<br/>vault_id"]
+        AG["AGENTS.md<br/>optional managed guidance"]
+    end
+
+    subgraph Plugin["Global Plugin"]
+        SK["4 Skills"]
+        MCP["local stdio MCP"]
+    end
+
+    CFG["User config<br/>active vault"]
+
+    subgraph Vault["Central filesystem vault"]
+        PM["projects/&lt;project_id&gt;<br/>metadata / experiences / memory"]
+        SM["shared/memory"]
+        KT["knowledge-tags.yaml"]
+    end
+
+    AG --> SK
+    RC --> MCP
+    RL --> MCP
+    SK --> MCP
+    MCP --> CFG
+    CFG --> Vault
+    MCP --> PM
+    MCP --> SM
+    MCP --> KT
 ```
+
+| 要素 | Source of truth | 役割 |
+|---|---|---|
+| 利用repo | `.refinery.yaml` | project IDと有効状態を共有する |
+| ローカルbinding | `.refinery.local.yaml` | repoと個人のvault IDを結び付ける |
+| Plugin | SkillsとMCP設定 | Codexの手順とtool interfaceを提供する |
+| ユーザー設定 | active vaultのpath | 現在接続する中央vaultを選ぶ |
+| 中央vault | project/shared knowledge | ナレッジの実体を保存する |
 
 ## 境界
 

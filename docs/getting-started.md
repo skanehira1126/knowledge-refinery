@@ -1,4 +1,23 @@
-# 導入
+# インストールと初期設定
+
+このページでは、Knowledge Refineryを使える状態までを順番にセットアップします。
+完了すると、任意のrepoから中央vaultを検索し、experienceとmemoryを記録できます。
+
+## 事前準備
+
+| 必要なもの | 用途 |
+|---|---|
+| CodexまたはChatGPT desktop app | PluginとSkillsを利用する |
+| Python 3.11以上 | CLIとローカルMCPを実行する |
+| `uv` | CLIのインストールとMCPの起動に使う |
+| knowledge保存用directory | 複数repoのknowledgeを集約する |
+
+セットアップは次の順序で進めます。
+
+```mermaid
+flowchart LR
+    P["1. Plugin"] --> C["2. CLI"] --> V["3. 中央vault"] --> R["4. repo登録"] --> D["5. doctor"]
+```
 
 ## 1. Pluginを追加
 
@@ -143,6 +162,10 @@ knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"
 ```
 
 一致しない場合はPluginとCLIの片方だけが更新されています。両方を同じreleaseへ揃えてから書き込みを開始します。
+
+!!! success "セットアップ完了"
+    `doctor`が`ok: yes`を返し、Plugin settingsに`knowledge-refinery`が表示されていれば準備完了です。
+    次は利用モードに応じて[最初のtask](#6-task)を開始します。
 
 ## 6. 最初のtask
 

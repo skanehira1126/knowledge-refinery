@@ -2,10 +2,11 @@
   "mcpServers": {
     "knowledge-refinery": {
       "title": "Knowledge Refinery",
-      "description": "ローカルGitで履歴管理するexperience vaultを検索・更新します。",
+      "description": "中央vaultのexperienceとmemoryを検索・更新し、任意でCodex deep searchを提供します。",
       "cwd": ".",
       "command": "uv",
-      "args": ["run", "--project", ".", "knowledge-refinery", "mcp", "serve"]
+      "args": ["run", "--project", ".", "knowledge-refinery", "mcp", "serve"],
+      "tool_timeout_sec": 300
     }
   }
 }

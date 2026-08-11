@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import anyio
@@ -9,7 +10,7 @@ from mcp import StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-def test_stdio_server_lists_expected_tools() -> None:
+def test_stdio_server_lists_expected_tools(tmp_path: Path) -> None:
     async def exercise_server() -> None:
         root = Path(__file__).resolve().parent.parent
         config = json.loads((root / ".mcp.json").read_text(encoding="utf-8"))
@@ -20,6 +21,10 @@ def test_stdio_server_lists_expected_tools() -> None:
             command=server["command"],
             args=server["args"],
             cwd=str(root) if server.get("cwd") == "." else server.get("cwd"),
+            env={
+                **os.environ,
+                "REFINERY_CONFIG": str(tmp_path / "config.yaml"),
+            },
         )
         async with stdio_client(parameters) as (reader, writer):
             async with ClientSession(reader, writer) as session:

@@ -1,3 +1,5 @@
+"""Validate tag taxonomy data and browse tag usage across the central vault."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,6 +32,8 @@ DEFAULT_TAG_DESCRIPTIONS = {
 
 
 class TagResult(TypedDict):
+    """Describe one tag and its aggregate document usage."""
+
     tag: str
     segment: str
     description: str | None
@@ -43,6 +47,8 @@ class TagResult(TypedDict):
 
 
 class TagBrowseResult(TypedDict):
+    """Describe the immediate children returned by tag browsing."""
+
     parent_tag: str | None
     all_projects: bool
     includes_shared_memory: bool
@@ -51,6 +57,8 @@ class TagBrowseResult(TypedDict):
 
 
 class TagSearchResult(TypedDict):
+    """Describe tags whose path or description matches all search terms."""
+
     terms: list[str]
     all_projects: bool
     includes_shared_memory: bool
@@ -60,10 +68,13 @@ class TagSearchResult(TypedDict):
 
 @dataclass(frozen=True)
 class TagTaxonomy:
+    """Hold taxonomy descriptions and their optimistic-lock timestamp."""
+
     updated_at: str | None
     descriptions: dict[str, str]
 
     def as_dict(self) -> dict[str, object]:
+        """Serialize the taxonomy in its persisted schema."""
         return {
             "schema_version": TAG_TAXONOMY_SCHEMA_VERSION,
             "updated_at": self.updated_at,
@@ -75,6 +86,7 @@ class TagTaxonomy:
 
 
 def validate_tag_path(tag: str, *, field: str = "tag") -> None:
+    """Validate a one-to-three-segment lowercase tag path."""
     segments = tag.split("/")
     if len(segments) > MAX_TAG_DEPTH or any(
         not SLUG_RE.fullmatch(segment) for segment in segments
@@ -83,6 +95,7 @@ def validate_tag_path(tag: str, *, field: str = "tag") -> None:
 
 
 def read_tag_taxonomy(vault: Path) -> TagTaxonomy:
+    """Read the vault taxonomy, including built-in top-level descriptions."""
     path = vault / TAG_TAXONOMY
     if not path.is_file():
         return TagTaxonomy(updated_at=None, descriptions=dict(DEFAULT_TAG_DESCRIPTIONS))
@@ -109,6 +122,7 @@ def update_tag_description(
     description: str,
     expected_updated_at: str | None,
 ) -> TagTaxonomy:
+    """Create or update a description using optimistic concurrency control."""
     validate_tag_path(tag)
     if not description.strip():
         raise ValueError("tag description must not be empty")
@@ -140,6 +154,7 @@ def update_tag_description(
 
 
 def validate_tag_taxonomy(raw: object) -> None:
+    """Validate the complete persisted tag-taxonomy structure."""
     if not isinstance(raw, dict):
         raise ValueError("tag taxonomy must be a mapping")
     if raw.get("schema_version") != TAG_TAXONOMY_SCHEMA_VERSION:
@@ -181,6 +196,7 @@ def browse_knowledge_tags(
     parent_tag: str | None = None,
     all_projects: bool = False,
 ) -> TagBrowseResult:
+    """List immediate tag children and their usage for the requested scope."""
     if parent_tag is not None:
         validate_tag_path(parent_tag, field="parent_tag")
     context_from_vault(vault, project_id)
@@ -204,6 +220,7 @@ def search_knowledge_tags(
     terms: list[str],
     all_projects: bool = False,
 ) -> TagSearchResult:
+    """Search tag paths and descriptions using AND-matched terms."""
     if not terms or any(not term.strip() for term in terms):
         raise ValueError("tag search requires one or more non-empty terms")
     context_from_vault(vault, project_id)

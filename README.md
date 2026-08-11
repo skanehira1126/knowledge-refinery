@@ -59,6 +59,7 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 - 成功、失敗、不採用案をexperienceとして記録する
 - experienceから再利用可能なproject memoryとshared memoryを抽出する
 - 現在のrepoから、必要に応じて他repoのknowledgeまで検索する
+- 任意でCodexを使い、中央vaultの検証済みsnapshotから根拠付きの深い検索を行う
 - repoごとに利用を無効化・再有効化する
 - 中央vaultを独立したGit repositoryとして履歴管理する
 
@@ -73,6 +74,7 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 - [repoの有効・無効](docs/project-lifecycle.md)
 - [ナレッジ運用](docs/knowledge-operations.md)
 - [CLIリファレンス](docs/cli.md)
+- [MCP toolsとdeep search](docs/mcp.md)
 - [仕組みとデータ配置](docs/architecture.md)
 - [トラブルシューティング](docs/troubleshooting.md)
 

@@ -1,7 +1,11 @@
+"""Expose validated Knowledge Refinery domain operations through local stdio MCP."""
+
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from pathlib import Path
+import sys
 from typing import Any
 from typing import Literal
 from typing import TypeVar
@@ -11,6 +15,10 @@ import yaml
 
 from knowledge_refinery import get_version
 from knowledge_refinery.config_ops import get_active_vault
+from knowledge_refinery.config_ops import get_deep_search_model
+from knowledge_refinery.config_ops import get_deep_search_settings
+from knowledge_refinery.deep_search_ops import DeepSearchResult
+from knowledge_refinery.deep_search_ops import run_deep_search
 from knowledge_refinery.errors import RefineryCliError
 from knowledge_refinery.experience_ops import SearchFilters
 from knowledge_refinery.experience_ops import parse_datetime_filter
@@ -335,6 +343,23 @@ def refinery_search_memory(
     return [_entry(entry, vault) for entry in entries]
 
 
+async def refinery_deep_search(
+    project_path: str,
+    question: str,
+) -> DeepSearchResult:
+    """検証済みvault snapshotをCodexで深く読み、根拠source ID付きで質問へ回答します。"""
+    vault = get_active_vault()
+    project_id = _validated_project_id(vault, project_path)
+    model = get_deep_search_model()
+    return await asyncio.to_thread(
+        run_deep_search,
+        vault,
+        project_id,
+        question,
+        model,
+    )
+
+
 @mcp.tool()
 def refinery_get_memory(
     project_path: str,
@@ -484,5 +509,27 @@ def _validate_document_location(
     seen_ids[key] = path
 
 
+def register_configured_tools(server: FastMCP = mcp) -> bool:
+    """Publish optional tools from validated startup configuration.
+
+    Deep search configuration errors are reported to stderr and leave the rest of the
+    MCP server available. The return value indicates whether the optional tool was added.
+    """
+    try:
+        enabled, _ = get_deep_search_settings()
+    except (OSError, ValueError) as error:
+        print(
+            f"warning: deep search tool is disabled because its configuration is invalid: {error}",
+            file=sys.stderr,
+        )
+        return False
+    if not enabled:
+        return False
+    server.add_tool(refinery_deep_search, structured_output=True)
+    return True
+
+
 def serve() -> None:
+    """Register optional tools once, then run the default MCP server over stdio."""
+    register_configured_tools()
     mcp.run(transport="stdio")

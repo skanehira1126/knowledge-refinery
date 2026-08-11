@@ -1,3 +1,5 @@
+"""Provide atomic file replacement and cooperative interprocess locking."""
+
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
@@ -62,6 +64,7 @@ class InterprocessLock(AbstractContextManager["InterprocessLock"]):
         stale_after: float = 60.0,
         poll_interval: float = 0.05,
     ) -> None:
+        """Configure a lock derived from a target path and timeout policy."""
         self.path = target.with_name(f".{target.name}.lock")
         self.timeout = timeout
         self.stale_after = stale_after
@@ -70,6 +73,7 @@ class InterprocessLock(AbstractContextManager["InterprocessLock"]):
         self.acquired = False
 
     def __enter__(self) -> InterprocessLock:
+        """Acquire the lock, recovering stale locks and enforcing the timeout."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         deadline = time.monotonic() + self.timeout
         while True:
@@ -108,6 +112,7 @@ class InterprocessLock(AbstractContextManager["InterprocessLock"]):
             pass
 
     def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+        """Release the lock only when this instance still owns it."""
         if not self.acquired:
             return
         try:
@@ -128,4 +133,5 @@ def interprocess_lock(
     timeout: float = 10.0,
     stale_after: float = 60.0,
 ) -> InterprocessLock:
+    """Create an interprocess lock associated with a target file."""
     return InterprocessLock(target, timeout=timeout, stale_after=stale_after)

@@ -56,6 +56,26 @@ uv tool dir --bin
 
 `uv tool dir --bin` の出力がPATHに含まれることを確認します。
 
+## deep search toolが表示されない・失敗する
+
+まず公開設定を確認します。
+
+```bash
+knowledge-refinery deep-search status --json
+```
+
+`enabled: true`へ変更した直後はMCP serverまたはCodex task/sessionを再起動します。通常toolは表示される
+のにdeep searchだけが表示されない場合、設定ファイルの`deep_search.enabled`がbooleanか確認します。
+不正なdeep search設定は既存MCPを止めず、そのtoolだけをfail-closedで非公開にします。
+
+実行時の`deep_search_codex_missing`はCodex CLIがPATHにない状態、
+`deep_search_codex_failed`は認証、model access、Codex側の実行失敗を示します。
+`deep_search_unknown_model`はmodel slugがrefresh済みcatalogにない状態、
+`deep_search_model_catalog_failed`はcatalog refresh自体の認証・network・CLI失敗です。
+`deep_search_timeout`では質問を絞るか、`deep-search model MODEL`でより速いmodelを設定して
+再実行します。通常の
+`refinery_search_experiences`と`refinery_search_memory`はdeep searchと独立して利用できます。
+
 ## validationエラー
 
 `knowledge-refinery doctor --target "$PROJECT_ROOT" --json`のvalidation errors、または

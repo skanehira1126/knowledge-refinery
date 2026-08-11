@@ -2,9 +2,12 @@ from pathlib import Path
 from typing import Any
 from typing import cast
 
+import anyio
+from mcp.server.fastmcp import FastMCP
 import pytest
 
 from knowledge_refinery.config_ops import set_active_vault
+from knowledge_refinery.config_ops import set_deep_search_enabled
 from knowledge_refinery.mcp_server import refinery_browse_knowledge_tags
 from knowledge_refinery.mcp_server import refinery_get_experience
 from knowledge_refinery.mcp_server import refinery_get_memory
@@ -19,6 +22,7 @@ from knowledge_refinery.mcp_server import refinery_search_memory
 from knowledge_refinery.mcp_server import refinery_update_project_metadata
 from knowledge_refinery.mcp_server import refinery_update_tag_description
 from knowledge_refinery.mcp_server import refinery_validate
+from knowledge_refinery.mcp_server import register_configured_tools
 from knowledge_refinery.tag_ops import TAG_TAXONOMY
 from knowledge_refinery.vault_ops import disable_project
 from knowledge_refinery.vault_ops import init_vault
@@ -35,6 +39,45 @@ def configured_mcp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     setup_project(project, vault, project_id="pybr")
     set_active_vault(vault)
     return vault
+
+
+def test_deep_search_tool_is_registered_only_when_enabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured_mcp(tmp_path, monkeypatch)
+
+    async def tool_names(server: FastMCP) -> set[str]:
+        return {tool.name for tool in await server.list_tools()}
+
+    disabled_server = FastMCP("disabled")
+    assert register_configured_tools(disabled_server) is False
+    assert "refinery_deep_search" not in anyio.run(tool_names, disabled_server)
+
+    set_deep_search_enabled(True, model="gpt-5.6-sol")
+    enabled_server = FastMCP("enabled")
+    assert register_configured_tools(enabled_server) is True
+    tools = anyio.run(enabled_server.list_tools)
+    deep_search = next(tool for tool in tools if tool.name == "refinery_deep_search")
+    assert deep_search.description == (
+        "検証済みvault snapshotをCodexで深く読み、根拠source ID付きで質問へ回答します。"
+    )
+    assert deep_search.inputSchema.get("required") == ["project_path", "question"]
+
+
+def test_invalid_deep_search_config_fails_closed_without_stopping_mcp(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configured_mcp(tmp_path, monkeypatch)
+    config = tmp_path / "config.yaml"
+    config.write_text("vault: /unused\ndeep_search:\n  enabled: true\n", encoding="utf-8")
+    server = FastMCP("invalid-config")
+
+    assert register_configured_tools(server) is False
+
+    assert "configuration is invalid" in capsys.readouterr().err
+    assert anyio.run(server.list_tools) == []
 
 
 def test_local_mcp_records_searches_and_validates(
@@ -85,7 +128,7 @@ def test_local_mcp_records_searches_and_validates(
     assert tagged_metadata["technologies"] == ["Python"]
     assert refinery_list_projects() == [tagged_metadata]
     assert refinery_info() == {
-        "version": "0.2.1",
+        "version": "0.3.0",
         "schema_version": 2,
         "project_metadata_schema_version": 1,
         "tag_taxonomy_schema_version": 1,

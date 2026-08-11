@@ -3,27 +3,48 @@ site_description: Central development knowledge for Codex with optional Git hist
 site_url: https://skanehira1126.github.io/knowledge-refinery/
 repo_url: https://github.com/skanehira1126/knowledge-refinery
 repo_name: skanehira1126/knowledge-refinery
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 Shinichi Kanehira
 theme:
   name: material
   language: ja
+  icon:
+    logo: material/filter-variant
+    repo: fontawesome/brands/github
   features:
     - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
+    - navigation.footer
     - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
     - content.code.copy
+    - toc.follow
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: teal
       accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: ダークモードに切り替える
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: teal
       accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: ライトモードに切り替える
 markdown_extensions:
   - admonition
   - attr_list
   - def_list
+  - md_in_html
   - pymdownx.details
   - pymdownx.superfences:
       custom_fences:
@@ -35,14 +56,19 @@ markdown_extensions:
 extra_javascript:
   - javascripts/mermaid.mjs
 nav:
-  - 概要: index.md
-  - 導入: getting-started.md
-  - エージェントへの頼み方: agent-workflow.md
-  - AGENTS.md追記サンプル: agents-guidance-examples.md
-  - repoの有効・無効: project-lifecycle.md
-  - ナレッジモデルと検索: knowledge-model.md
-  - ナレッジ運用: knowledge-operations.md
-  - アーキテクチャ: architecture.md
+  - ホーム: index.md
+  - はじめる:
+      - インストールと初期設定: getting-started.md
+      - 利用モードと依頼例: agent-workflow.md
+      - AGENTS.mdの設定例: agents-guidance-examples.md
+  - 基本概念:
+      - ナレッジモデルと検索: knowledge-model.md
+      - アーキテクチャ: architecture.md
+  - 運用ガイド:
+      - repoの有効化・無効化: project-lifecycle.md
+      - ナレッジの保守: knowledge-operations.md
+      - Gitとバックアップ: git-operations.md
+      - トラブルシューティング: troubleshooting.md
   - リファレンス:
       - CLI: cli.md
       - MCP tools: mcp.md
@@ -52,6 +78,5 @@ nav:
       - refinery-experience: skills/refinery-experience.md
       - refinery-memory: skills/refinery-memory.md
       - refinery-maintenance: skills/refinery-maintenance.md
-  - Git運用: git-operations.md
-  - トラブルシューティング: troubleshooting.md
-  - 開発・リリース: development.md
+  - コントリビューション:
+      - 開発・リリース: development.md

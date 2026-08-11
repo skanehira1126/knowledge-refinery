@@ -1,3 +1,5 @@
+"""Expose validated Knowledge Refinery domain operations through local stdio MCP."""
+
 from __future__ import annotations
 
 import asyncio
@@ -508,6 +510,11 @@ def _validate_document_location(
 
 
 def register_configured_tools(server: FastMCP = mcp) -> bool:
+    """Publish optional tools from validated startup configuration.
+
+    Deep search configuration errors are reported to stderr and leave the rest of the
+    MCP server available. The return value indicates whether the optional tool was added.
+    """
     try:
         enabled, _ = get_deep_search_settings()
     except (OSError, ValueError) as error:
@@ -523,5 +530,6 @@ def register_configured_tools(server: FastMCP = mcp) -> bool:
 
 
 def serve() -> None:
+    """Register optional tools once, then run the default MCP server over stdio."""
     register_configured_tools()
     mcp.run(transport="stdio")

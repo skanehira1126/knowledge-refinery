@@ -1,3 +1,5 @@
+"""Build a validated knowledge snapshot and query it through isolated Codex Exec."""
+
 from collections.abc import Sequence
 import json
 import os
@@ -41,16 +43,22 @@ Return only JSON matching the supplied output schema.
 
 
 class DeepSearchFinding(TypedDict):
+    """One synthesized finding with manifest-backed evidence identifiers."""
+
     summary: str
     source_ids: list[str]
 
 
 class DeepSearchSource(TypedDict):
+    """A source cited by the result after its title is normalized from the manifest."""
+
     source_id: str
     title: str
 
 
 class DeepSearchResult(TypedDict):
+    """Validated structured response returned by the deep search MCP tool."""
+
     answer: str
     findings: list[DeepSearchFinding]
     sources: list[DeepSearchSource]
@@ -60,6 +68,8 @@ class DeepSearchResult(TypedDict):
 
 
 class SnapshotDocument(TypedDict):
+    """Manifest entry for one schema-valid experience or memory document."""
+
     source_id: str
     path: str
     title: str
@@ -69,6 +79,8 @@ class SnapshotDocument(TypedDict):
 
 
 class SnapshotManifest(TypedDict):
+    """Search corpus index and non-fatal exclusions supplied to Codex."""
+
     schema_version: int
     current_project_id: str
     priority: list[str]
@@ -79,6 +91,12 @@ class SnapshotManifest(TypedDict):
 def build_search_snapshot(
     vault: Path, current_project_id: str, destination: Path
 ) -> SnapshotManifest:
+    """Copy only validated vault knowledge into a self-contained search corpus.
+
+    Invalid projects and documents outside the current project are excluded with
+    sanitized warnings. The current project metadata is a hard gate because it
+    establishes the repository identity used to prioritize search results.
+    """
     root = validate_vault_root(vault)
     read_project_metadata(root, current_project_id)
     destination.mkdir(parents=True, exist_ok=True)
@@ -154,6 +172,11 @@ def run_deep_search(
     codex_bin: str = "codex",
     timeout: int = DEEP_SEARCH_TIMEOUT_SECONDS,
 ) -> DeepSearchResult:
+    """Execute one read-only Codex search against a disposable validated snapshot.
+
+    The temporary directory owns the corpus, output schema, and final response, so
+    cleanup occurs for successful searches, validation failures, and subprocess errors.
+    """
     if not question.strip():
         raise ValueError("deep search question must not be empty")
     if not model.strip():
@@ -194,6 +217,12 @@ def validate_codex_model(
     codex_bin: str = "codex",
     timeout: int = MODEL_CATALOG_TIMEOUT_SECONDS,
 ) -> None:
+    """Refresh the Codex model catalog and reject an unknown model slug.
+
+    This check catches configuration mistakes before they are persisted. Runtime
+    entitlement, capacity, and usage-limit failures remain the responsibility of the
+    subsequent ``codex exec`` invocation.
+    """
     if not model.strip() or model != model.strip():
         raise ValueError("deep search model must be a non-empty string without surrounding space")
     try:
@@ -270,6 +299,11 @@ def _collect_documents(
     warnings: list[str],
     seen_source_ids: set[str],
 ) -> None:
+    """Validate eligible Markdown documents and add safe copies to the manifest.
+
+    Document content and validation errors are treated as untrusted. Exclusion warnings
+    therefore contain only vault-relative paths and fixed reason categories.
+    """
     if not source_root.is_dir():
         return
     for source_path in sorted(source_root.glob("*.md")):
@@ -319,6 +353,7 @@ def _source_identity(
     kind: str,
     project_id: str | None,
 ) -> tuple[str, str | None]:
+    """Derive a stable source ID while enforcing header, path, and scope agreement."""
     if kind == "experiences":
         if project_id is None or header.get("project_id") != project_id:
             raise ValueError("experience project_id must match its project path")
@@ -341,6 +376,7 @@ def _source_identity(
 
 
 def _write_taxonomy(vault: Path, destination: Path, warnings: list[str]) -> None:
+    """Write validated tag context, falling back to built-in taxonomy descriptions."""
     try:
         taxonomy = read_tag_taxonomy(vault).as_dict()
     except (OSError, ValueError, RefineryCliError):
@@ -367,6 +403,11 @@ def _codex_command(
     schema_path: Path,
     output_path: Path,
 ) -> list[str]:
+    """Build the non-interactive Codex command with search capabilities disabled.
+
+    The question is intentionally absent from the returned argv and is supplied to the
+    process over stdin by :func:`_run_codex`.
+    """
     developer_override = "developer_instructions=" + json.dumps(
         DEVELOPER_INSTRUCTIONS, ensure_ascii=False
     )
@@ -402,6 +443,7 @@ def _codex_command(
 
 
 def _run_codex(command: Sequence[str], question: str, *, timeout: int, output_path: Path) -> None:
+    """Run Codex in a new process group and convert failures to actionable CLI errors."""
     try:
         process = subprocess.Popen(
             command,
@@ -453,6 +495,7 @@ def _run_codex(command: Sequence[str], question: str, *, timeout: int, output_pa
 
 
 def _terminate_process(process: subprocess.Popen[str]) -> None:
+    """Terminate a timed-out Codex process group, escalating to a kill after five seconds."""
     if process.poll() is not None:
         return
     try:
@@ -476,6 +519,11 @@ def _terminate_process(process: subprocess.Popen[str]) -> None:
 
 
 def _validate_result(raw: object, manifest: SnapshotManifest, *, model: str) -> DeepSearchResult:
+    """Validate result shape and reject every citation absent from the snapshot manifest.
+
+    Source titles and the model field are replaced with server-owned values so untrusted
+    model output cannot redefine provenance metadata.
+    """
     if not isinstance(raw, dict):
         raise _invalid_result("result must be an object")
     expected_fields = {
@@ -521,6 +569,7 @@ def _validate_result(raw: object, manifest: SnapshotManifest, *, model: str) -> 
 
 
 def _validate_findings(raw: object) -> list[DeepSearchFinding]:
+    """Validate the finding list without accepting extra or missing fields."""
     if not isinstance(raw, list):
         raise _invalid_result("findings must be a list")
     findings: list[DeepSearchFinding] = []
@@ -535,6 +584,7 @@ def _validate_findings(raw: object) -> list[DeepSearchFinding]:
 
 
 def _validate_sources(raw: object) -> list[DeepSearchSource]:
+    """Validate source entries and require unique, non-empty identifiers."""
     if not isinstance(raw, list):
         raise _invalid_result("sources must be a list")
     sources: list[DeepSearchSource] = []
@@ -554,12 +604,14 @@ def _validate_sources(raw: object) -> list[DeepSearchSource]:
 
 
 def _string_list(raw: object, *, field: str) -> list[str]:
+    """Return a plain string list or raise a result-contract error for ``field``."""
     if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
         raise _invalid_result(f"{field} must be a list of strings")
     return list(raw)
 
 
 def _invalid_result(detail: str) -> RefineryCliError:
+    """Create the consistent public error used for invalid generated output."""
     return RefineryCliError(
         code="deep_search_invalid_output",
         summary="Codex deep search returned data that failed validation.",
@@ -569,6 +621,7 @@ def _invalid_result(detail: str) -> RefineryCliError:
 
 
 def _result_schema() -> dict[str, object]:
+    """Return the strict JSON Schema passed to Codex for its final response."""
     string_array = {"type": "array", "items": {"type": "string"}}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -616,5 +669,6 @@ def _result_schema() -> dict[str, object]:
 
 
 def _write_text(path: Path, content: str) -> None:
+    """Write one file beneath the already isolated temporary snapshot directory."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")

@@ -1,3 +1,5 @@
+"""Command-line interface for vault, project, knowledge, and MCP lifecycle operations."""
+
 from __future__ import annotations
 
 import argparse
@@ -994,6 +996,7 @@ def run_mcp_serve(args: argparse.Namespace) -> int:
 
 
 def run_deep_search_enable(args: argparse.Namespace) -> int:
+    """Validate the selected model, enable publication, and request an MCP restart."""
     validate_codex_model(args.model)
     path = set_deep_search_enabled(True, model=args.model)
     print("Deep search: enabled")
@@ -1004,6 +1007,7 @@ def run_deep_search_enable(args: argparse.Namespace) -> int:
 
 
 def run_deep_search_disable(args: argparse.Namespace) -> int:
+    """Disable future MCP publication while preserving the configured model."""
     del args
     path = set_deep_search_enabled(False)
     print("Deep search: disabled")
@@ -1013,6 +1017,7 @@ def run_deep_search_disable(args: argparse.Namespace) -> int:
 
 
 def run_deep_search_model(args: argparse.Namespace) -> int:
+    """Validate and update the server-owned model without changing tool visibility."""
     validate_codex_model(args.model)
     path = set_deep_search_model(args.model)
     print(f"Deep search model: {args.model}")
@@ -1021,6 +1026,7 @@ def run_deep_search_model(args: argparse.Namespace) -> int:
 
 
 def run_deep_search_status(args: argparse.Namespace) -> int:
+    """Print validated deep search visibility and model configuration."""
     enabled, model = get_deep_search_settings()
     payload = {
         "enabled": enabled,

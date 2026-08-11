@@ -1,3 +1,5 @@
+"""Read and update user-wide Knowledge Refinery settings without dropping unknown keys."""
+
 from __future__ import annotations
 
 import os
@@ -14,6 +16,7 @@ MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def config_path() -> Path:
+    """Resolve the user config path, honoring the test and automation override."""
     override = os.environ.get("REFINERY_CONFIG")
     if override:
         return Path(override).expanduser()
@@ -22,6 +25,7 @@ def config_path() -> Path:
 
 
 def set_active_vault(vault: Path) -> Path:
+    """Validate and persist the active vault while preserving unrelated settings."""
     root = _validate_vault(vault)
     raw = _read_config(required=False)
     raw["vault"] = str(root)
@@ -29,6 +33,11 @@ def set_active_vault(vault: Path) -> Path:
 
 
 def set_deep_search_enabled(enabled: bool, *, model: str | None = None) -> Path:
+    """Persist deep search visibility and require a valid model whenever enabled.
+
+    A supplied model replaces the current value. Disabling preserves a previously
+    selected model so the user can inspect or reuse it later.
+    """
     raw = _read_config(required=True)
     if not isinstance(raw.get("vault"), str):
         raise ValueError(
@@ -49,6 +58,7 @@ def set_deep_search_enabled(enabled: bool, *, model: str | None = None) -> Path:
 
 
 def set_deep_search_model(model: str) -> Path:
+    """Persist a structurally valid model without changing deep search visibility."""
     raw = _read_config(required=True)
     if not isinstance(raw.get("vault"), str):
         raise ValueError(
@@ -63,6 +73,11 @@ def set_deep_search_model(model: str) -> Path:
 
 
 def get_deep_search_settings() -> tuple[bool, str | None]:
+    """Return validated visibility and model settings, defaulting to disabled.
+
+    Malformed settings raise instead of silently enabling or partially configuring the
+    optional MCP tool, allowing startup registration to fail closed.
+    """
     raw = _read_config(required=False)
     deep_search = raw.get("deep_search")
     if deep_search is None:
@@ -89,11 +104,13 @@ def get_deep_search_settings() -> tuple[bool, str | None]:
 
 
 def is_deep_search_enabled() -> bool:
+    """Return whether valid configuration requests publication of the optional tool."""
     enabled, _ = get_deep_search_settings()
     return enabled
 
 
 def get_deep_search_model() -> str:
+    """Return the configured model only when deep search is currently enabled."""
     enabled, model = get_deep_search_settings()
     if not enabled or model is None:
         raise ValueError("Deep search is disabled or has no configured model")
@@ -101,6 +118,7 @@ def get_deep_search_model() -> str:
 
 
 def _write_config(raw: dict[str, object]) -> Path:
+    """Atomically render the complete user config mapping as YAML."""
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(
@@ -111,6 +129,7 @@ def _write_config(raw: dict[str, object]) -> Path:
 
 
 def get_active_vault() -> Path:
+    """Resolve and validate the environment override or persisted active vault."""
     environment = os.environ.get("REFINERY_VAULT")
     if environment:
         return _validate_vault(Path(environment))
@@ -122,6 +141,11 @@ def get_active_vault() -> Path:
 
 
 def _read_config(*, required: bool) -> dict[str, object]:
+    """Load the YAML config as a string-keyed mapping.
+
+    ``required=False`` permits a missing file for default-disabled feature discovery,
+    but malformed existing files are always rejected.
+    """
     path = config_path()
     if not path.is_file():
         if required:
@@ -139,6 +163,7 @@ def _read_config(*, required: bool) -> dict[str, object]:
 
 
 def _validate_vault(path: Path) -> Path:
+    """Validate a vault and add user-config context to domain validation errors."""
     try:
         return validate_vault_root(path)
     except ValueError as error:
@@ -146,6 +171,7 @@ def _validate_vault(path: Path) -> Path:
 
 
 def _validate_model_name(model: str) -> str:
+    """Reject blank or unsafe model names before they reach subprocess arguments."""
     normalized = model.strip()
     if not normalized or normalized != model or not MODEL_NAME_RE.fullmatch(model):
         raise ValueError(

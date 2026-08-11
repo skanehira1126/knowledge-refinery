@@ -1,3 +1,5 @@
+"""Initialize central vaults and manage repository-to-project registrations."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -29,12 +31,16 @@ VAULT_MANAGER = "knowledge-refinery"
 
 @dataclass(frozen=True)
 class VaultInitResult:
+    """Report the vault root and files changed during initialization."""
+
     root: Path
     changed: tuple[Path, ...]
 
 
 @dataclass(frozen=True)
 class ProjectSetupResult:
+    """Report paths and identity established while setting up a project."""
+
     project_id: str
     project_store: Path
     metadata_path: Path
@@ -45,6 +51,8 @@ class ProjectSetupResult:
 
 @dataclass(frozen=True)
 class ProjectContext:
+    """Bind a repository project to its central-vault storage context."""
+
     project_root: Path
     project_id: str
     project_store: Path
@@ -53,6 +61,8 @@ class ProjectContext:
 
 @dataclass(frozen=True)
 class ProjectConfig:
+    """Represent the repository-local project configuration."""
+
     schema_version: int
     project_id: str
     enabled: bool
@@ -61,6 +71,8 @@ class ProjectConfig:
 
 @dataclass(frozen=True)
 class ProjectMetadata:
+    """Represent searchable project metadata stored in the central vault."""
+
     schema_version: int
     project_id: str
     name: str
@@ -71,6 +83,7 @@ class ProjectMetadata:
     updated_at: str
 
     def as_dict(self) -> dict[str, object]:
+        """Serialize project metadata in its persisted schema."""
         return {
             "schema_version": self.schema_version,
             "project_id": self.project_id,
@@ -85,6 +98,8 @@ class ProjectMetadata:
 
 @dataclass(frozen=True)
 class ProjectStatus:
+    """Describe project configuration, vault identity, and readiness checks."""
+
     project_root: Path
     config_path: Path
     config_exists: bool
@@ -105,6 +120,7 @@ class ProjectStatus:
 
     @property
     def state(self) -> str:
+        """Return the high-level configuration state."""
         if not self.config_exists:
             return "unconfigured"
         if not self.config_valid:
@@ -113,6 +129,7 @@ class ProjectStatus:
 
     @property
     def ready(self) -> bool:
+        """Return whether all prerequisites for knowledge operations are valid."""
         return bool(
             self.config_valid
             and self.enabled
@@ -133,6 +150,7 @@ def _write_if_needed(path: Path, content: str, *, force: bool) -> bool:
 
 
 def init_vault(root: Path, *, force: bool = False) -> VaultInitResult:
+    """Initialize or migrate a supported central vault directory."""
     root = root.expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     changed: list[Path] = []
@@ -176,6 +194,7 @@ def setup_project(
     create_link: bool = False,
     _allow_disabled: bool = False,
 ) -> ProjectSetupResult:
+    """Register a repository project and bind it to a central vault."""
     target = target.expanduser().resolve()
     vault = vault.expanduser().resolve()
     if not target.is_dir():
@@ -330,6 +349,7 @@ def _validate_setup_metadata(
 
 
 def read_project_config(project: Path) -> ProjectConfig:
+    """Read and validate repository-local Knowledge Refinery configuration."""
     config_path = project.expanduser().resolve() / PROJECT_CONFIG
     if not config_path.is_file():
         raise ValueError(f"Missing {PROJECT_CONFIG} in {project}")
@@ -357,6 +377,7 @@ def read_project_config(project: Path) -> ProjectConfig:
 
 
 def resolve_project_id(project: Path, vault: Path | None = None) -> str:
+    """Resolve an enabled repository project ID and optionally verify vault identity."""
     config = read_project_config(project)
     if not config.enabled:
         raise ValueError(
@@ -371,6 +392,7 @@ def resolve_project_id(project: Path, vault: Path | None = None) -> str:
 
 
 def set_project_enabled(project: Path, *, enabled: bool) -> ProjectConfig:
+    """Persist the repository project's enabled state."""
     project_root = project.expanduser().resolve()
     config = read_project_config(project_root)
     atomic_write_text(
@@ -414,6 +436,7 @@ def enable_project(
     *,
     create_link: bool = False,
 ) -> ProjectSetupResult:
+    """Re-enable a configured project and restore its vault registration."""
     config = read_project_config(target)
     return setup_project(
         target,
@@ -425,6 +448,7 @@ def enable_project(
 
 
 def disable_project(target: Path) -> ProjectConfig:
+    """Disable a project and remove its optional vault symlink."""
     project_root = target.expanduser().resolve()
     config = set_project_enabled(project_root, enabled=False)
     link_path = project_root / PROJECT_LINK
@@ -434,6 +458,7 @@ def disable_project(target: Path) -> ProjectConfig:
 
 
 def inspect_project(project: Path, vault: Path | None) -> ProjectStatus:
+    """Inspect configuration, registration, metadata, and optional link health."""
     project_root = project.expanduser().resolve()
     project_config_path = project_root / PROJECT_CONFIG
     try:
@@ -515,6 +540,7 @@ def _link_state(project_root: Path, expected_store: Path | None) -> str:
 
 
 def context_from_vault(vault: Path, project_id: str) -> ProjectContext:
+    """Build project context from an explicit vault and registered project ID."""
     vault_root = validate_vault_root(vault)
     _validate_project_id(project_id)
     project_store = vault_root / "projects" / project_id
@@ -524,6 +550,7 @@ def context_from_vault(vault: Path, project_id: str) -> ProjectContext:
 
 
 def resolve_project_context(project: Path, vault: Path | None = None) -> ProjectContext:
+    """Resolve full vault context from repository configuration and optional link."""
     project_root = project.expanduser().resolve()
     if vault is not None:
         project_id = resolve_project_id(project_root, vault)
@@ -545,16 +572,19 @@ def resolve_project_context(project: Path, vault: Path | None = None) -> Project
 
 
 def list_project_ids(vault: Path) -> list[str]:
+    """List registered project IDs in stable order."""
     root = validate_vault_root(vault)
     return sorted(path.name for path in (root / "projects").iterdir() if path.is_dir())
 
 
 def list_project_metadata(vault: Path) -> list[ProjectMetadata]:
+    """Read metadata for every registered vault project."""
     root = validate_vault_root(vault)
     return [read_project_metadata(root, project_id) for project_id in list_project_ids(root)]
 
 
 def read_project_metadata(vault: Path, project_id: str) -> ProjectMetadata:
+    """Read and validate one registered project's searchable metadata."""
     context = context_from_vault(vault, project_id)
     path = context.project_store / PROJECT_METADATA
     if not path.is_file():
@@ -591,6 +621,7 @@ def update_project_metadata(
     tags: list[str] | None = None,
     technologies: list[str] | None = None,
 ) -> ProjectMetadata:
+    """Update selected project metadata fields with optimistic concurrency."""
     if name is None and summary is None and tags is None and technologies is None:
         raise ValueError("project metadata update requires at least one changed field")
     context = context_from_vault(vault, project_id)
@@ -615,6 +646,7 @@ def update_project_metadata(
 
 
 def validate_project_metadata(raw: object, *, expected_project_id: str | None = None) -> None:
+    """Validate persisted project metadata and its optional expected identity."""
     if not isinstance(raw, dict):
         raise ValueError("project metadata must be a mapping")
     if raw.get("schema_version") != PROJECT_METADATA_SCHEMA_VERSION:
@@ -702,6 +734,7 @@ def validate_vault_root(vault: Path) -> Path:
 
 
 def read_vault_id(vault: Path) -> str | None:
+    """Return the validated vault identity, including legacy identity-less vaults."""
     root = validate_vault_root(vault)
     raw = yaml.safe_load((root / VAULT_MARKER).read_text(encoding="utf-8"))
     assert isinstance(raw, dict)

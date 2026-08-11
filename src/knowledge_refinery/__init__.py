@@ -6,4 +6,5 @@ __version__ = "0.3.0"
 
 
 def get_version() -> str:
+    """Return the installed Knowledge Refinery version."""
     return __version__

@@ -89,6 +89,12 @@ select = [
     "I",
     "B",
     "UP",
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D105",
+    "D107",
 ]
 ignore = [
     "D211",
@@ -99,6 +105,11 @@ ignore = [
 force-single-line = true
 force-sort-within-sections = true
 lines-after-imports = 2
+
+[tool.ruff.lint.per-file-ignores]
+".agents/**" = ["D100", "D101", "D102", "D103", "D105", "D107"]
+"scripts/**" = ["D100", "D101", "D102", "D103", "D105", "D107"]
+"tests/**" = ["D100", "D101", "D102", "D103", "D105", "D107"]
 
 [tool.mypy]
 python_version = "3.11"

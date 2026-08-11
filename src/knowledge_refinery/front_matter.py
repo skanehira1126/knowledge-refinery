@@ -1,3 +1,5 @@
+"""Parse and render YAML front matter used by knowledge Markdown files."""
+
 from pathlib import Path
 from typing import Any
 
@@ -5,6 +7,7 @@ from knowledge_refinery.errors import RefineryFormatError
 
 
 def require_yaml() -> Any:
+    """Import PyYAML or terminate with an actionable dependency message."""
     try:
         import yaml
     except ImportError as exc:  # pragma: no cover - depends on runtime environment
@@ -32,6 +35,7 @@ def _split_front_matter_block(text: str) -> tuple[str, str] | None:
 
 
 def parse_front_matter(text: str, *, source_path: Path | None = None) -> dict[str, object]:
+    """Parse optional YAML front matter and return its mapping."""
     error_path = source_path or Path("<memory>")
     split = _split_front_matter_block(text)
     if split is None:
@@ -66,6 +70,7 @@ def parse_front_matter(text: str, *, source_path: Path | None = None) -> dict[st
 def split_front_matter(
     text: str, *, source_path: Path | None = None
 ) -> tuple[dict[str, object], str]:
+    """Require front matter and return its header and Markdown body."""
     error_path = source_path or Path("<memory>")
     split = _split_front_matter_block(text)
     if split is None:
@@ -89,6 +94,7 @@ def split_front_matter(
 
 
 def render_front_matter(header: dict[str, object]) -> str:
+    """Serialize a header mapping as a Markdown YAML front-matter block."""
     yaml = require_yaml()
     rendered = yaml.safe_dump(
         header,

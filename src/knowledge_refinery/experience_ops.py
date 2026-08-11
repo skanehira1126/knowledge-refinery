@@ -1,3 +1,5 @@
+"""Create, validate, retrieve, and search experience and memory documents."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -34,6 +36,8 @@ KNOWLEDGE_TAG_FACETS = ("domain", "artifact", "task", "tech", "issue")
 
 @dataclass(frozen=True)
 class SearchEntry:
+    """Represent normalized metadata for one knowledge-search result."""
+
     path: Path
     project_id: str
     document_id: str
@@ -50,6 +54,8 @@ class SearchEntry:
 
 @dataclass(frozen=True)
 class SearchFilters:
+    """Collect optional typed filters applied during knowledge search."""
+
     document_ids: tuple[str, ...] = ()
     source_experiences: tuple[str, ...] = ()
     related_experiences: tuple[str, ...] = ()
@@ -145,6 +151,7 @@ def _validate_experience_options(
 
 
 def parse_evidence_reference(reference: str) -> dict[str, str]:
+    """Parse a compact evidence reference into its structured representation."""
     prefix, separator, value = reference.partition(":")
     if not separator or not value:
         raise ValueError(f"Invalid evidence reference: {reference}")
@@ -188,6 +195,7 @@ def upsert_experience(
     expected_updated_at: str | None = None,
     clear_confidence: bool = False,
 ) -> Path:
+    """Create or update an experience resolved from a repository project."""
     context = resolve_project_context(project)
     return _upsert_experience(
         context,
@@ -225,6 +233,7 @@ def upsert_experience_at(
     expected_updated_at: str | None = None,
     clear_confidence: bool = False,
 ) -> Path:
+    """Create or update an experience at an explicit vault and project ID."""
     context = context_from_vault(vault, project_id)
     return _upsert_experience(
         context,
@@ -336,6 +345,7 @@ def upsert_memory(
     expected_updated_at: str | None = None,
     clear_confidence: bool = False,
 ) -> Path:
+    """Create or update project or shared memory for a repository project."""
     context = resolve_project_context(project)
     return _upsert_memory(
         context,
@@ -369,6 +379,7 @@ def upsert_memory_at(
     expected_updated_at: str | None = None,
     clear_confidence: bool = False,
 ) -> Path:
+    """Create or update memory at an explicit vault and project ID."""
     context = context_from_vault(vault, project_id)
     return _upsert_memory(
         context,
@@ -466,6 +477,7 @@ def search_documents(
     all_projects: bool,
     filters: SearchFilters | None = None,
 ) -> list[SearchEntry]:
+    """Search knowledge documents using a repository to resolve vault context."""
     if kind not in {"experiences", "memory"}:
         raise ValueError(f"Unsupported document kind: {kind}")
     context = resolve_project_context(project)
@@ -493,6 +505,7 @@ def search_documents_at(
     all_projects: bool,
     filters: SearchFilters | None = None,
 ) -> list[SearchEntry]:
+    """Search knowledge documents at an explicit vault and current project."""
     context = context_from_vault(vault, current_project_id)
     return _search_documents(
         context,
@@ -624,6 +637,7 @@ def _validate_search_inputs(
 def read_experience_at(
     vault: Path, project_id: str, experience_id: str
 ) -> tuple[Path, dict[str, object], str]:
+    """Read and validate one experience identified within a vault project."""
     context = context_from_vault(vault, project_id)
     _validate_slugs([experience_id], field="experience_id")
     path = _find_document_path(context.project_store / "experiences", experience_id)
@@ -641,6 +655,7 @@ def read_memory_at(
     scope: str,
     project_id: str | None = None,
 ) -> tuple[Path, dict[str, object], str]:
+    """Read and validate one project or shared memory document."""
     context = context_from_vault(vault, current_project_id)
     _validate_slugs([memory_id], field="memory_id")
     if scope == "shared":
@@ -763,6 +778,7 @@ def _matches_recorded_range(header: dict[str, object], filters: SearchFilters) -
 
 
 def parse_datetime_filter(value: str, *, end_of_day: bool) -> datetime:
+    """Normalize an ISO date or datetime filter to an aware UTC datetime."""
     normalized = value.replace("Z", "+00:00")
     try:
         parsed = datetime.fromisoformat(normalized)
@@ -781,6 +797,7 @@ def parse_datetime_filter(value: str, *, end_of_day: bool) -> datetime:
 
 
 def validate_document_header(header: dict[str, object], *, kind: str) -> None:
+    """Validate the schema and cross-field constraints of a document header."""
     if header.get("schema_version") != 2:
         raise ValueError("refinery document requires schema_version: 2")
     required = (
@@ -954,6 +971,7 @@ def _validate_evidence_path(value: str) -> None:
 def normalize_evidence(
     evidence: Sequence[str | dict[str, str]],
 ) -> list[dict[str, str]]:
+    """Normalize compact and structured evidence values, then validate them."""
     normalized = [
         parse_evidence_reference(item) if isinstance(item, str) else dict(item)
         for item in evidence

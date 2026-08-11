@@ -52,6 +52,7 @@ from knowledge_refinery.vault_ops import update_project_metadata
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the complete Knowledge Refinery command-line parser."""
     parser = argparse.ArgumentParser(
         prog="knowledge-refinery",
         description="Keep project experiences in a central personal refinery repository.",
@@ -442,17 +443,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def add_guide_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add shared managed-guide language and filename options."""
     parser.add_argument("--lang", choices=LANG_CHOICES, default="jp")
     parser.add_argument("--filename", choices=GUIDE_FILENAME_CHOICES, default="AGENTS.md")
 
 
 def add_body_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add mutually exclusive inline and file-based Markdown body options."""
     body_group = parser.add_mutually_exclusive_group()
     body_group.add_argument("--body", default=None, help="Markdown body")
     body_group.add_argument("--body-file", default=None, help="UTF-8 Markdown body file")
 
 
 def add_search_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add common free-text, project, tag, and scope search options."""
     parser.add_argument("terms", nargs="*", default=[], help="AND-matched search terms")
     parser.add_argument(
         "--project", "--target", dest="project", default=".", help="configured project path"
@@ -463,6 +467,7 @@ def add_search_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def add_typed_search_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add structured document metadata filters to a search parser."""
     parser.add_argument("--id", action="append", default=[], help="exact document ID")
     parser.add_argument("--confidence", action="append", choices=CONFIDENCE_CHOICES, default=[])
     parser.add_argument("--recorded-from", default=None, help="inclusive ISO date or datetime")
@@ -470,12 +475,14 @@ def add_typed_search_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def read_body(args: argparse.Namespace) -> str | None:
+    """Read an optional Markdown body from parsed inline or file input."""
     if args.body_file is not None:
         return Path(args.body_file).read_text(encoding="utf-8")
     return args.body
 
 
 def run_vault_init(args: argparse.Namespace) -> int:
+    """Initialize a vault and report each changed path."""
     previous, _ = _active_vault_or_error()
     result = init_vault(Path(args.root), force=bool(args.force))
     config = set_active_vault(result.root)
@@ -489,6 +496,7 @@ def run_vault_init(args: argparse.Namespace) -> int:
 
 
 def run_vault_configure(args: argparse.Namespace) -> int:
+    """Set the active central vault after validating its structure."""
     previous, _ = _active_vault_or_error()
     root = Path(args.root).expanduser().resolve()
     config = set_active_vault(root)
@@ -500,6 +508,7 @@ def run_vault_configure(args: argparse.Namespace) -> int:
 
 
 def run_project_setup(args: argparse.Namespace) -> int:
+    """Register a repository project and install its managed guide block."""
     vault = Path(args.vault)
     previous, _ = _active_vault_or_error()
     result = setup_project(
@@ -532,6 +541,7 @@ def run_project_setup(args: argparse.Namespace) -> int:
 
 
 def run_project_enable(args: argparse.Namespace) -> int:
+    """Re-enable a configured repository project."""
     previous, _ = _active_vault_or_error()
     vault = Path(args.vault) if args.vault is not None else get_active_vault()
     result = enable_project(Path(args.target), vault, create_link=bool(args.link))
@@ -557,6 +567,7 @@ def run_project_enable(args: argparse.Namespace) -> int:
 
 
 def run_project_disable(args: argparse.Namespace) -> int:
+    """Disable a repository project and remove its managed guide block."""
     project = Path(args.target)
     config = disable_project(project)
     removed = remove_agents_md(project, filename=args.filename)
@@ -627,6 +638,7 @@ def _print_mapping(payload: dict[str, object]) -> None:
 
 
 def run_project_status(args: argparse.Namespace) -> int:
+    """Print human-readable or JSON project readiness status."""
     payload = _project_status_payload(Path(args.target), args.filename)
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
@@ -636,6 +648,7 @@ def run_project_status(args: argparse.Namespace) -> int:
 
 
 def run_project_metadata_show(args: argparse.Namespace) -> int:
+    """Print the current project's central-vault metadata."""
     vault = get_active_vault()
     metadata = read_project_metadata(vault, resolve_project_id(Path(args.target), vault)).as_dict()
     if args.json:
@@ -646,6 +659,7 @@ def run_project_metadata_show(args: argparse.Namespace) -> int:
 
 
 def run_project_metadata_update(args: argparse.Namespace) -> int:
+    """Apply an optimistic update to the current project's metadata."""
     vault = get_active_vault()
     project_id = resolve_project_id(Path(args.target), vault)
     tags = [] if args.clear_tags else (list(args.tag) if args.tag is not None else None)
@@ -733,6 +747,7 @@ def _mcp_runtime_and_vault_check() -> tuple[dict[str, object], dict[str, object]
 
 
 def run_doctor(args: argparse.Namespace) -> int:
+    """Diagnose active-vault and repository integration health."""
     project = _project_status_payload(Path(args.target), args.filename)
     active_vault = Path(str(project["active_vault"])) if project["active_vault"] else None
     write_ok, write_detail = _vault_write_check(active_vault)
@@ -793,6 +808,7 @@ def run_doctor(args: argparse.Namespace) -> int:
 
 
 def run_experience_upsert(args: argparse.Namespace) -> int:
+    """Create or update an experience from CLI arguments."""
     project = Path(args.project)
     vault = get_active_vault()
     tags = [] if args.clear_tags else args.tag
@@ -823,6 +839,7 @@ def run_experience_upsert(args: argparse.Namespace) -> int:
 
 
 def run_experience_get(args: argparse.Namespace) -> int:
+    """Retrieve one exact experience and print its structured payload."""
     project = Path(args.project)
     vault = get_active_vault()
     current_project_id = resolve_project_id(project, vault)
@@ -844,6 +861,7 @@ def run_experience_get(args: argparse.Namespace) -> int:
 
 
 def run_memory_upsert(args: argparse.Namespace) -> int:
+    """Create or update project or shared memory from CLI arguments."""
     project = Path(args.project)
     vault = get_active_vault()
     tags = [] if args.clear_tags else args.tag
@@ -869,6 +887,7 @@ def run_memory_upsert(args: argparse.Namespace) -> int:
 
 
 def run_memory_get(args: argparse.Namespace) -> int:
+    """Retrieve one exact memory document and print its payload."""
     project = Path(args.project)
     vault = get_active_vault()
     current_project_id = resolve_project_id(project, vault)
@@ -890,14 +909,17 @@ def run_memory_get(args: argparse.Namespace) -> int:
 
 
 def run_experience_search(args: argparse.Namespace) -> int:
+    """Search experience documents using parsed CLI filters."""
     return run_document_search(args, kind="experiences", statuses=list(args.status))
 
 
 def run_memory_search(args: argparse.Namespace) -> int:
+    """Search memory documents using parsed CLI filters."""
     return run_document_search(args, kind="memory", statuses=[])
 
 
 def run_tag_browse(args: argparse.Namespace) -> int:
+    """Browse immediate tag children and aggregate usage."""
     project = Path(args.project)
     vault = get_active_vault()
     payload = browse_knowledge_tags(
@@ -911,6 +933,7 @@ def run_tag_browse(args: argparse.Namespace) -> int:
 
 
 def run_tag_search(args: argparse.Namespace) -> int:
+    """Search tag paths and descriptions using CLI terms."""
     project = Path(args.project)
     vault = get_active_vault()
     payload = search_knowledge_tags(
@@ -924,6 +947,7 @@ def run_tag_search(args: argparse.Namespace) -> int:
 
 
 def run_tag_describe(args: argparse.Namespace) -> int:
+    """Create or update one taxonomy description."""
     project = Path(args.project)
     vault = get_active_vault()
     project_id = resolve_project_id(project, vault)
@@ -944,6 +968,7 @@ def run_tag_describe(args: argparse.Namespace) -> int:
 
 
 def run_document_search(args: argparse.Namespace, *, kind: str, statuses: list[str]) -> int:
+    """Execute a typed document search and print normalized results."""
     filters = SearchFilters(
         document_ids=tuple(args.id),
         source_experiences=tuple(getattr(args, "source_experience", [])),
@@ -982,12 +1007,14 @@ def run_document_search(args: argparse.Namespace, *, kind: str, statuses: list[s
 
 
 def run_apply_agents_md(args: argparse.Namespace) -> int:
+    """Apply the managed guide block requested by CLI arguments."""
     path = apply_agents_md(Path(args.target), lang=args.lang, filename=args.filename)
     print(path)
     return 0
 
 
 def run_mcp_serve(args: argparse.Namespace) -> int:
+    """Start the stdio MCP server."""
     del args
     from knowledge_refinery.mcp_server import serve
 
@@ -1043,6 +1070,7 @@ def run_deep_search_status(args: argparse.Namespace) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Parse arguments, dispatch the selected command, and render CLI errors."""
     parser = build_parser()
     try:
         args = parser.parse_args(argv)

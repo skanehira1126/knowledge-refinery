@@ -1,3 +1,5 @@
+"""Manage the Knowledge Refinery instruction block in repository guide files."""
+
 from importlib.resources import files
 from pathlib import Path
 import re
@@ -18,6 +20,7 @@ MANAGED_BLOCK_RE = re.compile(
 
 
 def resolve_agents_path(target: Path, filename: str = "AGENTS.md") -> Path:
+    """Resolve a repository or guide path to the selected guide file."""
     if filename not in GUIDE_FILENAME_CHOICES:
         raise ValueError(f"Unsupported guide filename: {filename}")
 
@@ -28,6 +31,7 @@ def resolve_agents_path(target: Path, filename: str = "AGENTS.md") -> Path:
 
 
 def load_agents_snippet(lang: str) -> str:
+    """Load the packaged managed-block text for a supported language."""
     if lang not in LANG_CHOICES:
         raise ValueError(f"Unsupported language: {lang}")
     return (
@@ -39,6 +43,7 @@ def load_agents_snippet(lang: str) -> str:
 
 
 def render_managed_block(lang: str) -> str:
+    """Render the marked Knowledge Refinery guide block for a language."""
     snippet = load_agents_snippet(lang)
     return f"{START_MARKER_PREFIX} lang={lang} -->\n{snippet}\n{END_MARKER}\n"
 
@@ -52,6 +57,7 @@ def _split_suffix_after_truncated_block(current: str, start_match: re.Match[str]
 
 
 def replace_managed_block(current: str, block: str) -> str:
+    """Insert or replace one managed block while preserving user-authored text."""
     managed_match = MANAGED_BLOCK_RE.search(current)
     if managed_match is not None:
         return MANAGED_BLOCK_RE.sub(block, current, count=1)
@@ -74,6 +80,7 @@ def replace_managed_block(current: str, block: str) -> str:
 
 
 def apply_agents_md(target: Path, lang: str, filename: str = "AGENTS.md") -> Path:
+    """Write the current managed block to a repository guide file."""
     agents_path = resolve_agents_path(target, filename=filename)
     block = render_managed_block(lang)
 
@@ -89,6 +96,7 @@ def apply_agents_md(target: Path, lang: str, filename: str = "AGENTS.md") -> Pat
 
 
 def has_managed_block(target: Path, filename: str = "AGENTS.md") -> bool:
+    """Return whether the selected guide contains a complete managed block."""
     agents_path = resolve_agents_path(target, filename=filename)
     if not agents_path.is_file():
         return False

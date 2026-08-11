@@ -18,7 +18,11 @@ from knowledge_refinery.agents_ops import apply_agents_md
 from knowledge_refinery.agents_ops import has_managed_block
 from knowledge_refinery.agents_ops import remove_agents_md
 from knowledge_refinery.config_ops import get_active_vault
+from knowledge_refinery.config_ops import get_deep_search_settings
 from knowledge_refinery.config_ops import set_active_vault
+from knowledge_refinery.config_ops import set_deep_search_enabled
+from knowledge_refinery.config_ops import set_deep_search_model
+from knowledge_refinery.deep_search_ops import validate_codex_model
 from knowledge_refinery.errors import RefineryCliError
 from knowledge_refinery.experience_ops import CONFIDENCE_CHOICES
 from knowledge_refinery.experience_ops import EVIDENCE_TYPE_CHOICES
@@ -383,6 +387,36 @@ def build_parser() -> argparse.ArgumentParser:
     mcp_subparsers = mcp_parser.add_subparsers(dest="mcp_command", required=True)
     mcp_serve = mcp_subparsers.add_parser("serve", help="Serve MCP over stdio")
     mcp_serve.set_defaults(handler=run_mcp_serve)
+
+    deep_search_parser = subparsers.add_parser(
+        "deep-search", help="Manage the optional Codex-powered knowledge search tool"
+    )
+    deep_search_subparsers = deep_search_parser.add_subparsers(
+        dest="deep_search_command", required=True
+    )
+    deep_search_enable = deep_search_subparsers.add_parser(
+        "enable", help="Publish the deep search tool on the next MCP start"
+    )
+    deep_search_enable.add_argument(
+        "--model", required=True, help="Codex model slug used for every deep search"
+    )
+    deep_search_enable.set_defaults(handler=run_deep_search_enable)
+    deep_search_disable = deep_search_subparsers.add_parser(
+        "disable", help="Hide the deep search tool on the next MCP start"
+    )
+    deep_search_disable.set_defaults(handler=run_deep_search_disable)
+    deep_search_model = deep_search_subparsers.add_parser(
+        "model", help="Validate and set the Codex model used by deep search"
+    )
+    deep_search_model.add_argument("model", help="Codex model slug")
+    deep_search_model.set_defaults(handler=run_deep_search_model)
+    deep_search_status = deep_search_subparsers.add_parser(
+        "status", help="Show whether deep search is configured for publication"
+    )
+    deep_search_status.add_argument(
+        "--json", action="store_true", help="emit machine-readable JSON"
+    )
+    deep_search_status.set_defaults(handler=run_deep_search_status)
 
     doctor_parser = subparsers.add_parser(
         "doctor", help="Diagnose runtime, active vault, and project integration"
@@ -956,6 +990,49 @@ def run_mcp_serve(args: argparse.Namespace) -> int:
     from knowledge_refinery.mcp_server import serve
 
     serve()
+    return 0
+
+
+def run_deep_search_enable(args: argparse.Namespace) -> int:
+    validate_codex_model(args.model)
+    path = set_deep_search_enabled(True, model=args.model)
+    print("Deep search: enabled")
+    print(f"Model: {args.model}")
+    print(f"Config file: {path}")
+    print("Restart the Knowledge Refinery MCP server to publish the tool.")
+    return 0
+
+
+def run_deep_search_disable(args: argparse.Namespace) -> int:
+    del args
+    path = set_deep_search_enabled(False)
+    print("Deep search: disabled")
+    print(f"Config file: {path}")
+    print("Restart the Knowledge Refinery MCP server to hide the tool.")
+    return 0
+
+
+def run_deep_search_model(args: argparse.Namespace) -> int:
+    validate_codex_model(args.model)
+    path = set_deep_search_model(args.model)
+    print(f"Deep search model: {args.model}")
+    print(f"Config file: {path}")
+    return 0
+
+
+def run_deep_search_status(args: argparse.Namespace) -> int:
+    enabled, model = get_deep_search_settings()
+    payload = {
+        "enabled": enabled,
+        "model": model,
+        "mcp_restart_required_for_visibility_change": True,
+    }
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    else:
+        print(f"Deep search: {'enabled' if enabled else 'disabled'}")
+        print(f"Model: {model or '-'}")
+        print("Enable or disable changes take effect after the MCP server restarts.")
     return 0
 
 

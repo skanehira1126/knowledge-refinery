@@ -167,6 +167,20 @@ knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"
     `doctor`が`ok: yes`を返し、Plugin settingsに`knowledge-refinery`が表示されていれば準備完了です。
     次は利用モードに応じて[最初のtask](#6-task)を開始します。
 
+### 任意: Codexによるdeep searchを公開する
+
+通常の構造化検索に加え、vault内の複数文書を生成AIで比較・統合したい場合だけ有効にします。
+
+```bash
+knowledge-refinery deep-search enable --model gpt-5.6-sol
+knowledge-refinery deep-search status
+```
+
+modelは保存前にCodex catalogへ照合されます。変更後はMCP serverまたはCodex task/sessionを
+再起動します。Codex CLIがPATH上にあり、認証済みであることも必要です。deep searchは
+読み取り専用で、検証済み文書の一時snapshotだけを使用します。
+詳しい隔離境界は[MCP tools](mcp.md#codexdeep-search)を参照してください。
+
 ## 6. 最初のtask
 
 自動運用モードでは新しいtaskを開いて通常の開発依頼を開始できます。明示呼出モードでは、

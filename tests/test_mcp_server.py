@@ -80,6 +80,25 @@ def test_invalid_deep_search_config_fails_closed_without_stopping_mcp(
     assert anyio.run(server.list_tools) == []
 
 
+def test_invalid_deep_search_reasoning_effort_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configured_mcp(tmp_path, monkeypatch)
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "vault: /unused\ndeep_search:\n  enabled: true\n  model: gpt-5.6-sol\n"
+        "  reasoning_effort: []\n",
+        encoding="utf-8",
+    )
+    server = FastMCP("invalid-reasoning-effort")
+
+    assert register_configured_tools(server) is False
+    assert "configuration is invalid" in capsys.readouterr().err
+    assert anyio.run(server.list_tools) == []
+
+
 def test_local_mcp_records_searches_and_validates(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

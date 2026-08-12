@@ -169,6 +169,7 @@ def run_deep_search(
     question: str,
     model: str,
     *,
+    reasoning_effort: str | None = None,
     codex_bin: str = "codex",
     timeout: int = DEEP_SEARCH_TIMEOUT_SECONDS,
 ) -> DeepSearchResult:
@@ -193,6 +194,7 @@ def run_deep_search(
         command = _codex_command(
             codex_bin=codex_bin,
             model=model,
+            reasoning_effort=reasoning_effort,
             snapshot=snapshot,
             schema_path=schema_path,
             output_path=output_path,
@@ -214,6 +216,7 @@ def run_deep_search(
 def validate_codex_model(
     model: str,
     *,
+    reasoning_effort: str | None = None,
     codex_bin: str = "codex",
     timeout: int = MODEL_CATALOG_TIMEOUT_SECONDS,
 ) -> None:
@@ -263,16 +266,42 @@ def validate_codex_model(
             detail=detail,
             suggested_action="Check Codex authentication and network access, then retry.",
         )
+    supported = _supported_reasoning_efforts(completed.stdout, model)
+    if reasoning_effort is None:
+        return
+    if not reasoning_effort.strip() or reasoning_effort != reasoning_effort.strip():
+        raise ValueError(
+            "deep search reasoning effort must be a non-empty string without surrounding space"
+        )
+    if supported is None:
+        raise RefineryCliError(
+            code="deep_search_reasoning_effort_catalog_invalid",
+            summary=f"Codex model catalog has no reasoning-effort metadata for `{model}`.",
+            suggested_action="Choose another model or omit reasoning effort.",
+        )
+    if reasoning_effort not in supported:
+        available = ", ".join(sorted(supported)) or "none"
+        raise RefineryCliError(
+            code="deep_search_unsupported_reasoning_effort",
+            summary=(
+                f"Codex model `{model}` does not support reasoning effort `{reasoning_effort}`."
+            ),
+            detail=f"Supported reasoning efforts: {available}",
+            suggested_action="Choose a supported effort or omit it to use the model default.",
+        )
+
+
+def _supported_reasoning_efforts(catalog: str, model: str) -> set[str] | None:
+    """Parse one model's optional reasoning-effort contract from the Codex catalog."""
     try:
-        raw = json.loads(completed.stdout)
+        raw = json.loads(catalog)
         models = raw["models"]
         if not isinstance(models, list):
             raise TypeError("models is not a list")
-        slugs = {
-            item["slug"]
-            for item in models
-            if isinstance(item, dict) and isinstance(item.get("slug"), str)
-        }
+        selected = next(
+            (item for item in models if isinstance(item, dict) and item.get("slug") == model),
+            None,
+        )
     except (json.JSONDecodeError, KeyError, TypeError) as error:
         raise RefineryCliError(
             code="deep_search_model_catalog_invalid",
@@ -280,12 +309,20 @@ def validate_codex_model(
             detail=str(error),
             suggested_action="Update Codex CLI and retry.",
         ) from error
-    if model not in slugs:
+    if selected is None:
         raise RefineryCliError(
             code="deep_search_unknown_model",
             summary=f"Codex model catalog does not contain `{model}`.",
             suggested_action="Choose a model slug shown by `codex debug models`.",
         )
+    supported = selected.get("supported_reasoning_levels")
+    if not isinstance(supported, list):
+        return None
+    return {
+        item["effort"]
+        for item in supported
+        if isinstance(item, dict) and isinstance(item.get("effort"), str)
+    }
 
 
 def _collect_documents(
@@ -399,6 +436,7 @@ def _codex_command(
     *,
     codex_bin: str,
     model: str,
+    reasoning_effort: str | None,
     snapshot: Path,
     schema_path: Path,
     output_path: Path,
@@ -411,7 +449,7 @@ def _codex_command(
     developer_override = "developer_instructions=" + json.dumps(
         DEVELOPER_INSTRUCTIONS, ensure_ascii=False
     )
-    return [
+    command = [
         codex_bin,
         "--ask-for-approval",
         "never",
@@ -434,12 +472,19 @@ def _codex_command(
         'web_search="disabled"',
         "--config",
         "shell_environment_policy.inherit=none",
-        "--output-schema",
-        str(schema_path),
-        "--output-last-message",
-        str(output_path),
-        "-",
     ]
+    if reasoning_effort is not None:
+        command.extend(["--config", "model_reasoning_effort=" + json.dumps(reasoning_effort)])
+    command.extend(
+        [
+            "--output-schema",
+            str(schema_path),
+            "--output-last-message",
+            str(output_path),
+            "-",
+        ]
+    )
+    return command
 
 
 def _run_codex(command: Sequence[str], question: str, *, timeout: int, output_path: Path) -> None:

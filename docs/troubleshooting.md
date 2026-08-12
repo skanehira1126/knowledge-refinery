@@ -71,8 +71,10 @@ knowledge-refinery deep-search status --json
 実行時の`deep_search_codex_missing`はCodex CLIがPATHにない状態、
 `deep_search_codex_failed`は認証、model access、Codex側の実行失敗を示します。
 `deep_search_unknown_model`はmodel slugがrefresh済みcatalogにない状態、
+`deep_search_unsupported_reasoning_effort`はmodelが指定effortに対応していない状態、
 `deep_search_model_catalog_failed`はcatalog refresh自体の認証・network・CLI失敗です。
-`deep_search_timeout`では質問を絞るか、`deep-search model MODEL`でより速いmodelを設定して
+`deep_search_timeout`では質問を絞るか、`deep-search model MODEL`でより速いmodelを設定するか、
+`deep-search reasoning-effort EFFORT`でより軽いeffortを設定して
 再実行します。通常の
 `refinery_search_experiences`と`refinery_search_memory`はdeep searchと独立して利用できます。
 

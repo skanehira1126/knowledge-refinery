@@ -32,11 +32,16 @@ def set_active_vault(vault: Path) -> Path:
     return _write_config(raw)
 
 
-def set_deep_search_enabled(enabled: bool, *, model: str | None = None) -> Path:
+def set_deep_search_enabled(
+    enabled: bool,
+    *,
+    model: str | None = None,
+    reasoning_effort: str | None = None,
+) -> Path:
     """Persist deep search visibility and require a valid model whenever enabled.
 
-    A supplied model replaces the current value. Disabling preserves a previously
-    selected model so the user can inspect or reuse it later.
+    A supplied model replaces the current value and replaces or clears its reasoning
+    effort. Disabling preserves previously selected runtime settings for later reuse.
     """
     raw = _read_config(required=True)
     if not isinstance(raw.get("vault"), str):
@@ -47,6 +52,10 @@ def set_deep_search_enabled(enabled: bool, *, model: str | None = None) -> Path:
     deep_search = dict(current) if isinstance(current, dict) else {}
     if model is not None:
         deep_search["model"] = _validate_model_name(model)
+        if reasoning_effort is None:
+            deep_search.pop("reasoning_effort", None)
+        else:
+            deep_search["reasoning_effort"] = _validate_reasoning_effort(reasoning_effort)
     deep_search["enabled"] = enabled
     if enabled:
         configured_model = deep_search.get("model")
@@ -57,8 +66,8 @@ def set_deep_search_enabled(enabled: bool, *, model: str | None = None) -> Path:
     return _write_config(raw)
 
 
-def set_deep_search_model(model: str) -> Path:
-    """Persist a structurally valid model without changing deep search visibility."""
+def set_deep_search_model(model: str, *, reasoning_effort: str | None = None) -> Path:
+    """Persist a model and optional effort without changing deep search visibility."""
     raw = _read_config(required=True)
     if not isinstance(raw.get("vault"), str):
         raise ValueError(
@@ -68,11 +77,33 @@ def set_deep_search_model(model: str) -> Path:
     deep_search = dict(current) if isinstance(current, dict) else {"enabled": False}
     deep_search.setdefault("enabled", False)
     deep_search["model"] = _validate_model_name(model)
+    if reasoning_effort is None:
+        deep_search.pop("reasoning_effort", None)
+    else:
+        deep_search["reasoning_effort"] = _validate_reasoning_effort(reasoning_effort)
     raw["deep_search"] = deep_search
     return _write_config(raw)
 
 
-def get_deep_search_settings() -> tuple[bool, str | None]:
+def set_deep_search_reasoning_effort(reasoning_effort: str | None) -> Path:
+    """Persist or clear reasoning effort without changing model or visibility."""
+    raw = _read_config(required=True)
+    if not isinstance(raw.get("vault"), str):
+        raise ValueError(
+            "No active refinery vault. Run `knowledge-refinery vault configure --root <path>`."
+        )
+    current = raw.get("deep_search")
+    deep_search = dict(current) if isinstance(current, dict) else {"enabled": False}
+    deep_search.setdefault("enabled", False)
+    if reasoning_effort is None:
+        deep_search.pop("reasoning_effort", None)
+    else:
+        deep_search["reasoning_effort"] = _validate_reasoning_effort(reasoning_effort)
+    raw["deep_search"] = deep_search
+    return _write_config(raw)
+
+
+def get_deep_search_settings() -> tuple[bool, str | None, str | None]:
     """Return validated visibility and model settings, defaulting to disabled.
 
     Malformed settings raise instead of silently enabling or partially configuring the
@@ -81,7 +112,7 @@ def get_deep_search_settings() -> tuple[bool, str | None]:
     raw = _read_config(required=False)
     deep_search = raw.get("deep_search")
     if deep_search is None:
-        return False, None
+        return False, None, None
     if not isinstance(deep_search, dict) or not isinstance(deep_search.get("enabled"), bool):
         raise ValueError(
             f"Invalid deep_search configuration: {config_path()}: "
@@ -100,21 +131,34 @@ def get_deep_search_settings() -> tuple[bool, str | None]:
             f"Invalid deep_search configuration: {config_path()}: "
             "deep_search.model is required when enabled"
         )
-    return deep_search["enabled"], model
+    reasoning_effort = deep_search.get("reasoning_effort")
+    if reasoning_effort is not None:
+        if not isinstance(reasoning_effort, str):
+            raise ValueError(
+                f"Invalid deep_search configuration: {config_path()}: "
+                "expected deep_search.reasoning_effort to be a non-empty string"
+            )
+        reasoning_effort = _validate_reasoning_effort(reasoning_effort)
+    if reasoning_effort is not None and model is None:
+        raise ValueError(
+            f"Invalid deep_search configuration: {config_path()}: "
+            "deep_search.model is required when reasoning_effort is configured"
+        )
+    return deep_search["enabled"], model, reasoning_effort
 
 
 def is_deep_search_enabled() -> bool:
     """Return whether valid configuration requests publication of the optional tool."""
-    enabled, _ = get_deep_search_settings()
+    enabled, _, _ = get_deep_search_settings()
     return enabled
 
 
-def get_deep_search_model() -> str:
-    """Return the configured model only when deep search is currently enabled."""
-    enabled, model = get_deep_search_settings()
+def get_deep_search_runtime_settings() -> tuple[str, str | None]:
+    """Return model and optional reasoning effort when deep search is enabled."""
+    enabled, model, reasoning_effort = get_deep_search_settings()
     if not enabled or model is None:
         raise ValueError("Deep search is disabled or has no configured model")
-    return model
+    return model, reasoning_effort
 
 
 def _write_config(raw: dict[str, object]) -> Path:
@@ -176,5 +220,20 @@ def _validate_model_name(model: str) -> str:
     if not normalized or normalized != model or not MODEL_NAME_RE.fullmatch(model):
         raise ValueError(
             "deep search model must use only letters, numbers, dot, underscore, and hyphen"
+        )
+    return normalized
+
+
+def _validate_reasoning_effort(reasoning_effort: str) -> str:
+    """Reject blank or unsafe reasoning effort values before subprocess use."""
+    normalized = reasoning_effort.strip()
+    if (
+        not normalized
+        or normalized != reasoning_effort
+        or not MODEL_NAME_RE.fullmatch(reasoning_effort)
+    ):
+        raise ValueError(
+            "deep search reasoning effort must use only letters, numbers, dot, underscore, "
+            "and hyphen"
         )
     return normalized

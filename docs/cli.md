@@ -32,9 +32,11 @@ knowledge-refinery tag describe --project PATH --tag TAG --description TEXT [--e
 ## deep search
 
 ```text
-knowledge-refinery deep-search enable --model MODEL
+knowledge-refinery deep-search enable --model MODEL [--reasoning-effort EFFORT]
 knowledge-refinery deep-search disable
-knowledge-refinery deep-search model MODEL
+knowledge-refinery deep-search model MODEL [--reasoning-effort EFFORT]
+knowledge-refinery deep-search reasoning-effort EFFORT
+knowledge-refinery deep-search reasoning-effort --reset
 knowledge-refinery deep-search status [--json]
 ```
 
@@ -50,12 +52,18 @@ vault: /absolute/path/to/knowledge-refinery-vault
 deep_search:
   enabled: false
   model: gpt-5.6-sol
+  reasoning_effort: high
 ```
 
-`deep-search model MODEL`は公開状態を変えず、catalog検証後にmodelだけを更新します。すでにtoolが
-公開済みなら次の呼び出しから新しいmodelを使うため、model変更だけではMCP再起動は不要です。
-catalog照合はtypoやcatalogにないslugを保存前に拒否しますが、account entitlement、一時的な
-availability、実行時limitまで保証しません。これらは実際の`codex exec`でも検証されます。
+`--reasoning-effort`を指定すると、model catalogの`supported_reasoning_levels`へ照合してmodelと
+effortを保存します。`enable --model MODEL`または`model MODEL`でeffortを省略すると、保存済みの
+`reasoning_effort`を削除し、model既定値へ戻します。`reasoning-effort EFFORT`は現在modelの
+公開状態を変えずeffortだけを変更し、`--reset`はoverrideを削除します。
+
+すでにtoolが公開済みならmodelとeffortは次の呼び出しから反映されるため、これらの変更だけでは
+MCP再起動は不要です。catalog照合はtypoや未対応の組み合わせを保存前に拒否しますが、account
+entitlement、一時的なavailability、実行時limitまで保証しません。これらは実際の`codex exec`でも
+検証されます。
 
 deep searchを実行するにはCodex CLIの認証と、設定したmodelへのaccessが必要です。
 検索はvaultへ書き込まず、experienceやmemoryの作成にも使いません。

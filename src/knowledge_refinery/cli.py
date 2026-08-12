@@ -24,6 +24,7 @@ from knowledge_refinery.config_ops import get_deep_search_settings
 from knowledge_refinery.config_ops import set_active_vault
 from knowledge_refinery.config_ops import set_deep_search_enabled
 from knowledge_refinery.config_ops import set_deep_search_model
+from knowledge_refinery.config_ops import set_deep_search_reasoning_effort
 from knowledge_refinery.deep_search_ops import validate_codex_model
 from knowledge_refinery.errors import RefineryCliError
 from knowledge_refinery.experience_ops import CONFIDENCE_CHOICES
@@ -403,6 +404,10 @@ def build_parser() -> argparse.ArgumentParser:
     deep_search_enable.add_argument(
         "--model", required=True, help="Codex model slug used for every deep search"
     )
+    deep_search_enable.add_argument(
+        "--reasoning-effort",
+        help="Codex reasoning effort; omit to use the selected model's default",
+    )
     deep_search_enable.set_defaults(handler=run_deep_search_enable)
     deep_search_disable = deep_search_subparsers.add_parser(
         "disable", help="Hide the deep search tool on the next MCP start"
@@ -412,7 +417,21 @@ def build_parser() -> argparse.ArgumentParser:
         "model", help="Validate and set the Codex model used by deep search"
     )
     deep_search_model.add_argument("model", help="Codex model slug")
+    deep_search_model.add_argument(
+        "--reasoning-effort",
+        help="Codex reasoning effort; omit to use the selected model's default",
+    )
     deep_search_model.set_defaults(handler=run_deep_search_model)
+    deep_search_reasoning_effort = deep_search_subparsers.add_parser(
+        "reasoning-effort", help="Set or reset the Codex reasoning effort used by deep search"
+    )
+    deep_search_reasoning_effort.add_argument(
+        "reasoning_effort", nargs="?", help="Codex reasoning effort"
+    )
+    deep_search_reasoning_effort.add_argument(
+        "--reset", action="store_true", help="remove the override and use the model default"
+    )
+    deep_search_reasoning_effort.set_defaults(handler=run_deep_search_reasoning_effort)
     deep_search_status = deep_search_subparsers.add_parser(
         "status", help="Show whether deep search is configured for publication"
     )
@@ -1024,10 +1043,15 @@ def run_mcp_serve(args: argparse.Namespace) -> int:
 
 def run_deep_search_enable(args: argparse.Namespace) -> int:
     """Validate the selected model, enable publication, and request an MCP restart."""
-    validate_codex_model(args.model)
-    path = set_deep_search_enabled(True, model=args.model)
+    validate_codex_model(args.model, reasoning_effort=args.reasoning_effort)
+    path = set_deep_search_enabled(
+        True,
+        model=args.model,
+        reasoning_effort=args.reasoning_effort,
+    )
     print("Deep search: enabled")
     print(f"Model: {args.model}")
+    print(f"Reasoning effort: {args.reasoning_effort or 'model default'}")
     print(f"Config file: {path}")
     print("Restart the Knowledge Refinery MCP server to publish the tool.")
     return 0
@@ -1045,19 +1069,39 @@ def run_deep_search_disable(args: argparse.Namespace) -> int:
 
 def run_deep_search_model(args: argparse.Namespace) -> int:
     """Validate and update the server-owned model without changing tool visibility."""
-    validate_codex_model(args.model)
-    path = set_deep_search_model(args.model)
+    validate_codex_model(args.model, reasoning_effort=args.reasoning_effort)
+    path = set_deep_search_model(args.model, reasoning_effort=args.reasoning_effort)
     print(f"Deep search model: {args.model}")
+    print(f"Reasoning effort: {args.reasoning_effort or 'model default'}")
+    print(f"Config file: {path}")
+    return 0
+
+
+def run_deep_search_reasoning_effort(args: argparse.Namespace) -> int:
+    """Validate and update reasoning effort without changing model or visibility."""
+    if args.reset and args.reasoning_effort is not None:
+        raise ValueError("reasoning effort and --reset cannot be used together")
+    if not args.reset and args.reasoning_effort is None:
+        raise ValueError("reasoning effort or --reset is required")
+    _, model, _ = get_deep_search_settings()
+    if model is None:
+        raise ValueError("Configure a deep search model before setting reasoning effort")
+    reasoning_effort = None if args.reset else args.reasoning_effort
+    if reasoning_effort is not None:
+        validate_codex_model(model, reasoning_effort=reasoning_effort)
+    path = set_deep_search_reasoning_effort(reasoning_effort)
+    print(f"Deep search reasoning effort: {reasoning_effort or 'model default'}")
     print(f"Config file: {path}")
     return 0
 
 
 def run_deep_search_status(args: argparse.Namespace) -> int:
     """Print validated deep search visibility and model configuration."""
-    enabled, model = get_deep_search_settings()
+    enabled, model, reasoning_effort = get_deep_search_settings()
     payload = {
         "enabled": enabled,
         "model": model,
+        "reasoning_effort": reasoning_effort,
         "mcp_restart_required_for_visibility_change": True,
     }
     if args.json:
@@ -1065,6 +1109,7 @@ def run_deep_search_status(args: argparse.Namespace) -> int:
     else:
         print(f"Deep search: {'enabled' if enabled else 'disabled'}")
         print(f"Model: {model or '-'}")
+        print(f"Reasoning effort: {reasoning_effort or 'model default'}")
         print("Enable or disable changes take effect after the MCP server restarts.")
     return 0
 

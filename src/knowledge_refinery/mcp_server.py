@@ -15,7 +15,7 @@ import yaml
 
 from knowledge_refinery import get_version
 from knowledge_refinery.config_ops import get_active_vault
-from knowledge_refinery.config_ops import get_deep_search_model
+from knowledge_refinery.config_ops import get_deep_search_runtime_settings
 from knowledge_refinery.config_ops import get_deep_search_settings
 from knowledge_refinery.deep_search_ops import DeepSearchResult
 from knowledge_refinery.deep_search_ops import run_deep_search
@@ -350,13 +350,14 @@ async def refinery_deep_search(
     """検証済みvault snapshotをCodexで深く読み、根拠source ID付きで質問へ回答します。"""
     vault = get_active_vault()
     project_id = _validated_project_id(vault, project_path)
-    model = get_deep_search_model()
+    model, reasoning_effort = get_deep_search_runtime_settings()
     return await asyncio.to_thread(
         run_deep_search,
         vault,
         project_id,
         question,
         model,
+        reasoning_effort=reasoning_effort,
     )
 
 
@@ -516,7 +517,7 @@ def register_configured_tools(server: FastMCP = mcp) -> bool:
     MCP server available. The return value indicates whether the optional tool was added.
     """
     try:
-        enabled, _ = get_deep_search_settings()
+        enabled, _, _ = get_deep_search_settings()
     except (OSError, ValueError) as error:
         print(
             f"warning: deep search tool is disabled because its configuration is invalid: {error}",

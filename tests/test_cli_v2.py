@@ -73,8 +73,12 @@ def test_vault_configure_reports_previous_vault_and_config_file(
 def test_deep_search_toggle_preserves_config_and_reports_restart(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    validated_models: list[str] = []
-    monkeypatch.setattr("knowledge_refinery.cli.validate_codex_model", validated_models.append)
+    validated_models: list[tuple[str, str | None]] = []
+
+    def validate_model(model: str, *, reasoning_effort: str | None = None) -> None:
+        validated_models.append((model, reasoning_effort))
+
+    monkeypatch.setattr("knowledge_refinery.cli.validate_codex_model", validate_model)
     config = tmp_path / "config.yaml"
     monkeypatch.setenv("REFINERY_CONFIG", str(config))
     vault = tmp_path / "refinery"
@@ -85,7 +89,19 @@ def test_deep_search_toggle_preserves_config_and_reports_restart(
     config.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
     capsys.readouterr()
 
-    assert main(["deep-search", "enable", "--model", "gpt-5.6-sol"]) == 0
+    assert (
+        main(
+            [
+                "deep-search",
+                "enable",
+                "--model",
+                "gpt-5.6-sol",
+                "--reasoning-effort",
+                "high",
+            ]
+        )
+        == 0
+    )
     enabled_output = capsys.readouterr().out
     assert "Deep search: enabled" in enabled_output
     assert "Restart" in enabled_output
@@ -93,6 +109,7 @@ def test_deep_search_toggle_preserves_config_and_reports_restart(
     assert enabled["deep_search"] == {
         "future_option": "keep",
         "model": "gpt-5.6-sol",
+        "reasoning_effort": "high",
         "enabled": True,
     }
     assert enabled["custom"] == {"keep": True}
@@ -100,11 +117,28 @@ def test_deep_search_toggle_preserves_config_and_reports_restart(
     status = json.loads(capsys.readouterr().out)
     assert status["enabled"] is True
     assert status["model"] == "gpt-5.6-sol"
+    assert status["reasoning_effort"] == "high"
 
     assert main(["deep-search", "model", "gpt-5.6-terra"]) == 0
     capsys.readouterr()
     assert yaml.safe_load(config.read_text(encoding="utf-8"))["deep_search"]["model"] == (
         "gpt-5.6-terra"
+    )
+    assert (
+        "reasoning_effort" not in yaml.safe_load(config.read_text(encoding="utf-8"))["deep_search"]
+    )
+
+    assert main(["deep-search", "reasoning-effort", "medium"]) == 0
+    capsys.readouterr()
+    assert (
+        yaml.safe_load(config.read_text(encoding="utf-8"))["deep_search"]["reasoning_effort"]
+        == "medium"
+    )
+
+    assert main(["deep-search", "reasoning-effort", "--reset"]) == 0
+    capsys.readouterr()
+    assert (
+        "reasoning_effort" not in yaml.safe_load(config.read_text(encoding="utf-8"))["deep_search"]
     )
 
     assert main(["deep-search", "disable"]) == 0
@@ -116,7 +150,11 @@ def test_deep_search_toggle_preserves_config_and_reports_restart(
         "enabled": False,
     }
     assert disabled["vault"] == str(vault.resolve())
-    assert validated_models == ["gpt-5.6-sol", "gpt-5.6-terra"]
+    assert validated_models == [
+        ("gpt-5.6-sol", "high"),
+        ("gpt-5.6-terra", None),
+        ("gpt-5.6-terra", "medium"),
+    ]
 
 
 def test_cli_initializes_and_connects_project(

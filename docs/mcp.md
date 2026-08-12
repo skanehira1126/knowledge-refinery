@@ -29,7 +29,7 @@ metadata、repoとactive vaultの`vault_id`一致を検証します。
 行いません。既定ではMCP tool一覧へ公開されず、次の操作後にMCPを再起動すると公開されます。
 
 ```bash
-knowledge-refinery deep-search enable --model gpt-5.6-sol
+knowledge-refinery deep-search enable --model gpt-5.6-sol --reasoning-effort high
 knowledge-refinery deep-search status --json
 ```
 
@@ -44,8 +44,9 @@ tool shellへの環境変数継承を無効化します。質問はcommand line�
 一時snapshotは成功・失敗・timeoutのいずれでも削除されます。MCPのtool timeoutは300秒、内部の
 Codex実行timeoutは240秒です。
 
-modelはuser configからserver側で読み、MCP呼び出し側からoverrideできません。設定保存前に
-`codex debug models`のrefresh済みcatalogへslugを照合します。結果は`answer`、根拠ID付き
+modelと任意のreasoning effortはuser configからserver側で読み、MCP呼び出し側からoverrideできません。
+設定保存前に`codex debug models`のrefresh済みcatalogへslugと対応effortを照合します。effortが
+未設定ならCodexのmodel既定値を使います。結果は`answer`、根拠ID付き
 `findings`、`sources`、`contradictions`、`limitations`、設定された`model`を返します。
 source IDは`experience:project/id`、`memory:project/id`、
 `memory:shared/id`形式です。生成AIによる要約なので、重要な判断ではsource IDを通常のexact getへ

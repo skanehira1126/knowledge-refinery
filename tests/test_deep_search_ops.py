@@ -99,6 +99,7 @@ def test_run_deep_search_passes_question_on_stdin_and_validates_sources(
         "product",
         "What causes the timeout?",
         "gpt-5.4",
+        reasoning_effort="high",
         timeout=12,
     )
 
@@ -111,6 +112,7 @@ def test_run_deep_search_passes_question_on_stdin_and_validates_sources(
     assert "--ignore-user-config" in command
     assert "--ignore-rules" in command
     assert "read-only" in command
+    assert 'model_reasoning_effort="high"' in command
     assert result["model"] == "gpt-5.4"
     assert result["sources"] == [
         {
@@ -190,3 +192,35 @@ def test_validate_codex_model_rejects_unknown_slug(
     with pytest.raises(RefineryCliError) as captured:
         validate_codex_model("not-a-model")
     assert captured.value.code == "deep_search_unknown_model"
+
+
+def test_validate_codex_model_checks_supported_reasoning_effort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {
+                    "models": [
+                        {
+                            "slug": "gpt-5.6-sol",
+                            "supported_reasoning_levels": [
+                                {"effort": "low"},
+                                {"effort": "high"},
+                            ],
+                        }
+                    ]
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr("knowledge_refinery.deep_search_ops.subprocess.run", fake_run)
+
+    validate_codex_model("gpt-5.6-sol", reasoning_effort="high")
+    with pytest.raises(RefineryCliError) as captured:
+        validate_codex_model("gpt-5.6-sol", reasoning_effort="medium")
+    assert captured.value.code == "deep_search_unsupported_reasoning_effort"

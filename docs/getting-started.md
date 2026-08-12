@@ -172,11 +172,12 @@ knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"
 通常の構造化検索に加え、vault内の複数文書を生成AIで比較・統合したい場合だけ有効にします。
 
 ```bash
-knowledge-refinery deep-search enable --model gpt-5.6-sol
+knowledge-refinery deep-search enable --model gpt-5.6-sol --reasoning-effort high
 knowledge-refinery deep-search status
 ```
 
-modelは保存前にCodex catalogへ照合されます。変更後はMCP serverまたはCodex task/sessionを
+modelと指定したreasoning effortは保存前にCodex catalogへ照合されます。effortを省略するとmodel
+既定値を使用します。公開状態の変更後はMCP serverまたはCodex task/sessionを
 再起動します。Codex CLIがPATH上にあり、認証済みであることも必要です。deep searchは
 読み取り専用で、検証済み文書の一時snapshotだけを使用します。
 詳しい隔離境界は[MCP tools](mcp.md#codexdeep-search)を参照してください。

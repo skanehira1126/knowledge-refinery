@@ -147,7 +147,7 @@ def test_local_mcp_records_searches_and_validates(
     assert tagged_metadata["technologies"] == ["Python"]
     assert refinery_list_projects() == [tagged_metadata]
     assert refinery_info() == {
-        "version": "0.3.0",
+        "version": "0.3.1",
         "schema_version": 2,
         "project_metadata_schema_version": 1,
         "tag_taxonomy_schema_version": 1,

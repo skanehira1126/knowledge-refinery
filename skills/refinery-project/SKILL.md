@@ -1,9 +1,13 @@
 ---
 name: refinery-project
-description: 中央vaultを保持したまま、repositoryのKnowledge Refineryを設定、説明、有効化、無効化、検査、診断する。repositoryの導入・解除、中央project metadataの作成・更新、vaultの選択、`.refinery.yaml`の修復、managed AGENTS blockの更新、ローカルMCP接続のトラブルシューティングに使用する。
+description: repositoryのKnowledge Refineryを設定・診断し、中央vaultを保持して導入・解除、有効化・無効化、metadata・vault選択・managed AGENTS・ローカルMCP接続を管理する。Knowledge Refineryの設定や仕組みの説明に使用する。ナレッジ本文の検索・記録やvault内の品質監査には使用しない。
 ---
 
 # Refinery project
+
+Read the [shared operating rules](../operating-rules.md) for authorization,
+blocked operations, and completion. Use only the section below matching the requested lifecycle
+operation; a diagnosis or explanation does not authorize setup or repair.
 
 Use the `knowledge-refinery` CLI for lifecycle changes. Do not hand-edit managed files when the CLI can perform the operation.
 
@@ -12,9 +16,9 @@ Resolve the current repository to an absolute path and refer to that value as `P
 ## Inspect before changing
 
 1. Run `knowledge-refinery project status --target "$PROJECT_ROOT"`.
-2. Run `knowledge-refinery doctor --target "$PROJECT_ROOT"` when status is unhealthy or the MCP tools are unavailable.
+2. When MCP is available, set `MCP_VERSION` to `refinery_info.version` and run `knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"`. Otherwise run `knowledge-refinery doctor --target "$PROJECT_ROOT"` to diagnose the CLI and local runtime.
 3. Report the active vault, project ID, enabled state, `vault_match`, and failed checks before applying a repair. Never hand-edit `vault_id` to bypass a mismatch.
-4. When MCP is available, set `MCP_VERSION` to `refinery_info.version` and pass it to `knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"`. Stop and report version drift before writing.
+4. Version drift blocks refinery writes: report it and continue permitted inspection. Do not repeat a successful preflight unless the relevant state changes.
 
 For Knowledge Refinery configuration repair, use only this `refinery-project` skill and the documented CLI commands. Do not invent or recommend a repair skill or command that is not present in this plugin.
 
@@ -22,12 +26,12 @@ For Knowledge Refinery configuration repair, use only this `refinery-project` sk
 
 ## Set up
 
-1. Require an initialized central vault. If none exists, run `knowledge-refinery vault init --root "$VAULT_ROOT"` with the user-selected absolute vault path.
+1. Inspect the active vault and the user-selected absolute `VAULT_ROOT`. If no initialized vault exists there, prepare `knowledge-refinery vault init --root "$VAULT_ROOT"` for execution after step 3; `vault init` also changes the user-wide active vault.
 2. Inspect stable repo-owned sources such as README files and package manifests. Derive a human-readable name, a one-sentence summary, focused lowercase kebab-case discovery tags for purpose or domain, and the principal technologies. Keep technology names out of tags. Never include secrets, local absolute paths, temporary task state, or unsupported guesses.
-3. For an unconfigured repository, present the proposed immutable `PROJECT_ID`, `VAULT_ROOT`, derived metadata, and whether setup will switch the user-wide active vault. Wait for explicit user confirmation of the ID and vault transition before writing.
-4. Run `knowledge-refinery project setup --target "$PROJECT_ROOT" --vault "$VAULT_ROOT" --project-id "$PROJECT_ID" --project-name "$PROJECT_NAME" --summary "$SUMMARY"`, repeating `--tag` and `--technology` for the confirmed values. The CLI rejects connecting an unconfigured repository to an ID already registered in the vault.
+3. For an unconfigured repository, present the proposed immutable `PROJECT_ID`, `VAULT_ROOT`, derived metadata, and whether setup will switch the user-wide active vault. Require explicit user confirmation of the ID and vault transition before writing; an explicit choice or approval already given for those exact values satisfies this requirement. Ask only for the unresolved choice. Before any active-vault change, including for an existing repo, apply the same approval boundary.
+4. Initialize the selected vault if needed, then run `knowledge-refinery project setup --target "$PROJECT_ROOT" --vault "$VAULT_ROOT" --project-id "$PROJECT_ID" --project-name "$PROJECT_NAME" --summary "$SUMMARY"`, repeating `--tag` and `--technology` for the selected metadata. The CLI rejects connecting an unconfigured repository to an ID already registered in the vault.
 5. Add `--link` only when a human explicitly wants a `.refinery` browsing symlink.
-6. `project setup` does not change repository guidance by default. Add `--agents` only when a human explicitly wants the managed guidance block appended.
+6. `project setup` does not change repository guidance by default. Add `--agents` only when a human explicitly wants the managed guidance block appended. Check applicable repository guidance first: an `AGENTS.override.md` in the same directory takes precedence over `AGENTS.md`. If the edited file will not be loaded, report that limitation instead of claiming automatic mode is active or overwriting the override.
 7. Verify with `knowledge-refinery doctor --target "$PROJECT_ROOT"`.
 
 ## Maintain project metadata

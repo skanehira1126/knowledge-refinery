@@ -139,7 +139,7 @@ knowledge-refinery project setup \
 
 ```text
 $refinery-projectを使って、このrepoをKnowledge Refineryへ登録してください。
-project IDは通常どおり自動設定し、active vaultが切り替わる場合は先に確認してください。
+project IDの候補はdirectory名から作り、IDとactive vaultの切り替えを私が確認してからsetupしてください。
 AGENTS.mdは変更しないでください。
 ```
 

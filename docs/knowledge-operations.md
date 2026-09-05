@@ -26,6 +26,9 @@
 | vaultのcommit・push・backup | vault管理者 | diff、機密情報、remote状態 |
 
 自動処理やエージェントは、validationエラーの修復を理由に文書を黙って削除しません。
+検索・診断・提案だけの依頼では書き込みません。修復を依頼された場合は、結論を変えない事実訂正を
+現在revisionで反映し、根拠不足や承認待ちの箇所だけを保留します。承認が必要な操作は候補・差分を
+先に具体化し、同じ対象と影響への既存承認があれば再確認しません。
 
 ## ナレッジのライフサイクル
 
@@ -129,6 +132,9 @@ shared memory、現在project experienceの順に検索します。それでも�
 
 ### 日次または書き込みのまとまりごと
 
+この節は定期保守または依頼された書き込みのまとまりの完了確認です。単発のexperience保存ごとに
+全項目を実行する必要はありません。Git commit・pushは利用者が選んだvault運用の範囲で実施します。
+
 1. `refinery-maintenance` Skillで `refinery_validate` を実行する。
 2. project metadataが現在の名前、概要、検索用tag、主要技術を表しているか確認する。
 3. validationエラーをpath単位で修復する。
@@ -161,6 +167,9 @@ git -C "$REFINERY_VAULT" diff
 3. Git履歴から直前の正常内容を確認する。
 4. 最小限の修正を行い、`refinery_validate` を再実行する。
 5. vault全体がvalidになってからdiffをcommitする。
+
+修復をまとめて適用してから再validationし、必要な確認が通った後は、新しい変更・失敗・具体的な
+未解決リスクがある場合だけ追加検証します。未解決pathがある場合は理由とともに報告します。
 
 ```bash
 git -C "$REFINERY_VAULT" diff -- "path/from/validation.md"
@@ -221,10 +230,10 @@ product Gitとvault Gitのcommitやpull requestは常に分離します。
 ### 書き込み後
 
 - [ ] 保存した文書をexact getで読み直したか。
-- [ ] `refinery_validate` がvalidか。
-- [ ] product repoを変更していないか。
+- [ ] 保守による書き込みのまとまり、または具体的な整合性の懸念がある場合、`refinery_validate` がvalidか。
+- [ ] vault保守にproduct repoの変更を混ぜていないか。
 - [ ] vault Gitのdiffに機密情報や意図しない変更がないか。
-- [ ] vaultの変更をcommitし、必要なremoteへpushしたか。
+- [ ] 合意したGit運用に応じてcommit・pushし、保存のみの状態と区別して報告したか。
 
 ### 定期棚卸し
 

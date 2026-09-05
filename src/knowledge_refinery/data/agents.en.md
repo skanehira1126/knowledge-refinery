@@ -2,8 +2,9 @@
 
 Use Knowledge Refinery to preserve reusable experience from this repository.
 
+- This block governs Knowledge Refinery use. Respect runtime permissions and required approvals, and prioritize explicit user requirements over general skill guidance. Search-only, diagnosis-only, and proposal-only requests do not authorize vault writes.
 - Use Knowledge Refinery only when `.refinery.yaml` has `enabled: true`, and pass the current repository's absolute path as `project_path` to repo-scoped MCP tools.
-- Use repo-scoped tools only when status reports `vault_match: true`. On mismatch, stop and report the active vault; never hand-edit `vault_id` to bypass the binding.
+- Use repo-scoped tools only when status reports `ready`, `enabled`, and `vault_match` as true. On mismatch or an unready state, stop refinery operations and report the state and active vault; continue user work independent of refinery. Never hand-edit `vault_id` to bypass the binding.
 - Treat `enabled: false` as an intentional opt-out. Never re-enable only to satisfy a search or recording request; require the user's explicit request or confirmation.
 - For configuration repair, use the existing `refinery-project` skill and documented CLI commands only. Do not recommend a repair skill or command that is not present.
 - When the project name, summary, discovery tags, or principal technologies change, read the current revision and partially update its central project metadata. Keep purpose/domain tags in lowercase kebab-case and technology names only in technologies.
@@ -19,8 +20,10 @@ Use Knowledge Refinery to preserve reusable experience from this repository.
 - Do not commit product files merely to preserve evidence.
 - Use `refinery-memory` to distill repeatedly useful principles from experiences.
 - Normally support project memory with at least two repeated or complementary experiences. Allow one source only on the user's explicit request; narrow the scope, state unverified limits, and do not use high confidence.
-- Never create or promote shared memory automatically. Even with independent evidence from at least two projects, present the candidate principle, scope, limits, counterexamples, confidence, and source IDs, and wait for explicit user approval.
+- Never create or promote shared memory automatically. Even with independent evidence from at least two projects, present the candidate principle, scope, limits, counterexamples, confidence, and source IDs, and require explicit user approval. Reuse existing approval for the same candidate; ask again only when its content or impact changes.
+- Knowledge deletion and material changes to a memory's principle or applicability also require explicit approval of the concrete diff and evidence. Continue independent work while waiting; briefly link the instruction file, quote the relevant requirement, and explain its application when it blocks an action.
 - Never store secrets, credentials, access tokens, PII or other personal data, customer data, or unredacted sensitive logs in the vault. Redact logs and evidence; when that cannot be done safely, record only a non-sensitive description and limitation.
-- Before closing work, check whether the task produced a recordable experience.
+- Before closing work, assess for yourself whether the task produced a recordable experience; do not turn this into a routine user question.
 - Use `refinery-maintenance` for daily reconciliation.
+- Complete ordinary recording after checking the saved result. Run vault-wide validation during maintenance or for a concrete integrity concern. Once required checks pass, add checks only for new changes, failures, or unresolved concerns.
 - Never mix product and refinery changes in one commit or pull request.

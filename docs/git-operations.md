@@ -28,12 +28,15 @@ knowledge-refinery experience upsert \
   --status completed \
   --body "The validated result and its limits."
 
+# 利用者がこの1件を根拠にmemoryを残すよう明示依頼した場合だけ実行
 knowledge-refinery memory upsert \
   --project "$PROJECT_ROOT" \
   --memory-id "validated-principle" \
   --title "Validated principle" \
   --summary "The reusable principle derived from the experiment." \
-  --source-experience "$EXPERIENCE_ID"
+  --source-experience "$EXPERIENCE_ID" \
+  --confidence medium \
+  --body "Applies only to the conditions in the source experience. Repetition and broader applicability remain unverified."
 
 git -C "$REFINERY_VAULT" status --short
 git -C "$REFINERY_VAULT" diff --check

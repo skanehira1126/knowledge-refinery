@@ -84,7 +84,9 @@ knowledge-refinery deep-search status --json
 `refinery_validate`の`path`と`error`を確認します。shared memoryではqualified source、
 distinct project数、参照experienceの存在を優先的に確認します。
 
-検索は不正文書を隔離して正常文書を返すため、検索結果が少ない場合も `refinery_validate` を実行してください。exact getで対象文書自体が不正な場合は、その場でエラーになります。
+検索は不正文書を隔離して正常文書を返します。既知の文書が見つからず破損が疑われる場合や、
+exact getが不正文書を報告する場合は `refinery_validate` を実行してください。結果が少ないだけなら、
+まず検索語やscopeを確認し、通常検索を毎回vault全体の監査へ広げません。
 
 エージェントへ復旧を依頼する場合は`$refinery-maintenance`を使い、対象path、Git差分、
 修正案を先に報告させます。knowledge文書の削除やmemoryの大幅な書き換えは、利用者が確認する

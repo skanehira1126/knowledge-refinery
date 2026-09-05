@@ -70,6 +70,7 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 
 - [導入とオプション](docs/getting-started.md)
 - [エージェントへの頼み方](docs/agent-workflow.md)
+- [利用repoのAGENTS.md追記サンプル](docs/agents-guidance-examples.md)
 - [ナレッジモデルと検索](docs/knowledge-model.md)
 - [repoの有効・無効](docs/project-lifecycle.md)
 - [ナレッジ運用](docs/knowledge-operations.md)

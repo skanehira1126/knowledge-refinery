@@ -7,13 +7,14 @@
 
 - Plugin manifestは `.codex-plugin/plugin.json`、MCP起動設定は `.mcp.json` を正とする。
 - 配布するSkillは `skills/` 配下を正とする。
+- 配布Skill共通の実行・承認・完了条件は `skills/operating-rules.md` に置き、各 `SKILL.md` から読み込む。この `AGENTS.md` 自体は開発repoの規約であり、利用repoのmanaged blockには使わない。
 - MCP toolsは `src/knowledge_refinery/mcp_server.py`、experience/memoryのドメイン処理は `experience_ops.py`、中央vault管理は `vault_ops.py` に置く。
 - 利用repoへ挿入するAGENTS managed blockは `src/knowledge_refinery/data/agents.jp.md` と `agents.en.md` で管理する。
-- READMEの「利用repoのAGENTS.mdサンプル」は、上記managed blockの方針と同期させる。
+- READMEから辿る `docs/agent-workflow.md` と `docs/agents-guidance-examples.md` は、上記managed blockの方針と同期させる。
 
 ## Change rules
 
-- MCP toolの名前、引数、戻り値を変更した場合は、root Skill、README、`tests/test_mcp_server.py` も更新する。
+- MCP toolの名前、引数、戻り値を変更した場合は、該当する配布Skill、README、`tests/test_mcp_server.py` も更新する。
 - experience/memoryのYAML schemaを変更した場合は、検索、validation、README、テストを同時に更新する。
 - 利用repoへSkillをコピーする設計へ戻さない。SkillはPluginから提供する。
 - `.refinery` symlinkを必須にしない。利用repoの必須設定は `.refinery.yaml` の `project_id` とする。
@@ -28,3 +29,5 @@ bash scripts/validate.sh
 ```
 
 スクリプトは `CODEX_HOME` を参照し、未設定の場合は `~/.codex` を使う。
+必須検証が通った後の再実行・範囲拡大は、新しい変更、失敗、具体的な未解決リスクがある場合だけ行う。
+指示の変更では影響する発動・承認・完了判断を少数の代表ケースで確認し、実モデルでの試験と静的レビューを区別する。

@@ -8,6 +8,8 @@ projectの説明情報は中央vaultの `projects/<project_id>/project.yaml` を
 未設定repoをエージェントに登録させる場合は、immutableなproject ID候補を先に提示させ、
 利用者が確認してからsetupします。`project setup --vault`は指定vaultをユーザー全体のactive
 vaultにも設定するため、現在値と異なる場合は他repoや別taskへの影響も確認します。
+正確なproject ID、保存先、active vaultの切り替えを既に明示承認している場合は再確認せず、
+未決定の選択だけを確認します。新規vaultの`vault init`もactive vaultを変えるため、この確認より先には実行しません。
 
 以下の例は対象repoのrootで実行し、その絶対パスを一度だけ取得します。
 

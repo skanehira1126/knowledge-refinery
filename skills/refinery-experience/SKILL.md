@@ -1,13 +1,18 @@
 ---
 name: refinery-experience
-description: 過去のナレッジを検索し、意味のある開発上の試行を、目的、根拠、発見、限界、次の可能性を含む一つのexperienceとして記録する。実験、比較、デバッグ、不採用案、結論が出なかった作業、有用な失敗の後に使用し、evidenceが未追跡でも対象にする。
+description: Knowledge Refineryの過去のナレッジを検索し、意味のある開発上の試行を一つのexperienceとして記録する。ナレッジ検索の依頼、実験・比較・デバッグ・不採用・有用な失敗から得た知見の記録に使用し、未追跡evidenceも扱う。検索のみなら書き込まない。定型的な完了log、memoryへの原則抽出、設定修復は対象外。
 ---
 
 # Refinery experience
 
-1. Resolve the current repository to an absolute `PROJECT_ROOT`, then run `knowledge-refinery project status --target "$PROJECT_ROOT" --json`. Never pass a literal placeholder path. Stop without calling refinery tools unless `ready` and `enabled` are true.
+Read the [shared operating rules](../operating-rules.md) for authorization,
+blocked operations, and completion. Input is the current repo and a knowledge question or an
+inspected attempt with its evidence. For search-only requests, perform steps 1–2 and return the
+relevant findings and source IDs; steps 3–5 require recording authorization.
+
+1. Resolve the current repository to an absolute `PROJECT_ROOT`, then run `knowledge-refinery project status --target "$PROJECT_ROOT" --json`. Never pass a literal placeholder path. Unless `ready` and `enabled` are true, report the state and skip this repo's refinery operations; continue independent user work.
 2. Pass the repository's absolute path as `project_path` to every repo-scoped MCP tool. Search in this order: current project memory together with shared memory, current project experiences, then cross-project knowledge only when the local result is insufficient. For a bounded cross-project search, first use `refinery_list_projects` to choose IDs and pass `project_ids`; use `all_projects: true` only when no bounded project set is defensible. Never combine `project_ids` with `all_projects: true`. When `refinery_deep_search` is available, use it only for a question that materially benefits from semantic synthesis, comparison, or contradiction analysis after deterministic search is insufficient. The server selects the configured model; treat its answer as generated synthesis, and use returned source IDs with exact get before a consequential decision. Deep search never records or updates knowledge.
-3. After a meaningful attempt or before closing the task, ask: "Would this result change how a future agent chooses, avoids, verifies, or diagnoses something?" Record a comparison, rejection, non-obvious failure, constraint, or reusable discovery when the answer is yes. Skip routine completion logs, progress summaries, obvious typo fixes, and repetitions that add no new evidence, condition, or counterexample.
+3. After a meaningful attempt or before closing the task, assess for yourself: "Would this result change how a future agent chooses, avoids, verifies, or diagnoses something?" This is a recording decision, not a routine question to the user. Record a comparison, rejection, non-obvious failure, constraint, or reusable discovery when the answer is yes. Skip routine completion logs, progress summaries, obvious typo fixes, and repetitions that add no new evidence, condition, or counterexample.
 4. Before creating an experience, choose a stable, descriptive lowercase slug for `experience_id`. Record one integrated document with `refinery_record_experience`; do not split the attempt and its evaluation into separate records. Creating a new experience omits `expected_updated_at`. Updating an existing experience requires the exact `updated_at` returned by `refinery_get_experience` or the prior record response. On update, omitted optional fields are preserved, an explicit empty list clears a list field, and `clear_confidence: true` explicitly clears confidence. If the revision is stale, read and reconcile before retrying.
 5. Search the returned ID or read it back to confirm the saved record.
 

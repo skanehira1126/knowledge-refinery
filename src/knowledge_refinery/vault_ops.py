@@ -828,6 +828,9 @@ Personal, cross-project experience repository managed by knowledge-refinery.
 def _vault_agents() -> str:
     return """# Refinery vault rules
 
+- These rules govern knowledge in this vault, not product implementation. Respect runtime
+  permissions and explicit user scope; search-only, diagnosis-only, and proposal-only requests
+  are read-only.
 - Treat each experience as one integrated account of purpose, attempts, observations,
   evaluation, and future hypotheses.
 - Do not require product code or evidence files to be committed before recording an
@@ -836,6 +839,13 @@ def _vault_agents() -> str:
 - Promote only repeatedly useful principles into memory.
 - Use `shared/memory` only for cross-project principles.
 - Keep Knowledge tag descriptions stable and factual in `knowledge-tags.yaml`.
+- Do not store credentials, tokens, personal or customer data, or unredacted sensitive logs.
+- Preserve current revisions, supporting sources, and unrelated edits when updating knowledge.
+- Knowledge deletion or a material change to a memory's principle or applicability requires
+  explicit approval of the concrete diff and evidence. Reuse approval for unchanged work;
+  prepare permitted inspection and drafts before asking, and continue independent work.
+- If an instruction blocks an action, link its file, quote the requirement briefly, and explain
+  its application without treating an interpretation as a written rule.
 """
 
 
@@ -846,6 +856,9 @@ def _project_store_agents(project_id: str) -> str:
 - `experiences/` stores integrated attempts and conclusions.
 - Experience `evidence` entries store reference metadata only; do not copy source files or secrets.
 - `memory/` stores reusable principles supported by experiences.
+- Normally require two repeated or complementary experiences for project memory. One source
+  requires an explicit user request, narrow scope, stated unverified limits, and confidence
+  below high.
 - Product implementation and refinery history have independent Git lifecycles.
 """
 
@@ -855,5 +868,10 @@ def _shared_memory_agents() -> str:
 
 - Store only principles that are useful across projects.
 - Every memory document must list supporting experience IDs.
+- Read independent supporting experiences from at least two projects, using qualified
+  `project-id/experience-id` sources. Schema validity alone does not authorize promotion.
+- Before creating or promoting shared memory, present the principle, scope, limits,
+  counterexamples, confidence, and source IDs and require explicit user approval.
+  Existing approval for that unchanged candidate is sufficient.
 - Keep project-specific details in the originating project memory.
 """

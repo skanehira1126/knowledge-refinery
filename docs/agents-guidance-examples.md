@@ -12,6 +12,11 @@ knowledge-refinery project setup \
 
 `--agents` が追加するmanaged blockは、Knowledge Refineryを使うための共通ルールです。以下のサンプルは作業領域に固有の補足なので、必要なものだけを `AGENTS.md` のmanaged blockの外側へコピーしてください。外側に置くことで、`update-agents-md` を実行してもサンプル部分は上書きされません。
 
+以下の例にも[書き込みと確認の境界](agent-workflow.md#write-approval-boundary)が適用されます。
+検索・診断・提案のみの依頼では記録せず、disabledや未準備ならrefinery操作だけを見送ります。
+`AGENTS.override.md`が同じdirectoryにある場合はCodexがそちらを優先するため、追記だけで
+`AGENTS.md`が読み込まれたとは判断しません。利用repoの有効な指示と矛盾しない配置を確認してください。
+
 ## データ分析
 
 ```markdown
@@ -33,7 +38,7 @@ knowledge-refinery project setup \
 - APIやschemaの変更、ライブラリ選定、設計案の比較では、採用案だけでなく不採用案とtrade-offもexperienceに残す。
 - test結果、benchmark、再現手順、関連するdiffやcommitを、判断を裏付けるevidenceとして記録する。
 - 一時的な回避策と恒久対応を区別し、残る制約やfollow-upを明記する。
-- repo固有の実装規約はproject memoryに置き、複数repoで確認できた原則だけをshared memoryへ昇格する。
+- repo固有の実装規約はproject memoryに置き、独立した2 project以上の根拠を持つ原則は候補と適用範囲を提示し、利用者の明示承認後にshared memoryへ昇格する。
 ```
 
 ## 障害調査・運用

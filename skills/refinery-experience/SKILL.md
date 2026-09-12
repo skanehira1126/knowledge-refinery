@@ -1,62 +1,41 @@
 ---
 name: refinery-experience
-description: Knowledge Refineryの過去のナレッジを検索し、意味のある開発上の試行を一つのexperienceとして記録する。ナレッジ検索の依頼、実験・比較・デバッグ・不採用・有用な失敗から得た知見の記録に使用し、未追跡evidenceも扱う。検索のみなら書き込まない。定型的な完了log、memoryへの原則抽出、設定修復は対象外。
+description: Knowledge Refineryのナレッジ検索、または再利用できる試行・比較・失敗のexperience記録に使う。原則の抽出・改善はrefinery-memory、設定操作はrefinery-projectを使う。
 ---
 
 # Refinery experience
 
 Read the [shared operating rules](../operating-rules.md) for authorization,
 blocked operations, and completion. Input is the current repo and a knowledge question or an
-inspected attempt with its evidence. For search-only requests, perform steps 1–2 and return the
-relevant findings and source IDs; steps 3–5 require recording authorization.
+inspected attempt with its evidence. Search-only requests finish with relevant findings and source
+IDs. Read the recording reference only when creating or updating an experience.
 
-1. Resolve the current repository to an absolute `PROJECT_ROOT`, then run `knowledge-refinery project status --target "$PROJECT_ROOT" --json`. Never pass a literal placeholder path. Unless `ready` and `enabled` are true, report the state and skip this repo's refinery operations; continue independent user work.
-2. Pass the repository's absolute path as `project_path` to every repo-scoped MCP tool. Search in this order: current project memory together with shared memory, current project experiences, then cross-project knowledge only when the local result is insufficient. For a bounded cross-project search, first use `refinery_list_projects` to choose IDs and pass `project_ids`; use `all_projects: true` only when no bounded project set is defensible. Never combine `project_ids` with `all_projects: true`. When `refinery_deep_search` is available, use it only for a question that materially benefits from semantic synthesis, comparison, or contradiction analysis after deterministic search is insufficient. The server selects the configured model; treat its answer as generated synthesis, and use returned source IDs with exact get before a consequential decision. Deep search never records or updates knowledge.
-3. After a meaningful attempt or before closing the task, assess for yourself: "Would this result change how a future agent chooses, avoids, verifies, or diagnoses something?" This is a recording decision, not a routine question to the user. Record a comparison, rejection, non-obvious failure, constraint, or reusable discovery when the answer is yes. Skip routine completion logs, progress summaries, obvious typo fixes, and repetitions that add no new evidence, condition, or counterexample.
-4. Before creating an experience, choose a stable, descriptive lowercase slug for `experience_id`. Record one integrated document with `refinery_record_experience`; do not split the attempt and its evaluation into separate records. Creating a new experience omits `expected_updated_at`. Updating an existing experience requires the exact `updated_at` returned by `refinery_get_experience` or the prior record response. On update, omitted optional fields are preserved, an explicit empty list clears a list field, and `clear_confidence: true` explicitly clears confidence. If the revision is stale, read and reconcile before retrying.
-5. Search the returned ID or read it back to confirm the saved record.
+## Search
 
-If a create call has an ambiguous outcome, do not blindly retry it. First use exact get with the chosen `experience_id`, then search that ID if needed. Retry creation only after confirming that the record does not exist.
+Search when explicitly requested, or when opted-in repository guidance calls for past knowledge
+that could affect a design choice, diagnosis, comparison, or known constraint. Ordinary development
+work does not need a search merely because it started; skip unrelated lookups for mechanical edits.
+Reuse relevant results already inspected while their sources and the question remain unchanged.
 
-Use this body shape:
+Search current project memory together with shared memory, then current project experiences.
+Expand beyond the project only when the local result is insufficient: choose IDs with
+`refinery_list_projects` and pass `project_ids`; use `all_projects: true` only when no bounded
+project set is defensible. Never combine `project_ids` with `all_projects: true`.
 
-```markdown
-## 試したこと
+Use available `refinery_deep_search` only when deterministic search is insufficient and the question
+benefits from semantic synthesis, comparison, or contradiction analysis. The server selects the
+configured model. Treat the answer as generated synthesis and exact-get its source IDs before a
+consequential decision. Deep search never records or updates knowledge.
 
-## 分かったこと
+## Record
 
-## 微妙だった点・限界
+Assess whether an inspected result could change a future agent's choice, avoidance, verification,
+or diagnosis. Comparisons, rejections, informative failures, constraints, and reusable discoveries
+qualify. Skip routine completion logs, progress summaries, obvious typo fixes, and repetitions with
+no new evidence, condition, or counterexample. Rejected implementations and untracked evidence
+can still support a useful record.
 
-## 次の可能性
-```
-
-Keep observations, interpretations, limitations, and hypotheses distinguishable. Choose status by this table; success and status are separate concepts.
-
-| Status | Use when |
-|---|---|
-| `completed` | The planned attempt reached an evaluable result, including a definitive negative result. |
-| `inconclusive` | The attempt ran, but evidence is insufficient, conflicting, or cannot answer the question. |
-| `abandoned` | The attempt stopped before an evaluable result because of a blocker, cost, risk, or invalidated premise. State why it stopped. |
-| `superseded` | A later saved experience replaces this record's conclusion. Link the successor/predecessor before marking the old record superseded. |
-
-Choose confidence independently from status.
-
-| Confidence | Use when |
-|---|---|
-| `high` | Direct evidence is reproducible under stated conditions and no important unresolved contradiction remains. |
-| `medium` | Direct evidence exists, but repetition, coverage, or applicability is limited. |
-| `low` | Evidence is partial, indirect, unavailable for re-checking, or has important unresolved uncertainty. |
-
-Omit confidence only when it has not yet been assessed. A failed attempt may still be `completed` with high confidence when the negative result is reproducible.
-
-Pass evidence as structured mappings:
-
-- Local or untracked file: `type: file`, `path`, `retention: reference`, and optional `git_state`. When present, `git_state` must be one of `tracked`, `untracked`, `modified`, `staged`, `ignored`, or `deleted`.
-- Committed source: `type: git`, `commit`, `path`, `retention: source`.
-- Remote evidence: `type: mlflow`, `url`, or `external`, with `uri` and `retention: external`.
-
-Link related or superseded experience IDs when known. Do not commit product files merely to preserve an experience, and do not invent evidence that was not inspected.
-
-Never store secrets, credentials, access tokens, PII or other personal data, or customer data in a title, body, metadata, evidence, or copied log. Redact sensitive values before recording a safe excerpt or reference; if safe redaction is not possible, record only a non-sensitive description of the evidence and its limitation.
-
-Before assigning tags, call `refinery_browse_knowledge_tags` without `parent_tag`, then follow relevant children one level at a time. Use `refinery_search_knowledge_tags` when a concept is easier to identify from words than from the hierarchy. Reuse the narrowest existing tag whose description fits; do not invent a parallel spelling when an existing branch applies. Choose the root deterministically: subject/domain → `domain`, output artifact → `artifact`, work type → `task`, technology → `tech`, symptom or quality issue → `issue`. Never invent another root. Use one to three lowercase slug segments separated by `/`, such as `domain/ml/feature-selection`; a parent tag search also matches its descendants.
+When recording is explicitly requested or authorized by opted-in guidance, read
+[recording.md](references/recording.md), save the integrated experience, and verify it. This value
+judgment does not require a routine question to the user. Search needed for the record can reuse
+the relevant results from the current task.

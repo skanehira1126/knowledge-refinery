@@ -1,29 +1,14 @@
 ## Knowledge Refinery
 
-Use Knowledge Refinery to preserve reusable experience from this repository.
+This block authorizes automatic Knowledge Refinery use for reusable development experience.
+Before refinery operations, read the relevant plugin skill and follow its shared operating rules
+and the references needed for the task.
 
-- This block governs Knowledge Refinery use. Respect runtime permissions and required approvals, and prioritize explicit user requirements over general skill guidance. Search-only, diagnosis-only, and proposal-only requests do not authorize vault writes.
-- Use Knowledge Refinery only when `.refinery.yaml` has `enabled: true`, and pass the current repository's absolute path as `project_path` to repo-scoped MCP tools.
-- Use repo-scoped tools only when status reports `ready`, `enabled`, and `vault_match` as true. On mismatch or an unready state, stop refinery operations and report the state and active vault; continue user work independent of refinery. Never hand-edit `vault_id` to bypass the binding.
-- Treat `enabled: false` as an intentional opt-out. Never re-enable only to satisfy a search or recording request; require the user's explicit request or confirmation.
-- For configuration repair, use the existing `refinery-project` skill and documented CLI commands only. Do not recommend a repair skill or command that is not present.
-- When the project name, summary, discovery tags, or principal technologies change, read the current revision and partially update its central project metadata. Keep purpose/domain tags in lowercase kebab-case and technology names only in technologies.
-- Search current project memory together with shared memory first, then current project experiences. Expand only when needed, first to selected `project_ids` and then to `all_projects: true`; never combine selected IDs with `all_projects: true`.
-- Use `refinery-experience` after meaningful experiments, comparisons, rejections, or informative failures.
-- Record only results that could change a future agent's choice, avoidance, verification, or diagnosis. Skip routine completion reports, progress logs, obvious typo fixes, and repetitions with no new evidence, condition, or counterexample.
-- Keep purpose, attempts, findings, limitations, and future possibilities in one experience.
-- Use `completed` for an evaluable result regardless of success, `inconclusive` when insufficient or conflicting evidence cannot answer the question, `abandoned` when work stops before an evaluable result, and `superseded` only after a later experience replaces the conclusion.
-- Use high confidence for reproducible direct evidence under stated conditions, medium for direct but limited evidence, and low for partial or indirect evidence or important unresolved uncertainty.
-- Choose a stable lowercase-slug `experience_id` before creation. After an ambiguous create outcome, exact-get or search that ID before retrying.
-- Update existing experience or memory with the current revision. Omitted optional fields are preserved, an empty list explicitly clears a list, and `clear_confidence: true` clears confidence.
-- Do not discard an experience because its implementation was rejected or its evidence is untracked.
-- Do not commit product files merely to preserve evidence.
-- Use `refinery-memory` to distill repeatedly useful principles from experiences.
-- Normally support project memory with at least two repeated or complementary experiences. Allow one source only on the user's explicit request; narrow the scope, state unverified limits, and do not use high confidence.
-- Never create or promote shared memory automatically. Even with independent evidence from at least two projects, present the candidate principle, scope, limits, counterexamples, confidence, and source IDs, and require explicit user approval. Reuse existing approval for the same candidate; ask again only when its content or impact changes.
-- Knowledge deletion and material changes to a memory's principle or applicability also require explicit approval of the concrete diff and evidence. Continue independent work while waiting; briefly link the instruction file, quote the relevant requirement, and explain its application when it blocks an action.
-- Never store secrets, credentials, access tokens, PII or other personal data, customer data, or unredacted sensitive logs in the vault. Redact logs and evidence; when that cannot be done safely, record only a non-sensitive description and limitation.
-- Before closing work, assess for yourself whether the task produced a recordable experience; do not turn this into a routine user question.
-- Use `refinery-maintenance` for daily reconciliation.
-- Complete ordinary recording after checking the saved result. Run vault-wide validation during maintenance or for a concrete integrity concern. Once required checks pass, add checks only for new changes, failures, or unresolved concerns.
-- Never mix product and refinery changes in one commit or pull request.
+- Use `refinery-experience` to search when past knowledge could inform a design choice, diagnosis, comparison, or known constraint, and whenever a search is explicitly requested. Skip lookups for typo or formatting changes where past knowledge cannot affect the decision. Reuse results for an unchanged question and evidence.
+- Use `refinery-experience` to record attempts, comparisons, rejections, or informative failures that could change a future choice, avoidance, verification, or diagnosis. Rejected implementations and untracked evidence qualify; routine completion logs and repetitions with no new evidence do not.
+- Use `refinery-memory` to distill repeatedly useful principles from multiple experiences into project memory. Creating or promoting shared memory and materially rewriting memory require explicit approval of the concrete candidate and evidence.
+- Use `refinery-project` to update metadata when the project name, summary, discovery tags, or principal technologies change. Use the same skill for setup, configuration changes, state checks, and diagnosis.
+- Use `refinery-maintenance` for periodic reconciliation or requested vault audits and knowledge repairs. Ordinary development work or checking a single saved record does not trigger vault-wide maintenance.
+- Respect explicit user requirements, runtime permissions, and required approvals. Search-only, diagnosis-only, and proposal-only requests remain read-only even with this automatic-operation authorization. Knowledge deletion also requires explicit approval of the concrete target.
+- A disabled, unready, or mismatched repository blocks only refinery operations; continue independent user work. Route configuration repair to `refinery-project`, and never re-enable merely to satisfy a search or recording request.
+- Complete authorized recording through checking the saved result. Assess recording value yourself instead of asking a routine user question. Reuse approval for the same candidate and impact, and continue independent work while another approval is pending.

@@ -106,8 +106,10 @@ Project自体の発見に使う`project.yaml.tags`は別のfieldであり、こ�
 
 ## Knowledge tagの探索と説明
 
-生成AIはtagを新しく作る前に、`refinery_browse_knowledge_tags`でrootから既存階層を辿ります。
-toolは指定した`parent_tag`の直属の子だけを返すため、tag数が増えても必要な枝だけを取得できます。
+生成AIは語句検索または階層参照で既存tagの意味を確認し、適切なものを再利用します。同じtaskで
+意味を確認済みのtagは、関連taxonomyが変わらなければ再検索しません。階層を探索する場合、
+`refinery_browse_knowledge_tags`は指定した`parent_tag`の直属の子だけを返すため、rootまたは既知の
+親tagから必要な枝だけを取得できます。
 
 ```text
 parent_tagなし → domain → domain/ml → domain/ml/feature-selection

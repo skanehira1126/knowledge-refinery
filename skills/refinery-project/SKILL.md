@@ -1,70 +1,60 @@
 ---
 name: refinery-project
-description: repositoryのKnowledge Refineryを設定・診断し、中央vaultを保持して導入・解除、有効化・無効化、metadata・vault選択・managed AGENTS・ローカルMCP接続を管理する。Knowledge Refineryの設定や仕組みの説明に使用する。ナレッジ本文の検索・記録やvault内の品質監査には使用しない。
+description: Knowledge Refineryの導入・設定変更・状態確認・診断、仕組みの説明に使う。ナレッジ検索・記録やvault内の品質監査は対象外。
 ---
 
 # Refinery project
 
 Read the [shared operating rules](../operating-rules.md) for authorization,
-blocked operations, and completion. Use only the section below matching the requested lifecycle
-operation; a diagnosis or explanation does not authorize setup or repair.
+blocked operations, and completion. Choose only the requested operation below. An explanation
+or diagnosis does not authorize setup or repair.
 
-Use the `knowledge-refinery` CLI for lifecycle changes. Do not hand-edit managed files when the CLI can perform the operation.
+Use the `knowledge-refinery` CLI for lifecycle changes. Do not hand-edit managed files when the
+CLI can perform the operation. Resolve the repository to an absolute `PROJECT_ROOT`; command
+variables stand for concrete values selected by the user or returned by tools, never placeholders.
 
-Resolve the current repository to an absolute path and refer to that value as `PROJECT_ROOT`. Use `VAULT_ROOT`, `PROJECT_ID`, and `MCP_VERSION` below only as names for concrete values already selected or returned by tools. Never pass unresolved placeholder tokens to a command.
+## Explain, inspect, or diagnose
 
-## Inspect before changing
+- **Explanation:** use the relevant section or reference. Do not run local checks unless the question
+  depends on the current repository or machine state.
+- **State check:** run `knowledge-refinery project status --target "$PROJECT_ROOT" --json` and report
+  the active vault, project ID, enabled state, and `vault_match`. A status-only request ends here.
+- **Diagnosis or repair:** inspect status and run `knowledge-refinery doctor --target "$PROJECT_ROOT"`.
+  When MCP is available, obtain `refinery_info.version` and pass it with `--mcp-version` to doctor.
+  Report failed checks and apply only the requested repair using documented CLI commands.
+  Version drift blocks refinery writes; continue permitted inspection until it is resolved.
+  Do not repeat a successful preflight unless the relevant state changes.
 
-1. Run `knowledge-refinery project status --target "$PROJECT_ROOT"`.
-2. When MCP is available, set `MCP_VERSION` to `refinery_info.version` and run `knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"`. Otherwise run `knowledge-refinery doctor --target "$PROJECT_ROOT"` to diagnose the CLI and local runtime.
-3. Report the active vault, project ID, enabled state, `vault_match`, and failed checks before applying a repair. Never hand-edit `vault_id` to bypass a mismatch.
-4. Version drift blocks refinery writes: report it and continue permitted inspection. Do not repeat a successful preflight unless the relevant state changes.
-
-For Knowledge Refinery configuration repair, use only this `refinery-project` skill and the documented CLI commands. Do not invent or recommend a repair skill or command that is not present in this plugin.
-
-`state=disabled` is a healthy, intentional opt-out state, not damage to repair. Never run `project enable` merely to satisfy a search or recording request. Enable only when the user explicitly asks to re-enable the repository or explicitly confirms that transition after you report the disabled state.
+`state=disabled` is an intentional opt-out. Re-enable only on the user's explicit request or
+approval for that transition. Never hand-edit `vault_id` to bypass a mismatch.
 
 ## Set up
 
-1. Inspect the active vault and the user-selected absolute `VAULT_ROOT`. If no initialized vault exists there, prepare `knowledge-refinery vault init --root "$VAULT_ROOT"` for execution after step 3; `vault init` also changes the user-wide active vault.
-2. Inspect stable repo-owned sources such as README files and package manifests. Derive a human-readable name, a one-sentence summary, focused lowercase kebab-case discovery tags for purpose or domain, and the principal technologies. Keep technology names out of tags. Never include secrets, local absolute paths, temporary task state, or unsupported guesses.
-3. For an unconfigured repository, present the proposed immutable `PROJECT_ID`, `VAULT_ROOT`, derived metadata, and whether setup will switch the user-wide active vault. Require explicit user confirmation of the ID and vault transition before writing; an explicit choice or approval already given for those exact values satisfies this requirement. Ask only for the unresolved choice. Before any active-vault change, including for an existing repo, apply the same approval boundary.
-4. Initialize the selected vault if needed, then run `knowledge-refinery project setup --target "$PROJECT_ROOT" --vault "$VAULT_ROOT" --project-id "$PROJECT_ID" --project-name "$PROJECT_NAME" --summary "$SUMMARY"`, repeating `--tag` and `--technology` for the selected metadata. The CLI rejects connecting an unconfigured repository to an ID already registered in the vault.
-5. Add `--link` only when a human explicitly wants a `.refinery` browsing symlink.
-6. `project setup` does not change repository guidance by default. Add `--agents` only when a human explicitly wants the managed guidance block appended. Check applicable repository guidance first: an `AGENTS.override.md` in the same directory takes precedence over `AGENTS.md`. If the edited file will not be loaded, report that limitation instead of claiming automatic mode is active or overwriting the override.
-7. Verify with `knowledge-refinery doctor --target "$PROJECT_ROOT"`.
+For repository setup or an active-vault change, read [setup.md](references/setup.md).
 
 ## Maintain project metadata
 
-1. Read the current record with `refinery_get_project_metadata`, or use `knowledge-refinery project metadata show --target "$PROJECT_ROOT" --json` when MCP is unavailable.
-2. Update metadata only when stable project identity or discovery facts changed. Use lowercase kebab-case tags for purpose or domain, keep technology names only in `technologies`, and preserve accurate existing values.
-3. Prefer `refinery_update_project_metadata` and pass the current `updated_at` as `expected_updated_at`. Send only changed fields; omitted fields are preserved, while an explicit empty `tags` or `technologies` list clears that list. With the CLI, use `--clear-tags` or `--clear-technologies` only for an intentional clear.
-4. Read the result back and verify that `project_id` is unchanged.
+Read the current record with `refinery_get_project_metadata`, or
+`knowledge-refinery project metadata show --target "$PROJECT_ROOT" --json` when MCP is unavailable.
+Update only changed, stable identity or discovery facts. Keep purpose/domain tags lowercase
+kebab-case and technology names in `technologies`; exclude local paths, temporary state, and guesses.
+
+Prefer `refinery_update_project_metadata` with the current `updated_at` as `expected_updated_at`.
+Send only changed fields: omission preserves values, while an empty `tags` or `technologies` list
+clears it. With the CLI, `--clear-tags` and `--clear-technologies` are intentional clears.
+Read back the result and verify that `project_id` is unchanged.
 
 ## Toggle use
 
-- Enable with `knowledge-refinery project enable --target "$PROJECT_ROOT"` only after the explicit authorization above. Add `--agents` only to resume automatic mode; without it, enable must not create managed guidance.
+- Enable with `knowledge-refinery project enable --target "$PROJECT_ROOT"` after the authorization
+  above. Add `--agents` only when the user wants automatic operation.
 - Disable with `knowledge-refinery project disable --target "$PROJECT_ROOT"`.
 - Verify either transition with `knowledge-refinery project status --target "$PROJECT_ROOT"`.
 
-Treat disable as reversible. It must retain `.refinery.yaml` with `enabled: false` and preserve every document in the central vault. Do not delete vault data as part of repository offboarding. When disabled, do not call Knowledge Refinery MCP tools for that repository.
+Disable retains `.refinery.yaml` with `enabled: false` and all central-vault knowledge. Repository
+offboarding does not authorize deleting vault data.
 
-Never combine product-repository commits with central-vault commits.
+## Configure the optional deep search tool
 
-## Toggle the optional deep search tool
-
-Deep search publication is user-wide and independent of a repository's enabled state. Inspect it
-with `knowledge-refinery deep-search status --json`. Run
-`knowledge-refinery deep-search enable --model MODEL [--reasoning-effort EFFORT]`
-or `knowledge-refinery deep-search disable` only when the user explicitly asks to change tool
-availability. Tell the user to restart the Knowledge Refinery MCP server or open a new task after a
-visibility change. Use `knowledge-refinery deep-search model MODEL` to change only the configured
-model and reset reasoning effort to the model default, or add `--reasoning-effort EFFORT` to set both.
-Use `knowledge-refinery deep-search reasoning-effort EFFORT` to change only the effort and `--reset`
-to restore the model default. The CLI validates model and effort compatibility against the refreshed
-Codex catalog before saving it. Enabling the tool does not authorize a search or write knowledge.
-
-If malformed deep search configuration prevents publication, repair `deep_search.enabled`,
-`deep_search.model`, and optional `deep_search.reasoning_effort` while preserving the active vault and
-unknown config keys. Never place the central vault
-path, Codex instructions, or deep search policy in a product repository's `AGENTS.md`.
+For deep search publication, model, effort, or configuration repair, read
+[deep-search.md](references/deep-search.md). These user-wide settings are independent of repo enablement.

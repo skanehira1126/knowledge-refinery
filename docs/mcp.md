@@ -74,8 +74,10 @@ pathを解析せず、`scope: project`なら結果の`project_id`を渡し、`sc
 Experienceとmemoryのtagは`/`区切りの最大3階層です。`tags: [domain/ml]`は
 `domain/ml`と`domain/ml/feature-selection`の両方に一致します。複数tagはAND条件です。
 
-tagを選ぶときは、最初に`refinery_browse_knowledge_tags`の`parent_tag`を省略してrootを取得し、
-返された`has_children`を見ながら必要な枝だけを1階層ずつ辿ります。各tagには説明、直指定の
+tagは`refinery_search_knowledge_tags`の語句検索、または`refinery_browse_knowledge_tags`の階層参照で
+意味を確認し、適切な既存tagを再利用します。確認済みのtagは、関連taxonomyが変わらなければ
+再検索する必要はありません。階層を探索するときは`parent_tag`を省略してrootから始めるか、
+既知の親tagを指定し、`has_children`を見ながら必要な枝を辿ります。各tagには説明、直指定の
 `direct_count`、子孫を含む`document_count`、文書種別ごとの件数が含まれます。既定では現在
 projectとshared memoryを集計し、`all_projects: true`で全projectへ広げます。
 

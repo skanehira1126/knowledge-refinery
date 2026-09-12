@@ -1,6 +1,6 @@
 ---
 name: refinery-memory
-description: Knowledge Refineryのexperienceから繰り返し役立つ原則を抽出し、根拠付きのprojectまたはshared memoryを提案・記録する。複数experienceによる原則の抽出、既存memoryの改善、project固有か横断かの判断に使用する。過去のナレッジ検索だけの依頼、単一試行のexperience記録、設定修復は対象外。
+description: Knowledge Refineryのexperienceから再利用できる原則を抽出し、project・shared memoryを提案・記録・改善するときに使う。検索だけ、または単一試行の記録はrefinery-experienceを使う。
 ---
 
 # Refinery memory
@@ -10,7 +10,7 @@ blocked operations, and completion. Input is the current repo, a candidate princ
 question, and supporting experience IDs found during review. If the request is proposal-only,
 return the candidate, sources, scope, and limits without recording it.
 
-1. Resolve the current repository to an absolute `PROJECT_ROOT`, then run `knowledge-refinery project status --target "$PROJECT_ROOT" --json`. Never pass a literal placeholder path. Unless `ready` and `enabled` are true, report the state and skip this repo's refinery operations; continue independent user work.
+1. Apply the shared operating rules' repo-scoped access check before retrieving knowledge.
 2. Pass the repository's absolute path as `project_path` to every repo-scoped MCP tool. Search in this order: current project memory together with shared memory, current project experiences, then cross-project knowledge only when local evidence is insufficient. For a bounded cross-project search, choose IDs with `refinery_list_projects` and pass `project_ids`; use `all_projects: true` only when no bounded set is defensible. Never combine `project_ids` with `all_projects: true`. Update a matching principle instead of duplicating it.
 3. Read every supporting experience with `refinery_get_experience`. For cross-project evidence, pass the qualified `project-id/experience-id` source and check its evidence, applicability conditions, counterexamples, and confidence.
 4. Keep project-specific principles in project memory. Normally require at least two experiences that show repetition or complementary validation, and use unqualified experience IDs. A single source is allowed only when the user explicitly asks to preserve it as memory; narrow the scope, state the unverified limits in the body, and do not assign high confidence.
@@ -31,6 +31,6 @@ Choose confidence from the evidence supporting the reusable principle:
 | `medium` | More than one supporting observation exists, but coverage, independence, or applicability is limited. |
 | `low` | Support is preliminary, includes a user-approved single source, or has important unresolved conflict or uncertainty. |
 
-Omit confidence only when it has not yet been assessed. Never store secrets, credentials, access tokens, PII or other personal data, or customer data in memory or copied evidence. Redact sensitive log content; if it cannot be made safe, record only a non-sensitive limitation.
+Omit confidence only when it has not yet been assessed.
 
-Before assigning tags, call `refinery_browse_knowledge_tags` without `parent_tag`, then follow relevant children one level at a time. Use `refinery_search_knowledge_tags` when a concept is easier to identify from words than from the hierarchy. Reuse the narrowest existing tag whose description fits; do not invent a parallel spelling when an existing branch applies. Choose the root deterministically: subject/domain → `domain`, output artifact → `artifact`, work type → `task`, technology → `tech`, symptom or quality issue → `issue`. Never invent another root. Use one to three lowercase slug segments separated by `/`, such as `domain/ml/feature-selection`; a parent tag search also matches its descendants.
+When assigning tags, read [knowledge-tags.md](../knowledge-tags.md).

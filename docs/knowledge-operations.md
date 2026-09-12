@@ -110,14 +110,18 @@ schema条件を満たすだけでは作成しません。候補の原則、適�
 active vaultは `knowledge-refinery doctor --target "$PROJECT_ROOT" --json` の
 `project.active_vault` でも確認できます。
 
-### 作業開始時
+### 過去の知識が判断に役立つとき
+
+自動運用では設計判断、原因調査、手法比較、既知の制約などに過去の知識が役立つ場合に検索します。
+単純なtypo・書式変更では省略し、明示された検索依頼には応じます。同じ問いと根拠の結果を
+再利用し、repo・active vault・enabled状態が変わらなければ直前のstatus確認も再利用できます。
 
 ```bash
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 knowledge-refinery project status --target "$PROJECT_ROOT" --json
 ```
 
-`ready: true` と `enabled: true` のときだけrepo-scoped MCP toolsを使います。現在project memoryと
+`ready: true`、`enabled: true`、`vault_match: true` のときだけrepo-scoped MCP toolsを使います。現在project memoryと
 shared memory、現在project experienceの順に検索します。それでも判断できない場合は、
 `refinery_list_projects`のmetadataから関連projectを選び、`project_ids`でbounded searchします。
 対象を限定できない場合だけ`all_projects: true`へ広げます。`project_ids`と`all_projects: true`は
@@ -125,19 +129,25 @@ shared memory、現在project experienceの順に検索します。それでも�
 
 ### 意味のある試行の後
 
+明示的な記録依頼または自動運用の許可がある場合に実施します。検索・診断・提案のみの依頼では
+書き込みません。価値がある記録は、定型的な確認質問を挟まず保存結果の確認まで進めます。
+
 1. experienceとして残す価値があるか判断する。
 2. `refinery_record_experience` で一つの統合記録を保存する。
 3. 戻り値のIDを `refinery_get_experience` で読み直す。
 4. vaultの差分を確認する。
 
-### 日次または書き込みのまとまりごと
+### 定期監査または指定対象の修復
 
-この節は定期保守または依頼された書き込みのまとまりの完了確認です。単発のexperience保存ごとに
-全項目を実行する必要はありません。Git commit・pushは利用者が選んだvault運用の範囲で実施します。
+全体の棚卸しを依頼された場合は、以下の流れで監査します。指定したmetadataやtag説明の事実修正は、
+対象と根拠だけを調べて修正・読み戻し・差分確認まで進め、全projectやmemoryを点検しません。
+schema・provenanceの不備や具体的な整合性の懸念がある場合は`refinery_validate`を使います。
+このtoolは常にactive vault全体を検査するため、対象外のエラーは別途報告し、修復範囲を広げません。
+Git commit・pushは利用者が選んだvault運用の範囲で実施します。
 
 1. `refinery-maintenance` Skillで `refinery_validate` を実行する。
 2. project metadataが現在の名前、概要、検索用tag、主要技術を表しているか確認する。
-3. validationエラーをpath単位で修復する。
+3. 修復も依頼されている場合、許可されたvalidationエラーをpath単位で修復して再validationする。
 4. vault Gitのstatusとdiffを確認する。
 5. 意図の明確な単位でcommitし、利用しているremoteへpushする。
 
@@ -166,10 +176,11 @@ git -C "$REFINERY_VAULT" diff
 2. YAML、filename、ID、scope、source experienceのどれが不正か切り分ける。
 3. Git履歴から直前の正常内容を確認する。
 4. 最小限の修正を行い、`refinery_validate` を再実行する。
-5. vault全体がvalidになってからdiffをcommitする。
+5. 対象の修復と必要な検証を終え、未解決エラーを報告する。Commitは利用者が選んだ運用の範囲で行う。
 
 修復をまとめて適用してから再validationし、必要な確認が通った後は、新しい変更・失敗・具体的な
 未解決リスクがある場合だけ追加検証します。未解決pathがある場合は理由とともに報告します。
+対象外の既存エラーが残っていても、指定対象の修復・検証が済めばその依頼は完了できます。
 
 ```bash
 git -C "$REFINERY_VAULT" diff -- "path/from/validation.md"

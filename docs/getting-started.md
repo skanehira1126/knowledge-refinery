@@ -90,6 +90,8 @@ knowledge-refinery project setup \
 
 `--agents`はKnowledge Refineryの共通ルールを`AGENTS.md`へ追記し、通常の開発taskでも利用する
 自動運用モードを有効にします。既存の内容は保持され、管理対象のblockだけが追加または更新されます。
+自動検索は過去の知識が設計・調査・比較などの判断に役立つときに行い、単純なtypo・書式変更では
+省略します。再利用できる経験はagentが判断して保存・確認まで進めます。
 
 project IDはrepository directory名を小文字、数字、hyphenのslugにして生成され、登録後は
 変更されません。表示名もdirectory名が初期値です。別の値を指定する必要がある場合だけ、

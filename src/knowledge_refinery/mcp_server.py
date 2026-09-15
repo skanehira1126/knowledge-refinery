@@ -31,6 +31,13 @@ from knowledge_refinery.experience_ops import validate_document_header
 from knowledge_refinery.experience_ops import validate_experience_references
 from knowledge_refinery.experience_ops import validate_memory_source_references
 from knowledge_refinery.front_matter import split_front_matter
+from knowledge_refinery.handoff_ops import HANDOFF_SCHEMA_VERSION
+from knowledge_refinery.handoff_ops import archive_handoff_at
+from knowledge_refinery.handoff_ops import create_handoff_at
+from knowledge_refinery.handoff_ops import delete_handoff_at
+from knowledge_refinery.handoff_ops import list_handoffs_at
+from knowledge_refinery.handoff_ops import read_handoff_at
+from knowledge_refinery.handoff_ops import validate_handoffs_at
 from knowledge_refinery.tag_ops import TAG_TAXONOMY
 from knowledge_refinery.tag_ops import TAG_TAXONOMY_SCHEMA_VERSION
 from knowledge_refinery.tag_ops import TagBrowseResult
@@ -58,6 +65,7 @@ mcp = FastMCP(
         "repositoryを拒否します。"
         "判断前はcurrent projectとshared memoryを先に検索し、必要な場合だけselected projectsまたは"
         "vault全体へ広げてください。更新では省略fieldを保持し、空listは明示clearです。"
+        "handoffは明示された引き継ぎ操作専用です。通常のknowledge検索・記録には含めません。"
     ),
 )
 
@@ -144,6 +152,7 @@ def refinery_info() -> dict[str, object]:
         "schema_version": 2,
         "project_metadata_schema_version": PROJECT_METADATA_SCHEMA_VERSION,
         "tag_taxonomy_schema_version": TAG_TAXONOMY_SCHEMA_VERSION,
+        "handoff_schema_version": HANDOFF_SCHEMA_VERSION,
         "active_vault_id": active_vault_id,
     }
 
@@ -424,8 +433,101 @@ def refinery_record_memory(
 
 
 @mcp.tool()
+def refinery_create_handoff(
+    project_path: str,
+    title: str,
+    goal: str,
+    done_when: str,
+    body: str,
+    handoff_id: str | None = None,
+    task_id: str | None = None,
+    supersedes: str | None = None,
+    expected_updated_at: str | None = None,
+) -> dict[str, object]:
+    """引き継ぎを新規保存します。旧版を指定した場合は同じ作業の旧版をアーカイブします。"""
+    vault = get_active_vault()
+    project_id = _validated_project_id(vault, project_path)
+    return create_handoff_at(
+        vault,
+        project_id,
+        title=title,
+        goal=goal,
+        done_when=done_when,
+        body=body,
+        handoff_id=handoff_id,
+        task_id=task_id,
+        supersedes=supersedes,
+        expected_updated_at=expected_updated_at,
+    ).as_dict(vault)
+
+
+@mcp.tool()
+def refinery_list_handoffs(
+    project_path: str,
+    include_archived: bool = False,
+    task_id: str | None = None,
+    archived_before: str | None = None,
+) -> list[dict[str, object]]:
+    """現在projectの引き継ぎmetadataを一覧します。既定はactiveのみで本文を含めません。"""
+    vault = get_active_vault()
+    project_id = _validated_project_id(vault, project_path)
+    return [
+        record.as_dict(vault, include_body=False)
+        for record in list_handoffs_at(
+            vault,
+            project_id,
+            include_archived=include_archived,
+            task_id=task_id,
+            archived_before=archived_before,
+        )
+    ]
+
+
+@mcp.tool()
+def refinery_get_handoff(project_path: str, handoff_id: str) -> dict[str, object]:
+    """指定IDの引き継ぎを取得します。読み込みによる状態変更や削除は行いません。"""
+    vault = get_active_vault()
+    project_id = _validated_project_id(vault, project_path)
+    return read_handoff_at(vault, project_id, handoff_id).as_dict(vault)
+
+
+@mcp.tool()
+def refinery_archive_handoff(
+    project_path: str,
+    handoff_id: str,
+    expected_updated_at: str,
+) -> dict[str, object]:
+    """確認済みrevisionの引き継ぎをアーカイブし、内容を保持します。"""
+    vault = get_active_vault()
+    project_id = _validated_project_id(vault, project_path)
+    return archive_handoff_at(
+        vault,
+        project_id,
+        handoff_id,
+        expected_updated_at=expected_updated_at,
+    ).as_dict(vault)
+
+
+@mcp.tool()
+def refinery_delete_handoff(
+    project_path: str,
+    handoff_id: str,
+    expected_updated_at: str,
+) -> dict[str, object]:
+    """明示された削除対象として確認済みrevisionのarchived引き継ぎ1件を削除します。"""
+    vault = get_active_vault()
+    project_id = _validated_project_id(vault, project_path)
+    return delete_handoff_at(
+        vault,
+        project_id,
+        handoff_id,
+        expected_updated_at=expected_updated_at,
+    )
+
+
+@mcp.tool()
 def refinery_validate() -> dict[str, object]:
-    """active vaultのtaxonomy、project metadata、experience、memoryを検証します。"""
+    """active vaultのtaxonomy、project metadata、experience、memory、handoffを検証します。"""
     vault = get_active_vault()
     errors: list[dict[str, str]] = []
     checked = 0
@@ -444,6 +546,9 @@ def refinery_validate() -> dict[str, object]:
         try:
             read_project_metadata(vault, project_store.name)
             checked += 1
+            handoff_checked, handoff_errors = validate_handoffs_at(vault, project_store.name)
+            checked += handoff_checked
+            errors.extend(handoff_errors)
         except (OSError, ValueError, RefineryCliError) as error:
             errors.append({"path": str(path.relative_to(vault)), "error": str(error)})
     for path in sorted(vault.rglob("*.md")):

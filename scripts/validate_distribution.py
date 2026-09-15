@@ -18,6 +18,7 @@ EXPECTED_SKILLS = {
     "refinery-experience",
     "refinery-memory",
     "refinery-maintenance",
+    "refinery-handoff",
 }
 
 
@@ -94,6 +95,17 @@ def _validate_skills() -> None:
         default_prompt = interface.get("default_prompt")
         if not isinstance(default_prompt, str) or f"${name}" not in default_prompt:
             raise ValueError(f"Skill default prompt must invoke ${name}")
+        if name == "refinery-handoff":
+            _validate_handoff_skill(agent)
+
+
+def _validate_handoff_skill(agent: dict[str, object]) -> None:
+    policy = agent.get("policy")
+    if not isinstance(policy, dict) or policy.get("allow_implicit_invocation") is not False:
+        raise ValueError("refinery-handoff must require explicit invocation")
+    for reference in ("create.md", "resume.md", "cleanup.md"):
+        if not (ROOT / "skills/refinery-handoff/references" / reference).is_file():
+            raise ValueError(f"Handoff workflow reference is missing: {reference}")
 
 
 def _validate_marketplace() -> None:

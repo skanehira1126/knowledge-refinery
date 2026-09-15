@@ -19,6 +19,11 @@ metadata、repoとactive vaultの`vault_id`一致を検証します。
 | `refinery_search_memory` | project/shared memory検索 | `project_path` |
 | `refinery_get_memory` | scopeとIDを指定したmemory本文取得 | `project_path` |
 | `refinery_record_memory` | project/shared memoryの作成・revision付き更新 | `project_path` |
+| `refinery_create_handoff` | 引き継ぎsnapshotの作成と旧版のアーカイブ | `project_path` |
+| `refinery_list_handoffs` | 引き継ぎmetadataの一覧、作業・archive日時で絞り込み | `project_path` |
+| `refinery_get_handoff` | IDを指定した引き継ぎの取得 | `project_path` |
+| `refinery_archive_handoff` | revisionを指定した引き継ぎのアーカイブ | `project_path` |
+| `refinery_delete_handoff` | revisionを指定したarchived引き継ぎ1件の削除 | `project_path` |
 | `refinery_validate` | active vaultのYAMLとprovenance検証 | 管理tool |
 | `refinery_deep_search` | Codexによる検証済みvault snapshotの根拠付き検索 | `project_path`、任意公開 |
 
@@ -125,3 +130,35 @@ tagはlowercase kebab-caseで目的・領域を表し、技術名は `technologi
 - project metadataが不正。
 - memoryのsource experienceが実在しない。
 - shared memoryの根拠が2 project未満。
+
+## 引き継ぎ専用tools {#handoff-tools}
+
+handoffは通常のナレッジ検索から分離し、現在projectに限定して操作します。
+各toolは`project_path`から有効状態・vault binding・project metadataを検証します。
+`refinery_info`は`handoff_schema_version: 1`も返します。
+
+| Tool | 必須引数 | 任意引数 |
+|---|---|---|
+| `refinery_create_handoff` | `project_path`, `title`, `goal`, `done_when`, `body` | `handoff_id`, `task_id`, `supersedes`, `expected_updated_at` |
+| `refinery_list_handoffs` | `project_path` | `include_archived=false`, `task_id`, `archived_before` |
+| `refinery_get_handoff` | `project_path`, `handoff_id` | なし |
+| `refinery_archive_handoff` | `project_path`, `handoff_id`, `expected_updated_at` | なし |
+| `refinery_delete_handoff` | `project_path`, `handoff_id`, `expected_updated_at` | なし |
+
+create/get/archiveは`{header, body, path}`を返し、pathはvault相対です。listは作成日時の新しい順に
+`{header, path}`の配列を返し、本文は返しません。`task_id`は完全一致で絞り込みます。
+`archived_before`はtimezone付きISO日時の排他的上限で、`include_archived: true`と併用すると
+その日時より前にアーカイブした資料だけを返します。通常の一覧はactiveのみです。
+
+createは既存IDを上書きしません。IDを省略すると生成しますが、応答不明時の照合のためSkillでは
+保存前にIDを選びます。同じ作業にactive資料がある場合は`supersedes`でそのIDを指定し、
+旧版の`header.updated_at`を`expected_updated_at`として渡します。`task_id`は旧版から継承します。
+旧版指定なしの`expected_updated_at`、異なるtaskへの置き換え、archived資料の置き換えは拒否します。
+
+archiveは本文を保持し、既にarchivedなら同じrevisionへの呼び出しは変更しません。
+deleteはarchived資料だけを受け付け、`{deleted: true, project_id, handoff_id, path}`を返します。
+古いrevision、未知のID、不正なschema、symlinkによる保存領域の転送は拒否します。
+削除済みIDへの再実行は成功扱いにせず、存在確認して結果を判断します。
+
+`refinery_validate`はhandoffのschema・配置・同じtaskのactive重複も検証します。
+詳細と強制終了時の確認方法は[引き継ぎガイド](handoffs.md)を参照してください。

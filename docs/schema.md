@@ -5,7 +5,7 @@
 ```yaml
 schema_version: 2
 managed_by: knowledge-refinery
-cli_version: 0.4.0
+cli_version: 0.5.0
 vault_id: 0123456789abcdef0123456789abcdef
 ```
 
@@ -185,3 +185,38 @@ tag keyにはKnowledge tagと同じ形式を使い、descriptionは空にでき�
 vaultでも`domain`、`artifact`、`task`、`tech`、`issue`の標準説明を読み取り専用の既定値として
 返します。最初の説明登録ではrevisionを省略し、ファイル作成後の更新ではbrowseまたはsearchが
 返した`taxonomy_updated_at`を指定します。
+
+## Handoff {#handoff}
+
+保存先は`projects/<project_id>/handoffs/<handoff_id>.md`です。handoff固有のschema versionは1で、
+既存のexperience／memoryとvaultのschema versionは変更しません。
+
+```yaml
+schema_version: 1
+handoff_id: search-fix-02
+project_id: example-project
+task_id: search-fix
+title: 検索の不具合修正
+goal: 検索結果の欠落を直す
+done_when: 再現ケースの回帰テストが通る
+status: active
+created_at: '2026-09-15T10:00:00+00:00'
+updated_at: '2026-09-15T10:00:00+00:00'
+archived_at: null
+supersedes: search-fix-01
+superseded_by: null
+```
+
+`handoff_id`と`task_id`はlowercase slugです。`project_id`とファイル名は保存先に一致する必要があります。
+`title`、`goal`、`done_when`、Markdown本文は空にできません。本文には現在の成果物と作業状態、
+確認済みの事実、未検証の仮説、未解決事項、関連experience／memory IDを記録します。
+参照IDは本文でscopeを明記して保持し、schemaがknowledgeへの参照を自動検証することはありません。
+
+`status`は`active`または`archived`です。日時はtimezone付きのISO文字列で、
+`created_at <= updated_at`を満たします。archivedでは`created_at <= archived_at <= updated_at`を満たし、
+activeでは`archived_at`と`superseded_by`はnullです。
+`supersedes`と`superseded_by`は同一projectの別handoff IDまたはnullです。
+削除後のID参照は履歴として残るため、参照先の存在を必須にしません。
+
+snapshotの内容は変更せず、新しいIDで置き換えます。状態の変更には取得した`updated_at`を使います。
+有効期間と削除の扱いは[引き継ぎガイド](handoffs.md#lifetime)を参照してください。

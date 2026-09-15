@@ -64,6 +64,19 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 - 任意でCodexを使い、中央vaultの検証済みsnapshotから根拠付きの深い検索を行う
 - repoごとに利用を無効化・再有効化する
 - 中央vaultを独立したGit repositoryとして履歴管理する
+- 特定の作業の状態をhandoffに保存し、新しいチャットで再評価して再開する
+
+## 新しいチャットへ引き継ぐ
+
+`$refinery-handoff`は明示呼び出し専用です。旧チャットで
+「`$refinery-handoff`を使って、この作業の引き継ぎを保存してください」と依頼すると、
+目的・完了条件・現在の成果物・確認済みの事実・未解決事項を保存し、引き継ぎIDと再開用の依頼文を返します。
+新しいチャットでは、そのIDを指定して同Skillに再開を依頼します。
+
+handoffはprojectごとの専用領域に保存され、通常のexperience／memory検索やdeep searchには
+含まれません。読み込みでは消費せず、新版への置き換えや明示された終了でアーカイブします。
+自動期限・自動削除はなく、削除は指定したアーカイブ済みの資料だけを対象にします。
+作成・再開・整理の手順とCLI例は[引き継ぎガイド](docs/handoffs.md)を参照してください。
 
 機能の使い分け、保存前の確認境界、データ構造は
 [Web版ドキュメント](https://skanehira1126.github.io/knowledge-refinery/)で説明しています。

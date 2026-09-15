@@ -3,6 +3,8 @@
 This block authorizes automatic Knowledge Refinery use for reusable development experience.
 Before refinery operations, read the relevant plugin skill and follow its shared operating rules
 and the references needed for the task.
+Handoffs are outside this automatic workflow; create, resume, or clean them up only through
+an explicit `$refinery-handoff` invocation.
 
 - Use `refinery-experience` to search when past knowledge could inform a design choice, diagnosis, comparison, or known constraint, and whenever a search is explicitly requested. Skip lookups for typo or formatting changes where past knowledge cannot affect the decision. Reuse results for an unchanged question and evidence.
 - Use `refinery-experience` to record attempts, comparisons, rejections, or informative failures that could change a future choice, avoidance, verification, or diagnosis. Rejected implementations and untracked evidence qualify; routine completion logs and repetitions with no new evidence do not.

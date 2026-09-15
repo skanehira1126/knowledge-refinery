@@ -38,6 +38,11 @@ from knowledge_refinery.experience_ops import read_memory_at
 from knowledge_refinery.experience_ops import search_documents_at
 from knowledge_refinery.experience_ops import upsert_experience_at
 from knowledge_refinery.experience_ops import upsert_memory_at
+from knowledge_refinery.handoff_ops import archive_handoff_at
+from knowledge_refinery.handoff_ops import create_handoff_at
+from knowledge_refinery.handoff_ops import delete_handoff_at
+from knowledge_refinery.handoff_ops import list_handoffs_at
+from knowledge_refinery.handoff_ops import read_handoff_at
 from knowledge_refinery.tag_ops import browse_knowledge_tags
 from knowledge_refinery.tag_ops import search_knowledge_tags
 from knowledge_refinery.tag_ops import update_tag_description
@@ -337,6 +342,34 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_typed_search_arguments(memory_search)
     memory_search.set_defaults(handler=run_memory_search)
+
+    handoff_parser = subparsers.add_parser(
+        "handoff", help="Create, resume, and clean up task handoffs"
+    )
+    handoff_commands = handoff_parser.add_subparsers(dest="handoff_command", required=True)
+    for operation in ("create", "list", "get", "archive", "delete"):
+        command = handoff_commands.add_parser(operation, help=f"{operation.capitalize()} handoffs")
+        command.add_argument("--project", "--target", dest="project", default=".")
+        if operation in ("get", "archive", "delete"):
+            command.add_argument("handoff_id", help="exact handoff ID")
+        if operation in ("archive", "delete"):
+            command.add_argument("--expected-updated-at", required=True)
+        if operation == "create":
+            command.add_argument("--title", required=True)
+            command.add_argument("--goal", required=True)
+            command.add_argument("--done-when", required=True)
+            command.add_argument("--id", dest="handoff_id", default=None)
+            command.add_argument("--task-id", default=None)
+            command.add_argument("--supersedes", default=None)
+            command.add_argument("--expected-updated-at", default=None)
+            add_body_arguments(command)
+        if operation == "list":
+            command.add_argument("--include-archived", action="store_true")
+            command.add_argument("--task-id", default=None)
+            command.add_argument(
+                "--archived-before", default=None, help="exclusive ISO datetime with timezone"
+            )
+        command.set_defaults(handler=run_handoff)
 
     tag_parser = subparsers.add_parser("tag", help="Browse and describe Knowledge tags")
     tag_subparsers = tag_parser.add_subparsers(dest="tag_command", required=True)
@@ -924,6 +957,56 @@ def run_memory_get(args: argparse.Namespace) -> int:
             sort_keys=True,
         )
     )
+    return 0
+
+
+def run_handoff(args: argparse.Namespace) -> int:
+    """Execute an explicitly selected handoff operation and print JSON."""
+    vault = get_active_vault()
+    project_id = resolve_project_id(Path(args.project), vault)
+    operation = args.handoff_command
+    payload: object
+    if operation == "create":
+        payload = create_handoff_at(
+            vault,
+            project_id,
+            title=args.title,
+            goal=args.goal,
+            done_when=args.done_when,
+            body=read_body(args) or "",
+            handoff_id=args.handoff_id,
+            task_id=args.task_id,
+            supersedes=args.supersedes,
+            expected_updated_at=args.expected_updated_at,
+        ).as_dict(vault)
+    elif operation == "list":
+        payload = [
+            record.as_dict(vault, include_body=False)
+            for record in list_handoffs_at(
+                vault,
+                project_id,
+                include_archived=args.include_archived,
+                task_id=args.task_id,
+                archived_before=args.archived_before,
+            )
+        ]
+    elif operation == "get":
+        payload = read_handoff_at(vault, project_id, args.handoff_id).as_dict(vault)
+    elif operation == "archive":
+        payload = archive_handoff_at(
+            vault,
+            project_id,
+            args.handoff_id,
+            expected_updated_at=args.expected_updated_at,
+        ).as_dict(vault)
+    else:
+        payload = delete_handoff_at(
+            vault,
+            project_id,
+            args.handoff_id,
+            expected_updated_at=args.expected_updated_at,
+        )
+    print(json.dumps(payload, ensure_ascii=False))
     return 0
 
 

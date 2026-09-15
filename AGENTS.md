@@ -9,6 +9,7 @@
 - 配布するSkillは `skills/` 配下を正とする。
 - 配布Skill共通の実行・承認・完了条件は `skills/operating-rules.md` に置き、各 `SKILL.md` から読み込む。この `AGENTS.md` 自体は開発repoの規約であり、利用repoのmanaged blockには使わない。
 - MCP toolsは `src/knowledge_refinery/mcp_server.py`、experience/memoryのドメイン処理は `experience_ops.py`、中央vault管理は `vault_ops.py` に置く。
+- 引き継ぎのsnapshotとライフタイムは `handoff_ops.py` に置き、通常のナレッジ検索から分離する。
 - 利用repoへ挿入するAGENTS managed blockは `src/knowledge_refinery/data/agents.jp.md` と `agents.en.md` で管理する。
 - READMEから辿る `docs/agent-workflow.md` と `docs/agents-guidance-examples.md` は、上記managed blockの方針と同期させる。
 

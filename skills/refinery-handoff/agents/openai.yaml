@@ -1,0 +1,6 @@
+interface:
+  display_name: "Refinery Handoff"
+  short_description: "作業の引き継ぎを保存し、新しいチャットで再開・整理する"
+  default_prompt: "$refinery-handoffを使って、この作業を新しいチャットへ引き継ぐ資料を保存してください。"
+policy:
+  allow_implicit_invocation: false

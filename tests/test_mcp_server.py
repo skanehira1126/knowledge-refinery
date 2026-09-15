@@ -8,11 +8,16 @@ import pytest
 
 from knowledge_refinery.config_ops import set_active_vault
 from knowledge_refinery.config_ops import set_deep_search_enabled
+from knowledge_refinery.mcp_server import refinery_archive_handoff
 from knowledge_refinery.mcp_server import refinery_browse_knowledge_tags
+from knowledge_refinery.mcp_server import refinery_create_handoff
+from knowledge_refinery.mcp_server import refinery_delete_handoff
 from knowledge_refinery.mcp_server import refinery_get_experience
+from knowledge_refinery.mcp_server import refinery_get_handoff
 from knowledge_refinery.mcp_server import refinery_get_memory
 from knowledge_refinery.mcp_server import refinery_get_project_metadata
 from knowledge_refinery.mcp_server import refinery_info
+from knowledge_refinery.mcp_server import refinery_list_handoffs
 from knowledge_refinery.mcp_server import refinery_list_projects
 from knowledge_refinery.mcp_server import refinery_record_experience
 from knowledge_refinery.mcp_server import refinery_record_memory
@@ -147,10 +152,11 @@ def test_local_mcp_records_searches_and_validates(
     assert tagged_metadata["technologies"] == ["Python"]
     assert refinery_list_projects() == [tagged_metadata]
     assert refinery_info() == {
-        "version": "0.4.0",
+        "version": "0.5.0",
         "schema_version": 2,
         "project_metadata_schema_version": 1,
         "tag_taxonomy_schema_version": 1,
+        "handoff_schema_version": 1,
         "active_vault_id": read_vault_id(vault),
     }
     assert recorded["experience_id"] == "boruta-trial"
@@ -676,3 +682,78 @@ def test_repo_scoped_mcp_rejects_invalid_project_metadata(
             experience_id="must-not-exist",
         )
     assert not (vault / "projects" / "pybr" / "experiences" / "must-not-exist.md").exists()
+
+
+def test_mcp_handoff_lifecycle_and_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    project = str(tmp_path / "pybr")
+    saved = refinery_create_handoff(
+        project,
+        "検索",
+        "原因を直す",
+        "回帰テストが通る",
+        "src/search.pyに未commit変更。A案は未検証。",
+        handoff_id="fix",
+    )
+    header = cast(dict[str, Any], saved["header"])
+    listing = refinery_list_handoffs(project)
+    assert len(listing) == 1 and "body" not in listing[0]
+    assert refinery_get_handoff(project, "fix") == saved
+    assert refinery_validate() == {"valid": True, "checked": 2, "errors": []}
+    archived = refinery_archive_handoff(project, "fix", header["updated_at"])
+    assert refinery_list_handoffs(project) == []
+    revision = cast(dict[str, Any], archived["header"])["updated_at"]
+    assert refinery_delete_handoff(project, "fix", revision)["deleted"] is True
+    assert refinery_list_handoffs(project, include_archived=True) == []
+
+    broken = vault / "projects" / "pybr" / "handoffs" / "broken.md"
+    broken.write_text("---\nschema_version: 99\n---\nbody\n", encoding="utf-8")
+    result = refinery_validate()
+    assert result["valid"] is False
+    errors = cast(list[dict[str, str]], result["errors"])
+    assert errors[0]["path"] == "projects/pybr/handoffs/broken.md"
+    with pytest.raises(ValueError, match="schema_version"):
+        refinery_get_handoff(project, "broken")
+
+
+@pytest.mark.parametrize("operation", ["create", "list", "get", "archive", "delete"])
+@pytest.mark.parametrize("gate", ["disabled", "mismatch", "metadata"])
+def test_handoff_tools_enforce_project_access(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+    gate: str,
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "pybr"
+    saved = refinery_create_handoff(
+        str(project), "Task", "Goal", "Done", "State", handoff_id="one"
+    )
+    before = (vault / "projects" / "pybr" / "handoffs" / "one.md").read_bytes()
+    if gate == "disabled":
+        disable_project(project)
+    elif gate == "mismatch":
+        other_vault = tmp_path / "other-vault"
+        init_vault(other_vault)
+        set_active_vault(other_vault)
+    else:
+        (vault / "projects" / "pybr" / "project.yaml").write_text(
+            "invalid: true\n", encoding="utf-8"
+        )
+    revision = cast(dict[str, Any], saved["header"])["updated_at"]
+    with pytest.raises(ValueError):
+        if operation == "create":
+            refinery_create_handoff(
+                str(project), "Task", "Goal", "Done", "State", handoff_id="two"
+            )
+        elif operation == "list":
+            refinery_list_handoffs(str(project))
+        elif operation == "get":
+            refinery_get_handoff(str(project), "one")
+        elif operation == "archive":
+            refinery_archive_handoff(str(project), "one", revision)
+        else:
+            refinery_delete_handoff(str(project), "one", revision)
+    assert (vault / "projects" / "pybr" / "handoffs" / "one.md").read_bytes() == before

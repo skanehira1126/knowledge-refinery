@@ -152,3 +152,22 @@ revisionなしの上書きとstale revisionは拒否されます。
 
 automationは `project status --json` と `doctor --json` を使ってください。未設定、不正、または有効だが利用準備が整っていないproject statusはnon-zeroを返します。意図的なdisabledは正常状態として0を返します。
 doctorのJSONでは、全体の`ok`だけでなく`project.state`とvalidation errorsも確認してください。
+
+## handoff
+
+引き継ぎ専用のcommand群です。通常のexperience／memory検索には含めません。
+すべて`--project`（別名`--target`、既定は`.`）を受け、JSONを返します。
+
+| Command | 引数 |
+|---|---|
+| `handoff create` | 必須: `--title`, `--goal`, `--done-when`と、非空の`--body`または`--body-file`。任意: `--id`, `--task-id`, `--supersedes`, `--expected-updated-at` |
+| `handoff list` | 任意: `--include-archived`, `--task-id`, `--archived-before` |
+| `handoff get <ID>` | 正確な引き継ぎID |
+| `handoff archive <ID>` | 必須: `--expected-updated-at` |
+| `handoff delete <ID>` | 必須: `--expected-updated-at`。archivedのみ削除可能 |
+
+listは既定でactiveだけを作成日時の新しい順に返し、本文を含みません。
+`--archived-before`はtimezone付きISO日時を受け、`--include-archived`が必須です。
+その日時より前にアーカイブされた資料だけを候補として返し、削除はしません。
+置き換え時のrevision、返却値、例は[引き継ぎガイド](handoffs.md)と
+[MCPリファレンス](mcp.md#handoff-tools)を参照してください。

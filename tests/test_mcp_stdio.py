@@ -8,9 +8,24 @@ import anyio
 from mcp import ClientSession
 from mcp import StdioServerParameters
 from mcp.client.stdio import stdio_client
+import pytest
+
+from knowledge_refinery.config_ops import set_active_vault
+from knowledge_refinery.vault_ops import init_vault
+from knowledge_refinery.vault_ops import setup_project
 
 
-def test_stdio_server_lists_expected_tools(tmp_path: Path) -> None:
+def test_stdio_server_lists_expected_tools(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("REFINERY_CONFIG", str(tmp_path / "config.yaml"))
+    vault = tmp_path / "vault"
+    project = tmp_path / "product"
+    project.mkdir()
+    init_vault(vault)
+    setup_project(project, vault, project_id="product")
+    set_active_vault(vault)
+
     async def exercise_server() -> None:
         root = Path(__file__).resolve().parent.parent
         config = json.loads((root / ".mcp.json").read_text(encoding="utf-8"))
@@ -30,9 +45,45 @@ def test_stdio_server_lists_expected_tools(tmp_path: Path) -> None:
             async with ClientSession(reader, writer) as session:
                 await session.initialize()
                 result = await session.list_tools()
+                created = await session.call_tool(
+                    "refinery_create_handoff",
+                    {
+                        "project_path": str(project),
+                        "title": "Task",
+                        "goal": "Fix search",
+                        "done_when": "Regression passes",
+                        "body": "src/search.py has local changes",
+                        "handoff_id": "stdio-task",
+                    },
+                )
+                assert not created.isError and created.structuredContent is not None
+                archived = await session.call_tool(
+                    "refinery_archive_handoff",
+                    {
+                        "project_path": str(project),
+                        "handoff_id": "stdio-task",
+                        "expected_updated_at": created.structuredContent["header"]["updated_at"],
+                    },
+                )
+                assert not archived.isError and archived.structuredContent is not None
+                deleted = await session.call_tool(
+                    "refinery_delete_handoff",
+                    {
+                        "project_path": str(project),
+                        "handoff_id": "stdio-task",
+                        "expected_updated_at": archived.structuredContent["header"]["updated_at"],
+                    },
+                )
+                assert not deleted.isError and deleted.structuredContent is not None
+                assert deleted.structuredContent["deleted"] is True
 
         names = {tool.name for tool in result.tools}
         assert names == {
+            "refinery_create_handoff",
+            "refinery_list_handoffs",
+            "refinery_get_handoff",
+            "refinery_archive_handoff",
+            "refinery_delete_handoff",
             "refinery_browse_knowledge_tags",
             "refinery_get_experience",
             "refinery_get_memory",
@@ -50,6 +101,21 @@ def test_stdio_server_lists_expected_tools(tmp_path: Path) -> None:
         }
         descriptions = {tool.name: tool.description for tool in result.tools}
         assert descriptions == {
+            "refinery_create_handoff": (
+                "引き継ぎを新規保存します。旧版を指定した場合は同じ作業の旧版をアーカイブします。"
+            ),
+            "refinery_list_handoffs": (
+                "現在projectの引き継ぎmetadataを一覧します。既定はactiveのみで本文を含めません。"
+            ),
+            "refinery_get_handoff": (
+                "指定IDの引き継ぎを取得します。読み込みによる状態変更や削除は行いません。"
+            ),
+            "refinery_archive_handoff": (
+                "確認済みrevisionの引き継ぎをアーカイブし、内容を保持します。"
+            ),
+            "refinery_delete_handoff": (
+                "明示された削除対象として確認済みrevisionのarchived引き継ぎ1件を削除します。"
+            ),
             "refinery_browse_knowledge_tags": (
                 "Knowledge tagを指定階層の直下だけ、説明と利用件数を付けて取得します。"
             ),
@@ -91,7 +157,8 @@ def test_stdio_server_lists_expected_tools(tmp_path: Path) -> None:
                 "Knowledge tagの説明をtaxonomyの現在revisionを使って登録・更新します。"
             ),
             "refinery_validate": (
-                "active vaultのtaxonomy、project metadata、experience、memoryを検証します。"
+                "active vaultのtaxonomy、project metadata、experience、memory、handoffを"
+                "検証します。"
             ),
         }
         record_experience = next(
@@ -125,5 +192,12 @@ def test_stdio_server_lists_expected_tools(tmp_path: Path) -> None:
             tool for tool in result.tools if tool.name == "refinery_update_tag_description"
         )
         assert "expected_updated_at" not in update_tag.inputSchema.get("required", [])
+        for name in ("refinery_archive_handoff", "refinery_delete_handoff"):
+            tool = next(tool for tool in result.tools if tool.name == name)
+            assert set(tool.inputSchema["required"]) == {
+                "project_path",
+                "handoff_id",
+                "expected_updated_at",
+            }
 
     anyio.run(exercise_server)

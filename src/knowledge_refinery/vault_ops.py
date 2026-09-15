@@ -244,7 +244,7 @@ def setup_project(
             tags=tags,
             technologies=technologies,
         )
-    for name in ("experiences", "memory"):
+    for name in ("experiences", "memory", "handoffs"):
         (project_store / name).mkdir(parents=True, exist_ok=True)
     _write_if_needed(project_store / "AGENTS.md", _project_store_agents(resolved_id), force=False)
     if not metadata_path.is_file():
@@ -856,6 +856,7 @@ def _project_store_agents(project_id: str) -> str:
 - `experiences/` stores integrated attempts and conclusions.
 - Experience `evidence` entries store reference metadata only; do not copy source files or secrets.
 - `memory/` stores reusable principles supported by experiences.
+- `handoffs/` stores task snapshots for explicitly requested handoffs, outside knowledge search.
 - Normally require two repeated or complementary experiences for project memory. One source
   requires an explicit user request, narrow scope, stated unverified limits, and confidence
   below high.

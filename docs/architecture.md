@@ -12,7 +12,7 @@ flowchart TB
     end
 
     subgraph Plugin["Global Plugin"]
-        SK["4 Skills"]
+        SK["5 Skills<br/>handoffは明示呼び出し専用"]
         MCP["local stdio MCP"]
     end
 
@@ -22,7 +22,7 @@ flowchart TB
     SS["Validated temporary snapshot"]
 
     subgraph Vault["Central filesystem vault"]
-        PM["projects/&lt;project_id&gt;<br/>metadata / experiences / memory"]
+        PM["projects/&lt;project_id&gt;<br/>metadata / experiences / memory / handoffs"]
         SM["shared/memory"]
         KT["knowledge-tags.yaml"]
     end
@@ -60,6 +60,8 @@ flowchart TB
 - 検索は不正文書を隔離し、exact getは対象IDの正規pathを直接検証します。不正文書の一覧は `refinery_validate` が返します。
 - 任意のdeep search公開状態もユーザー設定に置きます。MCP起動時にだけ評価し、無効または不正な設定ではtoolを登録しません。
 - deep searchはschema検証済みknowledgeだけの一時snapshotを作り、中央vaultやproduct repoをCodex Execへ直接公開しません。snapshotはread-only・ephemeral実行後に破棄します。
+- `handoff_ops.py`は引き継ぎのsnapshotとライフタイムを管理します。通常検索とdeep searchに含めず、
+  CLI／MCPの専用操作で取得します。詳細は[引き継ぎガイド](handoffs.md)にあります。
 
 ## データフロー
 

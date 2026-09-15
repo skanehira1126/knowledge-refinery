@@ -20,6 +20,7 @@ knowledge-refinery project setup \
 自動検索は、過去の知識が今回の判断に役立つときに行います。以下の検索項目もこの条件で使い、
 typo・書式変更などの機械的な作業には適用しません。同じ問いと根拠の結果は再利用します。
 記録形式、status・confidence、更新引数の詳細はPlugin Skillに任せ、利用repoへ複製しません。
+handoffの作成・再開・整理は`$refinery-handoff`の明示呼び出し専用であり、以下の自動運用例には含めません。
 
 ## データ分析
 

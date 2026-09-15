@@ -667,7 +667,7 @@ def test_cli_can_disable_status_and_reenable_project(
     assert drift["runtime"][-1] == {
         "name": "version_match",
         "ok": False,
-        "detail": "cli=0.4.0, mcp=0.1.0",
+        "detail": "cli=0.5.0, mcp=0.1.0",
     }
 
 
@@ -721,3 +721,112 @@ def test_cli_reports_malformed_project_yaml_without_raising(
 
     assert main(["project", "disable", "--target", str(project)]) == 2
     assert "error: Invalid project config YAML" in capsys.readouterr().err
+
+
+def test_cli_handoff_create_replace_resume_and_cleanup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("REFINERY_CONFIG", str(tmp_path / "config.yaml"))
+    vault = tmp_path / "vault"
+    project = tmp_path / "product"
+    project.mkdir()
+    assert main(["vault", "init", "--root", str(vault)]) == 0
+    assert main(["project", "setup", "--target", str(project), "--vault", str(vault)]) == 0
+    capsys.readouterr()
+    body = tmp_path / "handoff.md"
+    body.write_text(
+        "## 作業状態\n\n変更ファイル: src/search.py\n未検証: cacheの影響\n", encoding="utf-8"
+    )
+    create_args = [
+        "--title",
+        "検索修正",
+        "--goal",
+        "検索バグを直す",
+        "--done-when",
+        "回帰テストが通る",
+        "--body-file",
+        str(body),
+        "--project",
+        str(project),
+    ]
+    assert main(["handoff", "create", "--id", "first", *create_args]) == 0
+    first = json.loads(capsys.readouterr().out)
+    assert (
+        main(
+            [
+                "handoff",
+                "create",
+                "--id",
+                "second",
+                "--supersedes",
+                "first",
+                "--expected-updated-at",
+                first["header"]["updated_at"],
+                *create_args,
+            ]
+        )
+        == 0
+    )
+    second = json.loads(capsys.readouterr().out)
+    assert second["header"]["task_id"] == "first"
+    assert main(["handoff", "list", "--project", str(project)]) == 0
+    listed = json.loads(capsys.readouterr().out)
+    assert len(listed) == 1 and listed[0]["header"]["handoff_id"] == "second"
+    assert "body" not in listed[0]
+    assert main(["handoff", "get", "first", "--project", str(project)]) == 0
+    old = json.loads(capsys.readouterr().out)
+    assert old["body"] == first["body"]
+    assert old["header"]["status"] == "archived"
+    assert (
+        main(
+            [
+                "handoff",
+                "archive",
+                "second",
+                "--project",
+                str(project),
+                "--expected-updated-at",
+                second["header"]["updated_at"],
+            ]
+        )
+        == 0
+    )
+    archived = json.loads(capsys.readouterr().out)
+    assert (
+        main(
+            [
+                "handoff",
+                "delete",
+                "second",
+                "--project",
+                str(project),
+                "--expected-updated-at",
+                second["header"]["updated_at"],
+            ]
+        )
+        == 2
+    )
+    assert "stale" in capsys.readouterr().err
+    assert (
+        main(
+            [
+                "handoff",
+                "delete",
+                "second",
+                "--project",
+                str(project),
+                "--expected-updated-at",
+                archived["header"]["updated_at"],
+            ]
+        )
+        == 0
+    )
+    assert json.loads(capsys.readouterr().out)["deleted"] is True
+    assert main(["handoff", "get", "second", "--project", str(project)]) == 2
+    capsys.readouterr()
+    assert main(["project", "disable", "--target", str(project)]) == 0
+    capsys.readouterr()
+    assert main(["handoff", "list", "--project", str(project)]) == 2
+    assert "disabled" in capsys.readouterr().err

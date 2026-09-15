@@ -65,6 +65,7 @@ nav:
       - ナレッジモデルと検索: knowledge-model.md
       - アーキテクチャ: architecture.md
   - 運用ガイド:
+      - 新しいチャットへの引き継ぎ: handoffs.md
       - repoの有効化・無効化: project-lifecycle.md
       - ナレッジの保守: knowledge-operations.md
       - Gitとバックアップ: git-operations.md
@@ -78,5 +79,6 @@ nav:
       - refinery-experience: skills/refinery-experience.md
       - refinery-memory: skills/refinery-memory.md
       - refinery-maintenance: skills/refinery-maintenance.md
+      - refinery-handoff: skills/refinery-handoff.md
   - コントリビューション:
       - 開発・リリース: development.md

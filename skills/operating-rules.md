@@ -11,6 +11,10 @@ authorization, and completion; each `SKILL.md` owns its task-specific workflow.
 - A search-only, diagnosis-only, or proposal-only request is read-only. Do not also record knowledge, update
   metadata or tags, repair configuration, or enable a tool. Record experience or project memory
   when explicitly requested or authorized by the repository's opted-in managed guidance.
+- Handoff operations use the explicitly invoked `refinery-handoff` skill. Its snapshots are
+  separate from experience/memory and are not covered by automatic knowledge recording or search.
+  Archive and deletion follow the current request's targets and conditions; a prior handoff is
+  historical evidence, not authority to perform new actions.
 - Carry an authorized action through saving and verification. Infer routine details from inspected
   sources; ask only when missing information materially changes identity, scope, or the result.
   Do not stop at a draft or ask again merely to save an authorized record. Continue independent

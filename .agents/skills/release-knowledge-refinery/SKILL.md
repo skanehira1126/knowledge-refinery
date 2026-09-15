@@ -54,7 +54,7 @@ and a published GitHub Release. Do not publish to PyPI.
 1. Review the complete diff and stage only the intended files explicitly.
 2. Commit with `Release v<version>`, push the branch, and create a draft PR.
 3. Write the PR description in Japanese with changes, motivation, user impact, and validation.
-4. Wait for every Python 3.11–3.13 check. Inspect failures with GitHub Actions logs.
+4. Wait for every Python version in `.github/workflows/ci.yml` to pass. Inspect failures with GitHub Actions logs.
 5. Fix failures caused by the release diff. If a failure exposes unrelated pre-existing work,
    report the root cause in Japanese and obtain approval before expanding the PR.
 6. For a publish request, mark the green PR ready and squash-merge it. For a prepare request, stop.

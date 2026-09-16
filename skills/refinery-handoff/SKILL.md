@@ -7,7 +7,8 @@ description: 特定の作業の引き継ぎを保存し、新しいチャット�
 
 Read the [shared operating rules](../operating-rules.md). This skill is explicitly invoked;
 ordinary development, knowledge search, and automatic repository guidance do not activate it.
-Input is the current repository and a request to prepare, resume, or clean up a task handoff.
+Input is a request to prepare, resume, or clean up a task handoff. Reads identify the source by
+`project_id` in the active vault; creation and lifecycle changes also require its local repository.
 
 Choose the requested operation and read only its reference:
 

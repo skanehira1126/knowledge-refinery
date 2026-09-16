@@ -29,6 +29,9 @@ authorization, and completion; each `SKILL.md` owns its task-specific workflow.
   candidate or diff. Pause only the dependent action. Name and link the instruction file, quote the
   relevant requirement briefly, and explain its application; distinguish the written rule from an
   interpretation. Report access or tool failures as such, without inventing a skill requirement.
+- Handoff list/get are vault-scoped reads: use the active vault and `project_id`, without a local
+  repository or repo-status preflight. Local disablement does not remove access to saved handoffs.
+  Handoff creation, archive, and deletion remain repo-scoped and follow the gate below.
 - Before repo-scoped knowledge access, resolve the current repository to an absolute `PROJECT_ROOT`
   and run `knowledge-refinery project status --target "$PROJECT_ROOT" --json`. Use repo-scoped
   tools only when `ready`, `enabled`, and `vault_match` are true, and pass that absolute path as

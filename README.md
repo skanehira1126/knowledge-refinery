@@ -71,7 +71,10 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 `$refinery-handoff`は明示呼び出し専用です。旧チャットで
 「`$refinery-handoff`を使って、この作業の引き継ぎを保存してください」と依頼すると、
 目的・完了条件・現在の成果物・確認済みの事実・未解決事項を保存し、引き継ぎIDと再開用の依頼文を返します。
-新しいチャットでは、そのIDを指定して同Skillに再開を依頼します。
+新しいチャットでは、保存元の`project_id`と引き継ぎIDを指定して同Skillに再開を依頼します。
+参照には保存元repoのローカルパスは不要です。MCPの`refinery_get_handoff(project_id, handoff_id)`で
+取得でき、`refinery_list_handoffs(project_id=...)`でprojectを絞るか、省略してactive vaultの全projectを
+一覧できます。CLIも`handoff get <ID> --project-id <project-id>`と`handoff list`に対応します。
 
 handoffはprojectごとの専用領域に保存され、通常のexperience／memory検索やdeep searchには
 含まれません。読み込みでは消費せず、新版への置き換えや明示された終了でアーカイブします。

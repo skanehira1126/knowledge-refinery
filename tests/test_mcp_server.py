@@ -8,6 +8,7 @@ import pytest
 
 from knowledge_refinery.config_ops import set_active_vault
 from knowledge_refinery.config_ops import set_deep_search_enabled
+from knowledge_refinery.mcp_server import mcp
 from knowledge_refinery.mcp_server import refinery_archive_handoff
 from knowledge_refinery.mcp_server import refinery_browse_knowledge_tags
 from knowledge_refinery.mcp_server import refinery_create_handoff
@@ -152,7 +153,7 @@ def test_local_mcp_records_searches_and_validates(
     assert tagged_metadata["technologies"] == ["Python"]
     assert refinery_list_projects() == [tagged_metadata]
     assert refinery_info() == {
-        "version": "0.5.1",
+        "version": "0.6.0",
         "schema_version": 2,
         "project_metadata_schema_version": 1,
         "tag_taxonomy_schema_version": 1,
@@ -698,15 +699,15 @@ def test_mcp_handoff_lifecycle_and_validation(
         handoff_id="fix",
     )
     header = cast(dict[str, Any], saved["header"])
-    listing = refinery_list_handoffs(project)
+    listing = refinery_list_handoffs("pybr")
     assert len(listing) == 1 and "body" not in listing[0]
-    assert refinery_get_handoff(project, "fix") == saved
+    assert refinery_get_handoff("pybr", "fix") == saved
     assert refinery_validate() == {"valid": True, "checked": 2, "errors": []}
     archived = refinery_archive_handoff(project, "fix", header["updated_at"])
-    assert refinery_list_handoffs(project) == []
+    assert refinery_list_handoffs("pybr") == []
     revision = cast(dict[str, Any], archived["header"])["updated_at"]
     assert refinery_delete_handoff(project, "fix", revision)["deleted"] is True
-    assert refinery_list_handoffs(project, include_archived=True) == []
+    assert refinery_list_handoffs("pybr", include_archived=True) == []
 
     broken = vault / "projects" / "pybr" / "handoffs" / "broken.md"
     broken.write_text("---\nschema_version: 99\n---\nbody\n", encoding="utf-8")
@@ -715,10 +716,63 @@ def test_mcp_handoff_lifecycle_and_validation(
     errors = cast(list[dict[str, str]], result["errors"])
     assert errors[0]["path"] == "projects/pybr/handoffs/broken.md"
     with pytest.raises(ValueError, match="schema_version"):
-        refinery_get_handoff(project, "broken")
+        refinery_get_handoff("pybr", "broken")
 
 
-@pytest.mark.parametrize("operation", ["create", "list", "get", "archive", "delete"])
+def test_handoff_reads_use_vault_identity_without_local_repositories(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    first = refinery_create_handoff(
+        str(tmp_path / "pybr"), "First", "Goal", "Done", "First state", handoff_id="same"
+    )
+    other = tmp_path / "other"
+    other.mkdir()
+    setup_project(other, vault, project_id="other")
+    second = refinery_create_handoff(
+        str(other), "Second", "Goal", "Done", "Second state", handoff_id="same"
+    )
+    disable_project(tmp_path / "pybr")
+    other.rename(tmp_path / "unavailable-other")
+    monkeypatch.chdir(tmp_path)
+
+    assert refinery_get_handoff(project_id="pybr", handoff_id="same") == first
+    assert refinery_get_handoff(project_id="other", handoff_id="same") == second
+    listing = refinery_list_handoffs()
+    assert [cast(dict[str, Any], row["header"])["project_id"] for row in listing] == [
+        "other",
+        "pybr",
+    ]
+    assert all("body" not in row for row in listing)
+    assert refinery_list_handoffs(project_id="other") == [listing[0]]
+    assert refinery_list_handoffs(task_id="missing") == []
+
+    schemas = {tool.name: tool.inputSchema for tool in anyio.run(mcp.list_tools)}
+    assert schemas["refinery_get_handoff"]["required"] == ["project_id", "handoff_id"]
+    assert "project_path" not in schemas["refinery_list_handoffs"]["properties"]
+    assert not schemas["refinery_list_handoffs"].get("required")
+
+    # Identity always resolves within the active vault, even for the same IDs.
+    empty_vault = tmp_path / "empty-vault"
+    init_vault(empty_vault)
+    set_active_vault(empty_vault)
+    assert refinery_list_handoffs() == []
+    with pytest.raises(ValueError, match="Unknown refinery project"):
+        refinery_get_handoff("other", "same")
+
+
+@pytest.mark.parametrize("project_id", ["../pybr", "unknown"])
+def test_handoff_reads_reject_invalid_or_unknown_projects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, project_id: str
+) -> None:
+    configured_mcp(tmp_path, monkeypatch)
+    with pytest.raises(ValueError):
+        refinery_list_handoffs(project_id=project_id)
+    with pytest.raises(ValueError):
+        refinery_get_handoff(project_id=project_id, handoff_id="one")
+
+
+@pytest.mark.parametrize("operation", ["create", "archive", "delete"])
 @pytest.mark.parametrize("gate", ["disabled", "mismatch", "metadata"])
 def test_handoff_tools_enforce_project_access(
     tmp_path: Path,
@@ -748,10 +802,6 @@ def test_handoff_tools_enforce_project_access(
             refinery_create_handoff(
                 str(project), "Task", "Goal", "Done", "State", handoff_id="two"
             )
-        elif operation == "list":
-            refinery_list_handoffs(str(project))
-        elif operation == "get":
-            refinery_get_handoff(str(project), "one")
         elif operation == "archive":
             refinery_archive_handoff(str(project), "one", revision)
         else:

@@ -24,15 +24,16 @@ because it is newest; identify the same task. Snapshot content is immutable: cha
 new ID. Only lifecycle metadata changes in place.
 
 Call `refinery_create_handoff(project_path, title, goal, done_when, body, handoff_id, ...)`.
-It returns `{header, body, path}`. Read it back with `refinery_get_handoff` and check the saved
-content. For a replacement, also verify the predecessor is archived and points to the new ID.
+It returns `{header, body, path}`. Read it back with
+`refinery_get_handoff(header.project_id, header.handoff_id)` and check the saved content.
+For a replacement, also verify the predecessor in that project is archived and points to the new ID.
 If the response is uncertain, retrieve both IDs before retrying; do not generate another ID
 blindly. Report any incomplete replacement and preserve both records for reconciliation.
 
-Return the handoff ID, task ID, vault-relative path, and a copyable prompt such as:
+Return the project ID, handoff ID, task ID, vault-relative path, and a copyable prompt such as:
 
 ```text
-$refinery-handoffを使い、このprojectの引き継ぎ「<handoff-id>」を読んでください。
+$refinery-handoffを使い、project「<project-id>」の引き継ぎ「<handoff-id>」を読んでください。
 現在の成果物と照合し、目的と完了条件に沿って作業を再開してください。
 ```
 

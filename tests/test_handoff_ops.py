@@ -201,6 +201,42 @@ def test_handoff_operations_refuse_redirected_storage(
         read_handoff_at(vault, "first", "snapshot-one")
     with pytest.raises(ValueError, match="symlink"):
         list_handoffs_at(vault, "first")
+    with pytest.raises(ValueError, match="symlink"):
+        list_handoffs_at(vault)
+
+
+def test_cross_project_listing_filters_and_fails_on_invalid_metadata(vault: Path) -> None:
+    first = create(vault, task_id="shared-task")
+    second = create_handoff_at(
+        vault,
+        "second",
+        title="Other",
+        goal="Goal",
+        done_when="Done",
+        body="Other state",
+        handoff_id="snapshot-one",
+        task_id="shared-task",
+    )
+    unrelated = create(vault, "unrelated")
+    archived = archive_handoff_at(
+        vault, "second", "snapshot-one", expected_updated_at=str(second.header["updated_at"])
+    )
+    assert list_handoffs_at(vault) == [unrelated, first]
+    assert list_handoffs_at(vault, include_archived=True, task_id="shared-task") == [
+        archived,
+        first,
+    ]
+    assert list_handoffs_at(
+        vault, include_archived=True, archived_before="2100-01-01T00:00:00Z"
+    ) == [archived]
+    with pytest.raises(ValueError, match="requires include_archived"):
+        list_handoffs_at(vault, archived_before="2100-01-01T00:00:00Z")
+    (vault / "projects" / "second" / "project.yaml").write_text("invalid: true\n")
+    with pytest.raises(ValueError):
+        list_handoffs_at(vault)
+    with pytest.raises(ValueError):
+        read_handoff_at(vault, "second", "snapshot-one")
+    assert list_handoffs_at(vault, "first") == [unrelated, first]
 
 
 def test_failed_predecessor_archive_preserves_original(

@@ -667,7 +667,7 @@ def test_cli_can_disable_status_and_reenable_project(
     assert drift["runtime"][-1] == {
         "name": "version_match",
         "ok": False,
-        "detail": "cli=0.5.1, mcp=0.1.0",
+        "detail": "cli=0.6.0, mcp=0.1.0",
     }
 
 
@@ -830,3 +830,54 @@ def test_cli_handoff_create_replace_resume_and_cleanup(
     capsys.readouterr()
     assert main(["handoff", "list", "--project", str(project)]) == 2
     assert "disabled" in capsys.readouterr().err
+
+
+def test_cli_handoff_reads_by_project_id_without_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("REFINERY_CONFIG", str(tmp_path / "config.yaml"))
+    vault = tmp_path / "vault"
+    assert main(["vault", "init", "--root", str(vault)]) == 0
+    for name in ("first", "second"):
+        project = tmp_path / name
+        project.mkdir()
+        assert main(["project", "setup", "--target", str(project), "--vault", str(vault)]) == 0
+        assert (
+            main(
+                [
+                    "handoff",
+                    "create",
+                    "--project",
+                    str(project),
+                    "--id",
+                    "same",
+                    "--title",
+                    name,
+                    "--goal",
+                    "Goal",
+                    "--done-when",
+                    "Done",
+                    "--body",
+                    name,
+                ]
+            )
+            == 0
+        )
+        project.rename(tmp_path / f"unavailable-{name}")
+    capsys.readouterr()
+    monkeypatch.chdir(tmp_path)
+    assert main(["handoff", "list"]) == 0
+    listing = json.loads(capsys.readouterr().out)
+    assert [row["header"]["project_id"] for row in listing] == ["second", "first"]
+    assert main(["handoff", "list", "--project-id", "first"]) == 0
+    assert json.loads(capsys.readouterr().out) == [listing[1]]
+    assert main(["handoff", "get", "same", "--project-id", "second"]) == 0
+    assert json.loads(capsys.readouterr().out)["body"].strip() == "second"
+    assert main(["handoff", "get", "same", "--project-id", "unknown"]) == 2
+    assert "Unknown refinery project" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["handoff", "get", "same"])
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(
+            ["handoff", "list", "--project-id", "first", "--project", str(tmp_path)]
+        )

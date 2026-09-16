@@ -20,8 +20,8 @@ metadata、repoとactive vaultの`vault_id`一致を検証します。
 | `refinery_get_memory` | scopeとIDを指定したmemory本文取得 | `project_path` |
 | `refinery_record_memory` | project/shared memoryの作成・revision付き更新 | `project_path` |
 | `refinery_create_handoff` | 引き継ぎsnapshotの作成と旧版のアーカイブ | `project_path` |
-| `refinery_list_handoffs` | 引き継ぎmetadataの一覧、作業・archive日時で絞り込み | `project_path` |
-| `refinery_get_handoff` | IDを指定した引き継ぎの取得 | `project_path` |
+| `refinery_list_handoffs` | 全projectまたは指定projectの引き継ぎmetadata一覧 | vault参照（任意の`project_id`） |
+| `refinery_get_handoff` | project IDと引き継ぎIDによる取得 | vault参照（`project_id`） |
 | `refinery_archive_handoff` | revisionを指定した引き継ぎのアーカイブ | `project_path` |
 | `refinery_delete_handoff` | revisionを指定したarchived引き継ぎ1件の削除 | `project_path` |
 | `refinery_validate` | active vaultのYAMLとprovenance検証 | 管理tool |
@@ -133,15 +133,16 @@ tagはlowercase kebab-caseで目的・領域を表し、技術名は `technologi
 
 ## 引き継ぎ専用tools {#handoff-tools}
 
-handoffは通常のナレッジ検索から分離し、現在projectに限定して操作します。
-各toolは`project_path`から有効状態・vault binding・project metadataを検証します。
+handoffは通常のナレッジ検索から分離しています。一覧・取得はactive vaultの`project_id`を使い、
+保存元repoのローカルパスや設定を必要としません。vault内のproject metadataと保存資料を検証します。
+作成・アーカイブ・削除は`project_path`から有効状態・vault binding・project metadataを検証します。
 `refinery_info`は`handoff_schema_version: 1`も返します。
 
 | Tool | 必須引数 | 任意引数 |
 |---|---|---|
 | `refinery_create_handoff` | `project_path`, `title`, `goal`, `done_when`, `body` | `handoff_id`, `task_id`, `supersedes`, `expected_updated_at` |
-| `refinery_list_handoffs` | `project_path` | `include_archived=false`, `task_id`, `archived_before` |
-| `refinery_get_handoff` | `project_path`, `handoff_id` | なし |
+| `refinery_list_handoffs` | なし | `project_id`, `include_archived=false`, `task_id`, `archived_before` |
+| `refinery_get_handoff` | `project_id`, `handoff_id` | なし |
 | `refinery_archive_handoff` | `project_path`, `handoff_id`, `expected_updated_at` | なし |
 | `refinery_delete_handoff` | `project_path`, `handoff_id`, `expected_updated_at` | なし |
 
@@ -149,6 +150,18 @@ create/get/archiveは`{header, body, path}`を返し、pathはvault相対です�
 `{header, path}`の配列を返し、本文は返しません。`task_id`は完全一致で絞り込みます。
 `archived_before`はtimezone付きISO日時の排他的上限で、`include_archived: true`と併用すると
 その日時より前にアーカイブした資料だけを返します。通常の一覧はactiveのみです。
+
+listは`project_id`を省略すると全projectを対象にし、指定するとそのprojectに限定します。
+getは`project_id`と`handoff_id`の組で特定するため、別projectに同名IDがあっても区別できます。
+一覧の`header.project_id`をそのまま取得に使えます。ローカルrepoの無効化・移動後も中央vaultの
+保存資料は参照可能です。参照はactive vault内に限定され、書き込みのrepo gateは維持されます。
+旧list/getの`project_path`引数は`project_id`に置き換わりました。
+
+```python
+refinery_list_handoffs()  # 全projectのmetadata
+refinery_list_handoffs(project_id="project-a")
+refinery_get_handoff(project_id="project-a", handoff_id="search-fix-01")
+```
 
 createは既存IDを上書きしません。IDを省略すると生成しますが、応答不明時の照合のためSkillでは
 保存前にIDを選びます。同じ作業にactive資料がある場合は`supersedes`でそのIDを指定し、

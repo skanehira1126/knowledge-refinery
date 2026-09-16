@@ -156,17 +156,20 @@ doctorのJSONでは、全体の`ok`だけでなく`project.state`とvalidation e
 ## handoff
 
 引き継ぎ専用のcommand群です。通常のexperience／memory検索には含めません。
-すべて`--project`（別名`--target`、既定は`.`）を受け、JSONを返します。
+すべてJSONを返します。作成・アーカイブ・削除は`--project`（別名`--target`、既定は`.`）を受けます。
+一覧・取得は`--project-id`でactive vaultを直接参照でき、ローカルrepoは不要です。
+従来の`--project`も指定できますが、`--project-id`との併用はできません。
 
 | Command | 引数 |
 |---|---|
 | `handoff create` | 必須: `--title`, `--goal`, `--done-when`と、非空の`--body`または`--body-file`。任意: `--id`, `--task-id`, `--supersedes`, `--expected-updated-at` |
-| `handoff list` | 任意: `--include-archived`, `--task-id`, `--archived-before` |
-| `handoff get <ID>` | 正確な引き継ぎID |
+| `handoff list` | 任意: `--project-id`または`--project`、`--include-archived`, `--task-id`, `--archived-before` |
+| `handoff get <ID>` | 必須: `--project-id`または`--project`と、正確な引き継ぎID |
 | `handoff archive <ID>` | 必須: `--expected-updated-at` |
 | `handoff delete <ID>` | 必須: `--expected-updated-at`。archivedのみ削除可能 |
 
 listは既定でactiveだけを作成日時の新しい順に返し、本文を含みません。
+project指定の省略時は、現在repoに関係なくactive vaultの全projectを対象にします。
 `--archived-before`はtimezone付きISO日時を受け、`--include-archived`が必須です。
 その日時より前にアーカイブされた資料だけを候補として返し、削除はしません。
 置き換え時のrevision、返却値、例は[引き継ぎガイド](handoffs.md)と

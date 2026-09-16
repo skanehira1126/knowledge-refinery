@@ -57,6 +57,22 @@ def test_stdio_server_lists_expected_tools(
                     },
                 )
                 assert not created.isError and created.structuredContent is not None
+                listed = await session.call_tool("refinery_list_handoffs", {})
+                assert not listed.isError and listed.structuredContent is not None
+                assert listed.structuredContent["result"] == [
+                    {
+                        key: value
+                        for key, value in created.structuredContent.items()
+                        if key != "body"
+                    }
+                ]
+                fetched = await session.call_tool(
+                    "refinery_get_handoff",
+                    {"project_id": "product", "handoff_id": "stdio-task"},
+                )
+                assert (
+                    not fetched.isError and fetched.structuredContent == created.structuredContent
+                )
                 archived = await session.call_tool(
                     "refinery_archive_handoff",
                     {
@@ -105,10 +121,13 @@ def test_stdio_server_lists_expected_tools(
                 "引き継ぎを新規保存します。旧版を指定した場合は同じ作業の旧版をアーカイブします。"
             ),
             "refinery_list_handoffs": (
-                "現在projectの引き継ぎmetadataを一覧します。既定はactiveのみで本文を含めません。"
+                "引き継ぎmetadataを一覧します。"
+                "project_id省略時はactive vaultの全projectが対象です。\n\n"
+                "既定はactiveのみで本文を含みません。ローカルrepoは不要です。\n"
             ),
             "refinery_get_handoff": (
-                "指定IDの引き継ぎを取得します。読み込みによる状態変更や削除は行いません。"
+                "active vaultからproject_idとhandoff_idで取得します。ローカルrepoは不要です。\n\n"
+                "読み込みによる状態変更や削除は行いません。\n"
             ),
             "refinery_archive_handoff": (
                 "確認済みrevisionの引き継ぎをアーカイブし、内容を保持します。"

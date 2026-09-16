@@ -5,8 +5,8 @@ Archive hides a snapshot from the default list while preserving its content. Del
 file; historical links in other handoffs remain as IDs and can become unavailable. Git history
 and external backups, if present, are not erased by this operation.
 
-For an age-based cleanup, list metadata with `include_archived: true` and, when useful,
-`archived_before: <ISO-datetime-with-timezone>`. The cutoff is exclusive and applies to
+For an age-based cleanup, list metadata with the intended `project_id`, `include_archived: true`
+and, when useful, `archived_before: <ISO-datetime-with-timezone>`. The cutoff is exclusive and applies to
 `archived_at`, not creation or last access. Add `task_id` to keep cleanup within one task.
 There is no timer and listing never deletes anything.
 
@@ -16,6 +16,10 @@ archiving it. For deletion, show the concrete target and effect when these have 
 approved. Honor an existing explicit request or agreed completion cleanup for those same targets;
 do not ask again merely because this reference was read. Do not infer deletion from "resume",
 "save", or a generic maintenance request.
+
+Read candidates with `refinery_get_handoff(project_id, handoff_id)`. Before a mutation, resolve
+the source repository, apply the repo-status gate, and confirm its project ID matches the selected
+record. Cross-project discovery alone does not authorize cleanup of every listed project.
 
 - Archive with `refinery_archive_handoff(project_path, handoff_id, expected_updated_at)` using
   the exact-get `header.updated_at`. Get it again and verify `status: archived` and preserved body.

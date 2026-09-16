@@ -13,10 +13,11 @@ $refinery-handoffを使って、この作業の引き継ぎを保存してくだ
 ```
 
 保存結果の確認後、引き継ぎIDと新チャット向けの短い依頼文が返ります。新しいチャットで、
-同じ利用projectを選び、その依頼文を使います。
+保存元の`project_id`と引き継ぎIDを含む依頼文を使います。別projectのチャットからも参照でき、
+保存元repoがローカルに存在しなくてもactive vaultから取得できます。
 
 ```text
-$refinery-handoffを使い、引き継ぎ「search-fix-01」を読んでください。
+$refinery-handoffを使い、project「project-a」の引き継ぎ「search-fix-01」を読んでください。
 現在の成果物と照合し、目的と完了条件に沿って作業を再開してください。
 ```
 
@@ -52,8 +53,10 @@ $refinery-handoffを使い、引き継ぎ「search-fix-01」を読んでくだ�
 
 ## CLIで使う
 
-以下は設定済みの利用repoからの例です。すべてのhandoff commandはJSONを返します。
-別の場所から実行する場合は`--project /absolute/path/to/project`を付けます。
+すべてのhandoff commandはJSONを返します。作成・アーカイブ・削除は設定済みの利用repoから
+実行するか、`--project /absolute/path/to/project`を付けます。一覧・取得は`--project-id`で
+中央vaultのprojectを指定でき、ローカルrepoは不要です。`list`で指定を省略すると全projectを
+対象にします。`get`には`--project-id`または従来の`--project`が必須です。両者は併用できません。
 
 ```bash
 knowledge-refinery handoff create \
@@ -64,8 +67,9 @@ knowledge-refinery handoff create \
   --body-file /tmp/search-handoff.md
 
 knowledge-refinery handoff list
-knowledge-refinery handoff get search-fix-01
-knowledge-refinery handoff list --include-archived --task-id search-fix
+knowledge-refinery handoff list --project-id project-a
+knowledge-refinery handoff get search-fix-01 --project-id project-a
+knowledge-refinery handoff list --project-id project-a --include-archived --task-id search-fix
 ```
 
 置き換えには`create --supersedes <旧ID> --expected-updated-at <取得した旧版のupdated_at>`を付けます。

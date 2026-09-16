@@ -66,6 +66,8 @@ mcp = FastMCP(
         "判断前はcurrent projectとshared memoryを先に検索し、必要な場合だけselected projectsまたは"
         "vault全体へ広げてください。更新では省略fieldを保持し、空listは明示clearです。"
         "handoffは明示された引き継ぎ操作専用です。通常のknowledge検索・記録には含めません。"
+        "handoffの一覧・取得はproject_idによるactive vaultの参照で、repository pathは不要です。"
+        "一覧でproject_idを省略すると全projectを対象にします。"
     ),
 )
 
@@ -463,14 +465,16 @@ def refinery_create_handoff(
 
 @mcp.tool()
 def refinery_list_handoffs(
-    project_path: str,
+    project_id: str | None = None,
     include_archived: bool = False,
     task_id: str | None = None,
     archived_before: str | None = None,
 ) -> list[dict[str, object]]:
-    """現在projectの引き継ぎmetadataを一覧します。既定はactiveのみで本文を含めません。"""
+    """引き継ぎmetadataを一覧します。project_id省略時はactive vaultの全projectが対象です。
+
+    既定はactiveのみで本文を含みません。ローカルrepoは不要です。
+    """
     vault = get_active_vault()
-    project_id = _validated_project_id(vault, project_path)
     return [
         record.as_dict(vault, include_body=False)
         for record in list_handoffs_at(
@@ -484,10 +488,12 @@ def refinery_list_handoffs(
 
 
 @mcp.tool()
-def refinery_get_handoff(project_path: str, handoff_id: str) -> dict[str, object]:
-    """指定IDの引き継ぎを取得します。読み込みによる状態変更や削除は行いません。"""
+def refinery_get_handoff(project_id: str, handoff_id: str) -> dict[str, object]:
+    """active vaultからproject_idとhandoff_idで取得します。ローカルrepoは不要です。
+
+    読み込みによる状態変更や削除は行いません。
+    """
     vault = get_active_vault()
-    project_id = _validated_project_id(vault, project_path)
     return read_handoff_at(vault, project_id, handoff_id).as_dict(vault)
 
 

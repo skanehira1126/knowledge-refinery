@@ -349,7 +349,14 @@ def build_parser() -> argparse.ArgumentParser:
     handoff_commands = handoff_parser.add_subparsers(dest="handoff_command", required=True)
     for operation in ("create", "list", "get", "archive", "delete"):
         command = handoff_commands.add_parser(operation, help=f"{operation.capitalize()} handoffs")
-        command.add_argument("--project", "--target", dest="project", default=".")
+        if operation in ("list", "get"):
+            scope = command.add_mutually_exclusive_group(required=operation == "get")
+            scope.add_argument("--project-id", help="registered project ID in the active vault")
+            scope.add_argument(
+                "--project", "--target", dest="project", help="configured repo path"
+            )
+        else:
+            command.add_argument("--project", "--target", dest="project", default=".")
         if operation in ("get", "archive", "delete"):
             command.add_argument("handoff_id", help="exact handoff ID")
         if operation in ("archive", "delete"):
@@ -963,8 +970,12 @@ def run_memory_get(args: argparse.Namespace) -> int:
 def run_handoff(args: argparse.Namespace) -> int:
     """Execute an explicitly selected handoff operation and print JSON."""
     vault = get_active_vault()
-    project_id = resolve_project_id(Path(args.project), vault)
     operation = args.handoff_command
+    project_id = (
+        resolve_project_id(Path(args.project), vault)
+        if args.project is not None
+        else args.project_id
+    )
     payload: object
     if operation == "create":
         payload = create_handoff_at(

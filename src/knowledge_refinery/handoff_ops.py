@@ -14,6 +14,7 @@ from knowledge_refinery.front_matter import split_front_matter
 from knowledge_refinery.storage_ops import atomic_write_text
 from knowledge_refinery.storage_ops import interprocess_lock
 from knowledge_refinery.vault_ops import context_from_vault
+from knowledge_refinery.vault_ops import list_project_ids
 from knowledge_refinery.vault_ops import read_project_metadata
 
 
@@ -132,13 +133,13 @@ def read_handoff_at(vault: Path, project_id: str, handoff_id: str) -> Handoff:
 
 def list_handoffs_at(
     vault: Path,
-    project_id: str,
+    project_id: str | None = None,
     *,
     include_archived: bool = False,
     task_id: str | None = None,
     archived_before: str | None = None,
 ) -> list[Handoff]:
-    """List project handoffs, with optional task and strict archive-date filters."""
+    """List one or all vault projects' handoffs, newest first, with optional filters."""
     if task_id is not None and not SLUG_RE.fullmatch(task_id):
         raise ValueError("task_id must be a lowercase slug")
     cutoff = (
@@ -146,13 +147,19 @@ def list_handoffs_at(
     )
     if cutoff is not None and not include_archived:
         raise ValueError("archived_before requires include_archived")
-    root = _handoff_root(vault, project_id)
-    if not root.exists():
-        return []
-    with interprocess_lock(root / "lifecycle"):
-        records = [
-            _read_handoff(root, project_id, path.stem) for path in sorted(root.glob("*.md"))
-        ]
+    if (vault / "projects").is_symlink():
+        raise ValueError("Handoff storage must not use symlinks: projects")
+    project_ids = list_project_ids(vault) if project_id is None else [project_id]
+    records: list[Handoff] = []
+    for selected_project in project_ids:
+        root = _handoff_root(vault, selected_project)
+        if not root.exists():
+            continue
+        with interprocess_lock(root / "lifecycle"):
+            records.extend(
+                _read_handoff(root, selected_project, path.stem)
+                for path in sorted(root.glob("*.md"))
+            )
     selected = [
         record
         for record in records
@@ -170,6 +177,7 @@ def list_handoffs_at(
         selected,
         key=lambda record: (
             _timestamp(record.header["created_at"], "created_at"),
+            str(record.header["project_id"]),
             str(record.header["handoff_id"]),
         ),
         reverse=True,

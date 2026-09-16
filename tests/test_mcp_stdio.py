@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from inspect import cleandoc
 import json
 import os
 from pathlib import Path
@@ -115,7 +116,7 @@ def test_stdio_server_lists_expected_tools(
             "refinery_update_project_metadata",
             "refinery_validate",
         }
-        descriptions = {tool.name: tool.description for tool in result.tools}
+        descriptions = {tool.name: cleandoc(tool.description or "") for tool in result.tools}
         assert descriptions == {
             "refinery_create_handoff": (
                 "引き継ぎを新規保存します。旧版を指定した場合は同じ作業の旧版をアーカイブします。"
@@ -123,11 +124,11 @@ def test_stdio_server_lists_expected_tools(
             "refinery_list_handoffs": (
                 "引き継ぎmetadataを一覧します。"
                 "project_id省略時はactive vaultの全projectが対象です。\n\n"
-                "既定はactiveのみで本文を含みません。ローカルrepoは不要です。\n"
+                "既定はactiveのみで本文を含みません。ローカルrepoは不要です。"
             ),
             "refinery_get_handoff": (
                 "active vaultからproject_idとhandoff_idで取得します。ローカルrepoは不要です。\n\n"
-                "読み込みによる状態変更や削除は行いません。\n"
+                "読み込みによる状態変更や削除は行いません。"
             ),
             "refinery_archive_handoff": (
                 "確認済みrevisionの引き継ぎをアーカイブし、内容を保持します。"

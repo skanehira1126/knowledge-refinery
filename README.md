@@ -1,5 +1,7 @@
 # knowledge-refinery
 
+<img src="docs/assets/knowledge-refinery.png" alt="Knowledge Refinery logo" width="160">
+
 Codexで得た開発経験を、複数のプロジェクトから再利用できる形で残すためのPluginです。
 試行や失敗をexperienceとして記録し、そこから抽出した原則をmemoryとして、プロダクトrepoとは
 別のローカル中央vaultへ保存します。

@@ -19,5 +19,4 @@ secret、credential、access token、個人情報、顧客data、未redact log�
 `refinery-maintenance`が担当し、通常の開発レビューや単発の記録確認をvault監査へ広げません。
 
 自動運用では、過去の知識が今回の判断に役立つときに検索します。機械的な修正では省略し、
-明示された検索依頼には応じます。検索時には記録手順を読まず、experience保存・導入・deep search
-設定の詳細は、各Skillから必要な参照ファイルだけを読みます。
+明示された検索依頼には応じます。検索時には記録手順を読まず、experience保存・導入の詳細は、各Skillから必要な参照ファイルだけを読みます。

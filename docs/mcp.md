@@ -25,37 +25,6 @@ metadata、repoとactive vaultの`vault_id`一致を検証します。
 | `refinery_archive_handoff` | revisionを指定した引き継ぎのアーカイブ | `project_path` |
 | `refinery_delete_handoff` | revisionを指定したarchived引き継ぎ1件の削除 | `project_path` |
 | `refinery_validate` | active vaultのYAMLとprovenance検証 | 管理tool |
-| `refinery_deep_search` | Codexによる検証済みvault snapshotの根拠付き検索 | `project_path`、任意公開 |
-
-## Codexによるdeep search
-
-`refinery_deep_search(project_path, question)`は、語句やfieldで絞る通常検索では答えにくい
-比較、関連付け、矛盾の整理に生成AIを利用する読み取り専用toolです。knowledgeの作成や更新は
-行いません。既定ではMCP tool一覧へ公開されず、次の操作後にMCPを再起動すると公開されます。
-
-```bash
-knowledge-refinery deep-search enable --model gpt-5.6-sol --reasoning-effort high
-knowledge-refinery deep-search status --json
-```
-
-serverは中央vaultそのものをCodexの作業directoryにしません。現在repoを検証した後、全登録projectの
-project metadata、schemaと参照が正しいexperience、project/shared memory、tag taxonomyだけを
-一時snapshotへ複製します。`AGENTS.md`、Git metadata、product repoのfile、不正文書は含めません。
-不正文書は結果の`limitations`へ除外理由として追加します。
-
-Codex Execはsnapshot内でephemeralかつread-onlyで動き、user config、project rules、web検索、
-tool shellへの環境変数継承を無効化します。質問はcommand lineではなくstdinで渡します。corpusの全内容をuntrusted evidenceと
-扱うdeveloper instructionsを与え、manifestにないsource IDを返した結果はserver側で拒否します。
-一時snapshotは成功・失敗・timeoutのいずれでも削除されます。MCPのtool timeoutは300秒、内部の
-Codex実行timeoutは240秒です。
-
-modelと任意のreasoning effortはuser configからserver側で読み、MCP呼び出し側からoverrideできません。
-設定保存前に`codex debug models`のrefresh済みcatalogへslugと対応effortを照合します。effortが
-未設定ならCodexのmodel既定値を使います。結果は`answer`、根拠ID付き
-`findings`、`sources`、`contradictions`、`limitations`、設定された`model`を返します。
-source IDは`experience:project/id`、`memory:project/id`、
-`memory:shared/id`形式です。生成AIによる要約なので、重要な判断ではsource IDを通常のexact getへ
-渡して原文を確認してください。
 
 ## 検索スコープ
 

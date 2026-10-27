@@ -27,8 +27,8 @@ typo修正や書式変更では省略し、同じ問いと根拠なら既に確�
 ## 指示の適用範囲
 
 Pluginの各`SKILL.md`は、共通の実行・承認・完了条件を
-`skills/operating-rules.md`から読み、個別手順は各Skillで扱います。Experienceの記録、導入、
-deep search設定の詳細は、該当操作のときだけ参照ファイルを読みます。タグ選択の共通規則は
+`skills/operating-rules.md`から読み、個別手順は各Skillで扱います。Experienceの記録と導入の詳細は、
+該当操作のときだけ参照ファイルを読みます。タグ選択の共通規則は
 `skills/knowledge-tags.md`に置き、タグを付けるときやtaxonomyを点検するときに読みます。
 この開発repoの`AGENTS.md`はプラグイン保守用です。利用repoへはCLIが日英のmanaged blockを
 追加し、利用repoに適用される指示と組み合わせます。Managed blockは発動条件と権限を持ち、

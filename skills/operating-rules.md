@@ -20,7 +20,7 @@ authorization, and completion; each `SKILL.md` owns its task-specific workflow.
   Do not stop at a draft or ask again merely to save an authorized record. Continue independent
   work while a material decision is pending.
 - Keep existing approval requirements: immutable project ID and active-vault selection at setup,
-  re-enabling a disabled repo, user-wide deep-search changes, shared-memory creation or promotion,
+  re-enabling a disabled repo, shared-memory creation or promotion,
   knowledge deletion, and material memory rewrites. Check the conversation for explicit approval
   of the same concrete target, content, and impact; do not ask again unless those change.
   A general setup, maintenance, or extraction request alone does not approve a specific shared

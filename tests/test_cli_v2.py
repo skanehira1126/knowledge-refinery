@@ -8,6 +8,15 @@ from knowledge_refinery.cli import build_parser
 from knowledge_refinery.cli import main
 
 
+def test_parser_rejects_removed_deep_search_command(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = build_parser()
+    assert "deep-search" not in parser.format_help()
+    with pytest.raises(SystemExit) as error:
+        parser.parse_args(["deep-search", "status"])
+    assert error.value.code == 2
+    assert "invalid choice" in capsys.readouterr().err
+
+
 def test_parser_exposes_v2_commands(tmp_path: Path) -> None:
     project = tmp_path / "pybr"
     vault = tmp_path / "refinery"
@@ -68,93 +77,6 @@ def test_vault_configure_reports_previous_vault_and_config_file(
     assert f"Previous active vault: {second.resolve()}" in output
     assert f"Active vault: {first.resolve()}" in output
     assert f"Config file: {tmp_path / 'config.yaml'}" in output
-
-
-def test_deep_search_toggle_preserves_config_and_reports_restart(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    validated_models: list[tuple[str, str | None]] = []
-
-    def validate_model(model: str, *, reasoning_effort: str | None = None) -> None:
-        validated_models.append((model, reasoning_effort))
-
-    monkeypatch.setattr("knowledge_refinery.cli.validate_codex_model", validate_model)
-    config = tmp_path / "config.yaml"
-    monkeypatch.setenv("REFINERY_CONFIG", str(config))
-    vault = tmp_path / "refinery"
-    assert main(["vault", "init", "--root", str(vault)]) == 0
-    raw = yaml.safe_load(config.read_text(encoding="utf-8"))
-    raw["custom"] = {"keep": True}
-    raw["deep_search"] = {"future_option": "keep"}
-    config.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
-    capsys.readouterr()
-
-    assert (
-        main(
-            [
-                "deep-search",
-                "enable",
-                "--model",
-                "gpt-5.6-sol",
-                "--reasoning-effort",
-                "high",
-            ]
-        )
-        == 0
-    )
-    enabled_output = capsys.readouterr().out
-    assert "Deep search: enabled" in enabled_output
-    assert "Restart" in enabled_output
-    enabled = yaml.safe_load(config.read_text(encoding="utf-8"))
-    assert enabled["deep_search"] == {
-        "future_option": "keep",
-        "model": "gpt-5.6-sol",
-        "reasoning_effort": "high",
-        "enabled": True,
-    }
-    assert enabled["custom"] == {"keep": True}
-    assert main(["deep-search", "status", "--json"]) == 0
-    status = json.loads(capsys.readouterr().out)
-    assert status["enabled"] is True
-    assert status["model"] == "gpt-5.6-sol"
-    assert status["reasoning_effort"] == "high"
-
-    assert main(["deep-search", "model", "gpt-5.6-terra"]) == 0
-    capsys.readouterr()
-    assert yaml.safe_load(config.read_text(encoding="utf-8"))["deep_search"]["model"] == (
-        "gpt-5.6-terra"
-    )
-    assert (
-        "reasoning_effort" not in yaml.safe_load(config.read_text(encoding="utf-8"))["deep_search"]
-    )
-
-    assert main(["deep-search", "reasoning-effort", "medium"]) == 0
-    capsys.readouterr()
-    assert (
-        yaml.safe_load(config.read_text(encoding="utf-8"))["deep_search"]["reasoning_effort"]
-        == "medium"
-    )
-
-    assert main(["deep-search", "reasoning-effort", "--reset"]) == 0
-    capsys.readouterr()
-    assert (
-        "reasoning_effort" not in yaml.safe_load(config.read_text(encoding="utf-8"))["deep_search"]
-    )
-
-    assert main(["deep-search", "disable"]) == 0
-    capsys.readouterr()
-    disabled = yaml.safe_load(config.read_text(encoding="utf-8"))
-    assert disabled["deep_search"] == {
-        "future_option": "keep",
-        "model": "gpt-5.6-terra",
-        "enabled": False,
-    }
-    assert disabled["vault"] == str(vault.resolve())
-    assert validated_models == [
-        ("gpt-5.6-sol", "high"),
-        ("gpt-5.6-terra", None),
-        ("gpt-5.6-terra", "medium"),
-    ]
 
 
 def test_cli_initializes_and_connects_project(

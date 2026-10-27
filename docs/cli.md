@@ -29,45 +29,6 @@ knowledge-refinery tag search TERMS... --project PATH [--all-projects]
 knowledge-refinery tag describe --project PATH --tag TAG --description TEXT [--expected-updated-at TIMESTAMP]
 ```
 
-## deep search
-
-```text
-knowledge-refinery deep-search enable --model MODEL [--reasoning-effort EFFORT]
-knowledge-refinery deep-search disable
-knowledge-refinery deep-search model MODEL [--reasoning-effort EFFORT]
-knowledge-refinery deep-search reasoning-effort EFFORT
-knowledge-refinery deep-search reasoning-effort --reset
-knowledge-refinery deep-search status [--json]
-```
-
-deep searchは既定で無効です。`enable --model`すると、modelをCodexのrefresh済みcatalogへ
-照合してから保存し、次回MCP起動時から
-`refinery_deep_search`をtool一覧へ追加します。`disable`すると次回起動時から一覧へ追加しません。
-enableまたはdisable後はKnowledge Refinery MCP serverまたはCodex task/sessionを再起動してください。
-設定はactive vaultと同じuser configの`deep_search.enabled`へ保存され、vault設定や未知の設定keyを
-保持します。これは全repoに共通するtool公開設定であり、各repoの`enabled`状態とは別です。
-
-```yaml
-vault: /absolute/path/to/knowledge-refinery-vault
-deep_search:
-  enabled: false
-  model: gpt-5.6-sol
-  reasoning_effort: high
-```
-
-`--reasoning-effort`を指定すると、model catalogの`supported_reasoning_levels`へ照合してmodelと
-effortを保存します。`enable --model MODEL`または`model MODEL`でeffortを省略すると、保存済みの
-`reasoning_effort`を削除し、model既定値へ戻します。`reasoning-effort EFFORT`は現在modelの
-公開状態を変えずeffortだけを変更し、`--reset`はoverrideを削除します。
-
-すでにtoolが公開済みならmodelとeffortは次の呼び出しから反映されるため、これらの変更だけでは
-MCP再起動は不要です。catalog照合はtypoや未対応の組み合わせを保存前に拒否しますが、account
-entitlement、一時的なavailability、実行時limitまで保証しません。これらは実際の`codex exec`でも
-検証されます。
-
-deep searchを実行するにはCodex CLIの認証と、設定したmodelへのaccessが必要です。
-検索はvaultへ書き込まず、experienceやmemoryの作成にも使いません。
-
 `project setup`は中央vaultへ`project.yaml`を必ず作成します。名前、概要、検索用tag、利用技術は
 setup optionで指定できます。project IDを省略するとrepository directory名をlowercase slug化し、
 空白、dot、underscore等をhyphenへ揃えます。slugを生成できない名前では`--project-id`を要求します。

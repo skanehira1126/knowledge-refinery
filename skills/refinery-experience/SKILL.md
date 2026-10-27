@@ -22,11 +22,6 @@ Expand beyond the project only when the local result is insufficient: choose IDs
 `refinery_list_projects` and pass `project_ids`; use `all_projects: true` only when no bounded
 project set is defensible. Never combine `project_ids` with `all_projects: true`.
 
-Use available `refinery_deep_search` only when deterministic search is insufficient and the question
-benefits from semantic synthesis, comparison, or contradiction analysis. The server selects the
-configured model. Treat the answer as generated synthesis and exact-get its source IDs before a
-consequential decision. Deep search never records or updates knowledge.
-
 ## Record
 
 Assess whether an inspected result could change a future agent's choice, avoidance, verification,

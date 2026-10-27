@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 
 from knowledge_refinery import handoff_ops
-from knowledge_refinery.deep_search_ops import build_search_snapshot
 from knowledge_refinery.experience_ops import search_documents_at
 from knowledge_refinery.handoff_ops import Handoff
 from knowledge_refinery.handoff_ops import archive_handoff_at
@@ -150,9 +149,7 @@ def test_archive_cutoff_is_exclusive_and_never_deletes(vault: Path) -> None:
     assert old.path.exists()
 
 
-def test_handoff_does_not_enter_knowledge_search_tags_or_deep_snapshot(
-    vault: Path, tmp_path: Path
-) -> None:
+def test_handoff_does_not_enter_knowledge_search_or_tags(vault: Path) -> None:
     create(vault)
     for kind in ("experiences", "memory"):
         assert (
@@ -168,9 +165,6 @@ def test_handoff_does_not_enter_knowledge_search_tags_or_deep_snapshot(
             )
             == []
         )
-    manifest = build_search_snapshot(vault, "first", tmp_path / "snapshot")
-    assert manifest["documents"] == []
-    assert not list((tmp_path / "snapshot").rglob("handoffs"))
     assert all(tag["document_count"] == 0 for tag in browse_knowledge_tags(vault, "first")["tags"])
 
 

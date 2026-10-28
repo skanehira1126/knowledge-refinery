@@ -63,3 +63,25 @@ flowchart TB
 3. domain処理がproject metadataまたはknowledge文書のYAML schemaとprovenanceを検証する。
 4. storage層が中央vaultへatomicに保存する。
 5. Git履歴を有効にしたvaultでは、vault Gitがknowledge履歴をproduct Gitとは別に追跡する。
+
+## issue管理
+
+issueはprojectに所有させず、active vault直下の`issues.json`へ独立して保存します。
+`projects`には登録済みproject IDを複数紐付けられ、空のままでも作成できます。
+`tags`はissue専用の自由な分類で、既存の`knowledge-tags.yaml`とは独立しています。
+通常のexperience／memory検索や`refinery_validate`の対象には含めません。
+issueコマンドは保存データのschema・ID重複・履歴を読み込み時に検証します。
+
+`issue_ops.py`がドメイン処理と永続化を所有し、`issue_cli.py`がCLIの入力・出力を担当します。
+今回はローカルCLIのみで提供し、MCP toolsやリモート通信は追加しません。
+ローカルrepoのパスや設定を必要とせず、project IDで紐付けるvault単位の操作です。
+そのためrepoの`enabled`はissueの閲覧・更新権限を表しません。
+
+保存形式は`schema_version: 1`と`issues`配列を持つJSONです。既存vaultは移行不要で、
+最初の作成時にファイルを生成します。全書き込みを同じプロセス間lockで直列化し、
+全体をatomic replaceすることでタグの一括変更も一度に確定します。
+各issueは更新ごとに`revision`を増やし、時刻・理由・変更後のfield値を履歴に残します。
+古いrevisionによる更新は拒否し、内容が変わらない更新ではrevisionを増やしません。
+
+初期実装はファイル全体を読み書きする小規模なローカル運用向けです。
+大量のissueや長い履歴を扱う場合のデータベース化は別途検討します。

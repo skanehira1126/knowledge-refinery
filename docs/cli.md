@@ -135,3 +135,56 @@ project指定の省略時は、現在repoに関係なくactive vaultの全projec
 その日時より前にアーカイブされた資料だけを候補として返し、削除はしません。
 置き換え時のrevision、返却値、例は[引き継ぎガイド](handoffs.md)と
 [MCPリファレンス](mcp.md#handoff-tools)を参照してください。
+
+## issue
+
+issueはactive vault全体で独立管理します。作業directoryによる暗黙のproject絞り込みはなく、
+`--project`にはローカルパスではなく登録済みのproject IDを渡します。
+project未所属・複数projectへの所属のどちらも可能です。
+必要なら`REFINERY_VAULT`で操作先の既存vaultを明示できます。
+
+```text
+knowledge-refinery issue create --title TEXT [--description TEXT] [--done-when TEXT] [--project ID ...] [--tag TEXT ...] [--json]
+knowledge-refinery issue list [--project ID] [--status STATUS] [--tag TEXT] [--json]
+knowledge-refinery issue show ISSUE_ID [--json]
+knowledge-refinery issue update ISSUE_ID --expected-revision N [--title TEXT] [--description TEXT] [--done-when TEXT] [--status STATUS] [--reason TEXT] [--add-project ID ...] [--remove-project ID ...] [--add-tag TEXT ...] [--remove-tag TEXT ...] [--json]
+knowledge-refinery issue tag list [--project ID] [--json]
+knowledge-refinery issue tag rename OLD NEW [--json]
+knowledge-refinery issue tag remove TAG [--json]
+```
+
+作成結果の`id`（`issue-`に続く32桁のhex）を以降の操作に使用します。
+`create`の初期状態は`backlog`、初期`revision`は`1`です。
+`list`は更新日時の降順で返し、複数のfilterはAND条件です。完了・取消済みも含めます。
+`list`は履歴を省略し、`show`は全変更履歴を返します。
+出力は既定でも整形済みJSONで、`--json`は1行のJSONを返します。
+
+状態は`backlog / ready / in_progress / blocked / done / cancelled`です。
+任意の状態への変更・再開が可能ですが、変更には`--reason`が必要です。
+`done`には空でない`done_when`も必要で、`--reason`に完了・検証の根拠を記載します。
+CLIがテストや完了条件の充足を自動判定するわけではありません。
+
+更新は`show`または`list`が返した最新の`revision`を`--expected-revision`に渡します。
+競合時は終了コード`2`と`issue_revision_conflict`を返すので、読み直してから変更を再判断します。
+指定していないfieldは保持し、`--description ""`で説明を空にできます。
+`--add-project`・`--add-tag`は追加、`--remove-project`・`--remove-tag`は紐付け解除です。
+同じ値の追加と解除を同時指定することはできません。
+
+```bash
+knowledge-refinery issue create --title "検索精度の改善" --project example \
+  --tag 検索 --done-when "比較試験で改善を確認できる" --json
+# 作成結果のidをISSUE_IDへ設定する
+knowledge-refinery issue update "$ISSUE_ID" --expected-revision 1 \
+  --status in_progress --reason "比較試験に着手" --json
+knowledge-refinery issue list --project example --status in_progress --json
+knowledge-refinery issue show "$ISSUE_ID" --json
+```
+
+タグは大文字・小文字を区別し、日本語も使えます。前後の空白と重複を除いて保存します。
+`issue tag list`は現在使われているタグとissue件数を返します。
+`rename`は全project・全状態のissueを対象とし、変更先が既存タグなら統合します。
+`remove`は全issueからタグを解除しますが、issue本体と過去の変更履歴は削除しません。
+どちらも変更されたissueのrevisionが増え、応答の`affected_issues`で対象IDを確認できます。
+全体への操作なので、特定issueだけ変更する場合は`issue update`を使います。
+未使用タグの登録や説明管理は提供しません。既存の`tag browse/search/describe`は
+experience／memory用であり、issueタグには影響しません。

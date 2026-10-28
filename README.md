@@ -67,6 +67,7 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 - repoごとに利用を無効化・再有効化する
 - 中央vaultを独立したGit repositoryとして履歴管理する
 - 特定の作業の状態をhandoffに保存し、新しいチャットで再評価して再開する
+- CLIで独立したissueを管理し、複数projectの紐付け、進捗・タグ・更新履歴を追跡する
 
 ## 新しいチャットへ引き継ぐ
 

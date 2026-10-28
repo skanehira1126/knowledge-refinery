@@ -8,8 +8,9 @@ copyright: Copyright &copy; 2026 Shinichi Kanehira
 theme:
   name: material
   language: ja
+  logo: assets/knowledge-refinery.png
+  favicon: assets/knowledge-refinery.png
   icon:
-    logo: material/filter-variant
     repo: fontawesome/brands/github
   features:
     - navigation.instant

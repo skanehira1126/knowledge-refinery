@@ -1,5 +1,7 @@
 # knowledge-refinery
 
+<img src="docs/assets/knowledge-refinery.png" alt="Knowledge Refinery logo" width="160">
+
 Codexで得た開発経験を、複数のプロジェクトから再利用できる形で残すためのPluginです。
 試行や失敗をexperienceとして記録し、そこから抽出した原則をmemoryとして、プロダクトrepoとは
 別のローカル中央vaultへ保存します。
@@ -65,6 +67,7 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 - repoごとに利用を無効化・再有効化する
 - 中央vaultを独立したGit repositoryとして履歴管理する
 - 特定の作業の状態をhandoffに保存し、新しいチャットで再評価して再開する
+- CLIで独立したissueを管理し、複数projectの紐付け、進捗・タグ・更新履歴を追跡する
 
 ## 新しいチャットへ引き継ぐ
 
@@ -76,7 +79,7 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 取得でき、`refinery_list_handoffs(project_id=...)`でprojectを絞るか、省略してactive vaultの全projectを
 一覧できます。CLIも`handoff get <ID> --project-id <project-id>`と`handoff list`に対応します。
 
-handoffはprojectごとの専用領域に保存され、通常のexperience／memory検索やdeep searchには
+handoffはprojectごとの専用領域に保存され、通常のexperience／memory検索には
 含まれません。読み込みでは消費せず、新版への置き換えや明示された終了でアーカイブします。
 自動期限・自動削除はなく、削除は指定したアーカイブ済みの資料だけを対象にします。
 作成・再開・整理の手順とCLI例は[引き継ぎガイド](docs/handoffs.md)を参照してください。
@@ -93,7 +96,7 @@ handoffはprojectごとの専用領域に保存され、通常のexperience／me
 - [repoの有効・無効](docs/project-lifecycle.md)
 - [ナレッジ運用](docs/knowledge-operations.md)
 - [CLIリファレンス](docs/cli.md)
-- [MCP toolsとdeep search](docs/mcp.md)
+- [MCP tools](docs/mcp.md)
 - [仕組みとデータ配置](docs/architecture.md)
 - [トラブルシューティング](docs/troubleshooting.md)
 

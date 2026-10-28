@@ -29,45 +29,6 @@ knowledge-refinery tag search TERMS... --project PATH [--all-projects]
 knowledge-refinery tag describe --project PATH --tag TAG --description TEXT [--expected-updated-at TIMESTAMP]
 ```
 
-## deep search
-
-```text
-knowledge-refinery deep-search enable --model MODEL [--reasoning-effort EFFORT]
-knowledge-refinery deep-search disable
-knowledge-refinery deep-search model MODEL [--reasoning-effort EFFORT]
-knowledge-refinery deep-search reasoning-effort EFFORT
-knowledge-refinery deep-search reasoning-effort --reset
-knowledge-refinery deep-search status [--json]
-```
-
-deep searchは既定で無効です。`enable --model`すると、modelをCodexのrefresh済みcatalogへ
-照合してから保存し、次回MCP起動時から
-`refinery_deep_search`をtool一覧へ追加します。`disable`すると次回起動時から一覧へ追加しません。
-enableまたはdisable後はKnowledge Refinery MCP serverまたはCodex task/sessionを再起動してください。
-設定はactive vaultと同じuser configの`deep_search.enabled`へ保存され、vault設定や未知の設定keyを
-保持します。これは全repoに共通するtool公開設定であり、各repoの`enabled`状態とは別です。
-
-```yaml
-vault: /absolute/path/to/knowledge-refinery-vault
-deep_search:
-  enabled: false
-  model: gpt-5.6-sol
-  reasoning_effort: high
-```
-
-`--reasoning-effort`を指定すると、model catalogの`supported_reasoning_levels`へ照合してmodelと
-effortを保存します。`enable --model MODEL`または`model MODEL`でeffortを省略すると、保存済みの
-`reasoning_effort`を削除し、model既定値へ戻します。`reasoning-effort EFFORT`は現在modelの
-公開状態を変えずeffortだけを変更し、`--reset`はoverrideを削除します。
-
-すでにtoolが公開済みならmodelとeffortは次の呼び出しから反映されるため、これらの変更だけでは
-MCP再起動は不要です。catalog照合はtypoや未対応の組み合わせを保存前に拒否しますが、account
-entitlement、一時的なavailability、実行時limitまで保証しません。これらは実際の`codex exec`でも
-検証されます。
-
-deep searchを実行するにはCodex CLIの認証と、設定したmodelへのaccessが必要です。
-検索はvaultへ書き込まず、experienceやmemoryの作成にも使いません。
-
 `project setup`は中央vaultへ`project.yaml`を必ず作成します。名前、概要、検索用tag、利用技術は
 setup optionで指定できます。project IDを省略するとrepository directory名をlowercase slug化し、
 空白、dot、underscore等をhyphenへ揃えます。slugを生成できない名前では`--project-id`を要求します。
@@ -174,3 +135,56 @@ project指定の省略時は、現在repoに関係なくactive vaultの全projec
 その日時より前にアーカイブされた資料だけを候補として返し、削除はしません。
 置き換え時のrevision、返却値、例は[引き継ぎガイド](handoffs.md)と
 [MCPリファレンス](mcp.md#handoff-tools)を参照してください。
+
+## issue
+
+issueはactive vault全体で独立管理します。作業directoryによる暗黙のproject絞り込みはなく、
+`--project`にはローカルパスではなく登録済みのproject IDを渡します。
+project未所属・複数projectへの所属のどちらも可能です。
+必要なら`REFINERY_VAULT`で操作先の既存vaultを明示できます。
+
+```text
+knowledge-refinery issue create --title TEXT [--description TEXT] [--done-when TEXT] [--project ID ...] [--tag TEXT ...] [--json]
+knowledge-refinery issue list [--project ID] [--status STATUS] [--tag TEXT] [--json]
+knowledge-refinery issue show ISSUE_ID [--json]
+knowledge-refinery issue update ISSUE_ID --expected-revision N [--title TEXT] [--description TEXT] [--done-when TEXT] [--status STATUS] [--reason TEXT] [--add-project ID ...] [--remove-project ID ...] [--add-tag TEXT ...] [--remove-tag TEXT ...] [--json]
+knowledge-refinery issue tag list [--project ID] [--json]
+knowledge-refinery issue tag rename OLD NEW [--json]
+knowledge-refinery issue tag remove TAG [--json]
+```
+
+作成結果の`id`（`issue-`に続く32桁のhex）を以降の操作に使用します。
+`create`の初期状態は`backlog`、初期`revision`は`1`です。
+`list`は更新日時の降順で返し、複数のfilterはAND条件です。完了・取消済みも含めます。
+`list`は履歴を省略し、`show`は全変更履歴を返します。
+出力は既定でも整形済みJSONで、`--json`は1行のJSONを返します。
+
+状態は`backlog / ready / in_progress / blocked / done / cancelled`です。
+任意の状態への変更・再開が可能ですが、変更には`--reason`が必要です。
+`done`には空でない`done_when`も必要で、`--reason`に完了・検証の根拠を記載します。
+CLIがテストや完了条件の充足を自動判定するわけではありません。
+
+更新は`show`または`list`が返した最新の`revision`を`--expected-revision`に渡します。
+競合時は終了コード`2`と`issue_revision_conflict`を返すので、読み直してから変更を再判断します。
+指定していないfieldは保持し、`--description ""`で説明を空にできます。
+`--add-project`・`--add-tag`は追加、`--remove-project`・`--remove-tag`は紐付け解除です。
+同じ値の追加と解除を同時指定することはできません。
+
+```bash
+knowledge-refinery issue create --title "検索精度の改善" --project example \
+  --tag 検索 --done-when "比較試験で改善を確認できる" --json
+# 作成結果のidをISSUE_IDへ設定する
+knowledge-refinery issue update "$ISSUE_ID" --expected-revision 1 \
+  --status in_progress --reason "比較試験に着手" --json
+knowledge-refinery issue list --project example --status in_progress --json
+knowledge-refinery issue show "$ISSUE_ID" --json
+```
+
+タグは大文字・小文字を区別し、日本語も使えます。前後の空白と重複を除いて保存します。
+`issue tag list`は現在使われているタグとissue件数を返します。
+`rename`は全project・全状態のissueを対象とし、変更先が既存タグなら統合します。
+`remove`は全issueからタグを解除しますが、issue本体と過去の変更履歴は削除しません。
+どちらも変更されたissueのrevisionが増え、応答の`affected_issues`で対象IDを確認できます。
+全体への操作なので、特定issueだけ変更する場合は`issue update`を使います。
+未使用タグの登録や説明管理は提供しません。既存の`tag browse/search/describe`は
+experience／memory用であり、issueタグには影響しません。

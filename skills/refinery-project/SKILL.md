@@ -53,8 +53,3 @@ Read back the result and verify that `project_id` is unchanged.
 
 Disable retains `.refinery.yaml` with `enabled: false` and all central-vault knowledge. Repository
 offboarding does not authorize deleting vault data.
-
-## Configure the optional deep search tool
-
-For deep search publication, model, effort, or configuration repair, read
-[deep-search.md](references/deep-search.md). These user-wide settings are independent of repo enablement.

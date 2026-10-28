@@ -98,7 +98,7 @@ knowledge-refinery handoff list --include-archived --archived-before 2026-09-01T
 OSの単一transactionではないため、強制終了や応答不明時には両IDの保存状態を確認します。
 重複作成・古いrevision・active資料の直接削除は拒否します。保存領域や資料のsymlinkも拒否します。
 
-通常検索、tag集計、deep search snapshotはhandoffを含みません。`refinery_validate`はhandoffのschemaと
+通常検索とtag集計はhandoffを含みません。`refinery_validate`はhandoffのschemaと
 配置も検査します。handoff一覧・更新は不正文書を検出すると停止し、部分的な一覧を削除候補と誤認させません。
 
 API引数は[MCPリファレンス](mcp.md#handoff-tools)、保存形式は[YAML schema](schema.md#handoff)を参照してください。

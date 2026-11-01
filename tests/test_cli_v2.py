@@ -589,7 +589,7 @@ def test_cli_can_disable_status_and_reenable_project(
     assert drift["runtime"][-1] == {
         "name": "version_match",
         "ok": False,
-        "detail": "cli=0.7.0, mcp=0.1.0",
+        "detail": "cli=0.7.1, mcp=0.1.0",
     }
 
 
@@ -803,3 +803,24 @@ def test_cli_handoff_reads_by_project_id_without_repo(
         build_parser().parse_args(
             ["handoff", "list", "--project-id", "first", "--project", str(tmp_path)]
         )
+
+
+def test_vault_status_is_read_only_and_rejects_an_inactive_vault(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("REFINERY_CONFIG", str(tmp_path / "config.yaml"))
+    vault = tmp_path / "vault"
+    other = tmp_path / "other"
+    assert main(["vault", "init", "--root", str(other)]) == 0
+    assert main(["vault", "init", "--root", str(vault)]) == 0
+    capsys.readouterr()
+    before = {p: p.read_bytes() for p in vault.rglob("*") if p.is_file()}
+    monkeypatch.chdir(vault)
+    assert main(["vault", "status", "--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["ready"] is True
+    assert result["vault_context"]["vault_path"] == str(vault)
+    assert result["vault_context"]["project_id"] is None
+    assert {p: p.read_bytes() for p in vault.rglob("*") if p.is_file()} == before
+    assert main(["vault", "status", "--target", str(other), "--json"]) == 2
+    assert "does not match the active vault" in capsys.readouterr().err

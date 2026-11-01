@@ -18,6 +18,7 @@ from knowledge_refinery.front_matter import split_front_matter
 from knowledge_refinery.storage_ops import atomic_write_text
 from knowledge_refinery.storage_ops import interprocess_lock
 from knowledge_refinery.vault_ops import context_from_vault
+from knowledge_refinery.vault_ops import validate_vault_root
 
 
 TAG_TAXONOMY = "knowledge-tags.yaml"
@@ -191,7 +192,7 @@ def _validate_tag_definition(tag: object, definition: object) -> None:
 
 def browse_knowledge_tags(
     vault: Path,
-    project_id: str,
+    project_id: str | None,
     *,
     parent_tag: str | None = None,
     all_projects: bool = False,
@@ -199,7 +200,11 @@ def browse_knowledge_tags(
     """List immediate tag children and their usage for the requested scope."""
     if parent_tag is not None:
         validate_tag_path(parent_tag, field="parent_tag")
-    context_from_vault(vault, project_id)
+    validate_vault_root(vault)
+    if project_id is not None:
+        context_from_vault(vault, project_id)
+    elif not all_projects:
+        raise ValueError("Vault tag usage requires project_id or all_projects")
     taxonomy = read_tag_taxonomy(vault)
     usage = _collect_tag_usage(vault, project_id, all_projects=all_projects)
     known_tags = _known_tags(taxonomy.descriptions, usage)
@@ -215,7 +220,7 @@ def browse_knowledge_tags(
 
 def search_knowledge_tags(
     vault: Path,
-    project_id: str,
+    project_id: str | None,
     *,
     terms: list[str],
     all_projects: bool = False,
@@ -223,7 +228,11 @@ def search_knowledge_tags(
     """Search tag paths and descriptions using AND-matched terms."""
     if not terms or any(not term.strip() for term in terms):
         raise ValueError("tag search requires one or more non-empty terms")
-    context_from_vault(vault, project_id)
+    validate_vault_root(vault)
+    if project_id is not None:
+        context_from_vault(vault, project_id)
+    elif not all_projects:
+        raise ValueError("Vault tag usage requires project_id or all_projects")
     taxonomy = read_tag_taxonomy(vault)
     usage = _collect_tag_usage(vault, project_id, all_projects=all_projects)
     known_tags = _known_tags(taxonomy.descriptions, usage)
@@ -244,7 +253,7 @@ def search_knowledge_tags(
 
 
 def _collect_tag_usage(
-    vault: Path, project_id: str, *, all_projects: bool
+    vault: Path, project_id: str | None, *, all_projects: bool
 ) -> dict[str, dict[str, set[str]]]:
     usage: dict[str, dict[str, set[str]]] = {}
     projects_root = vault / "projects"
@@ -252,6 +261,8 @@ def _collect_tag_usage(
         sorted(path for path in projects_root.iterdir() if path.is_dir())
         if all_projects
         else [projects_root / project_id]
+        if project_id is not None
+        else []
     )
     roots: list[tuple[str, Path, str]] = []
     for project_dir in project_dirs:

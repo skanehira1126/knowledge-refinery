@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
+from dataclasses import asdict
 import json
 import os
 from pathlib import Path
@@ -46,6 +47,7 @@ from knowledge_refinery.vault_ops import context_from_vault
 from knowledge_refinery.vault_ops import disable_project
 from knowledge_refinery.vault_ops import enable_project
 from knowledge_refinery.vault_ops import init_vault
+from knowledge_refinery.vault_ops import inspect_maintenance_vault
 from knowledge_refinery.vault_ops import inspect_project
 from knowledge_refinery.vault_ops import read_project_metadata
 from knowledge_refinery.vault_ops import resolve_project_id
@@ -81,6 +83,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     vault_configure.add_argument("--root", required=True, help="central refinery repository path")
     vault_configure.set_defaults(handler=run_vault_configure)
+
+    vault_status = vault_subparsers.add_parser(
+        "status", help="Verify an opened vault for direct maintenance without project setup"
+    )
+    vault_status.add_argument("--target", default=".", help="opened vault root path")
+    vault_status.add_argument(
+        "--json", action="store_true", help="print maintenance context as JSON"
+    )
+    vault_status.set_defaults(handler=run_vault_status)
 
     project_parser = subparsers.add_parser("project", help="Connect a project to a refinery")
     project_subparsers = project_parser.add_subparsers(dest="project_command", required=True)
@@ -513,6 +524,19 @@ def run_vault_configure(args: argparse.Namespace) -> int:
         print(f"Previous active vault: {previous}")
     print(f"Active vault: {root}")
     print(f"Config file: {config}")
+    return 0
+
+
+def run_vault_status(args: argparse.Namespace) -> int:
+    """Report the verified vault identity without creating repository configuration."""
+    context = inspect_maintenance_vault(
+        Path(args.target).expanduser().resolve(), get_active_vault()
+    )
+    payload = {"ready": True, "version": get_version(), "vault_context": asdict(context)}
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False))
+    else:
+        _print_mapping(payload)
     return 0
 
 

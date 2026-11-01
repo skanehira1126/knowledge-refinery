@@ -5,6 +5,7 @@
 ```text
 knowledge-refinery vault init --root PATH [--force]
 knowledge-refinery vault configure --root PATH
+knowledge-refinery vault status [--target PATH] [--json]
 ```
 
 `init` はmarkerと基本layoutを作成し、active vaultも更新します。`configure` は既存vaultをactiveにします。
@@ -13,6 +14,13 @@ vaultはfilesystem directoryであり、どちらも`git init`、commit、push�
 active vaultはユーザー全体で1つなので、切り替えると他repoや別taskのMCP検索先も変わります。
 `vault init --force`は不変`vault_id`を保持しますが、vault直下のmanaged README/AGENTS templateを
 file単位で上書きします。local editsとGit差分を確認したうえで明示的に使います。
+
+`status`は開いたvault（`--target`省略時は現在directory）のmarkerとactive vaultを照合する
+読み取り専用の保守入口です。成功時はexit 0で`ready: true`、packageの`version`、
+`vault_context: {vault_path, vault_id, project_id: null}`を返します。不正なmarker、ID欠落、
+active vaultとのpath不一致はexit 2です。project登録やactive vaultの変更は行いません。
+保守の検索・更新には[MCPのvault context](mcp.md#vault-maintenance)を使います。
+既存のexperience／memory／tag CLIは引き続きrepo-scopedです。
 
 ## project lifecycle
 

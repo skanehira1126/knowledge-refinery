@@ -6,12 +6,12 @@ description: Knowledge Refineryのexperienceから再利用できる原則を抽
 # Refinery memory
 
 Read the [shared operating rules](../operating-rules.md) for authorization,
-blocked operations, and completion. Input is the current repo, a candidate principle or extraction
+blocked operations, and completion. Input is the current repo or verified vault-maintenance context, a candidate principle or extraction
 question, and supporting experience IDs found during review. If the request is proposal-only,
 return the candidate, sources, scope, and limits without recording it.
 
-1. Apply the shared operating rules' repo-scoped access check before retrieving knowledge.
-2. Pass the repository's absolute path as `project_path` to every repo-scoped MCP tool. Search in this order: current project memory together with shared memory, current project experiences, then cross-project knowledge only when local evidence is insufficient. For a bounded cross-project search, choose IDs with `refinery_list_projects` and pass `project_ids`; use `all_projects: true` only when no bounded set is defensible. Never combine `project_ids` with `all_projects: true`. Update a matching principle instead of duplicating it.
+1. Apply the shared operating rules' access check. Continue a verified vault-maintenance context without requiring a product repository.
+2. In a repository, pass its absolute path as `project_path` and search current project memory together with shared memory, current project experiences, then cross-project knowledge only when local evidence is insufficient. In direct vault maintenance, use the requested project set or shared scope and retain `project_path: null` plus `vault_context`. For a bounded cross-project search, choose IDs with `refinery_list_projects` and pass `project_ids`; use `all_projects: true` only when no bounded set is defensible. Never combine `project_ids` with `all_projects: true`. Update a matching principle instead of duplicating it.
 3. Read every supporting experience with `refinery_get_experience`. For cross-project evidence, pass the qualified `project-id/experience-id` source and check its evidence, applicability conditions, counterexamples, and confidence.
 4. Keep project-specific principles in project memory. Normally require at least two experiences that show repetition or complementary validation, and use unqualified experience IDs. A single source is allowed only when the user explicitly asks to preserve it as memory; narrow the scope, state the unverified limits in the body, and do not assign high confidence.
 5. Treat shared memory as a user-approved promotion. Independent experiences from at least two projects must support the same principle and every source must use `project-id/experience-id`, but satisfying that schema is not approval. Present the candidate principle, scope, limits, counterexamples, confidence, and source IDs, and call `refinery_record_memory(shared: true)` only after explicit user approval. Approval already given for that unchanged candidate is sufficient; new material evidence or a scope change requires reconsidering the candidate.

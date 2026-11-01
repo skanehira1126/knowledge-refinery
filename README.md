@@ -66,8 +66,21 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 - 任意でCodexを使い、中央vaultの検証済みsnapshotから根拠付きの深い検索を行う
 - repoごとに利用を無効化・再有効化する
 - 中央vaultを独立したGit repositoryとして履歴管理する
+- 中央vaultを直接開き、project登録なしで横断検索・棚卸し・承認済みの知識更新を行う
 - 特定の作業の状態をhandoffに保存し、新しいチャットで再評価して再開する
 - CLIで独立したissueを管理し、複数projectの紐付け、進捗・タグ・更新履歴を追跡する
+
+## vaultを直接開いて保守する
+
+中央vaultを開いたチャットで`$refinery-maintenance`に棚卸しや修復を依頼できます。
+`knowledge-refinery vault status --target "$REFINERY_VAULT" --json`、またはMCPの
+`refinery_vault_status(vault_path)`でactive vaultとの一致を確認します。MCPの検索・更新には
+返された`vault_context`と`project_path: null`を渡します。vault自身のproject登録は不要です。
+
+この入口は中央の保存資料を管理し、各repoのopt-outは変更しません。無効repoからの自動迂回には
+使わず、shared memory昇格・重要改訂・削除の承認条件も維持します。
+対象の指定とAPI例は[MCP tools](docs/mcp.md#vault-maintenance)、手順は
+[refinery-maintenance](docs/skills/refinery-maintenance.md)を参照してください。
 
 ## 新しいチャットへ引き継ぐ
 

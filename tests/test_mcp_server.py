@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from typing import cast
@@ -27,8 +28,10 @@ from knowledge_refinery.mcp_server import refinery_search_memory
 from knowledge_refinery.mcp_server import refinery_update_project_metadata
 from knowledge_refinery.mcp_server import refinery_update_tag_description
 from knowledge_refinery.mcp_server import refinery_validate
+from knowledge_refinery.mcp_server import refinery_vault_status
 from knowledge_refinery.mcp_server import serve
 from knowledge_refinery.tag_ops import TAG_TAXONOMY
+from knowledge_refinery.vault_ops import VaultContext
 from knowledge_refinery.vault_ops import disable_project
 from knowledge_refinery.vault_ops import init_vault
 from knowledge_refinery.vault_ops import read_vault_id
@@ -116,7 +119,7 @@ def test_local_mcp_records_searches_and_validates(
     assert tagged_metadata["technologies"] == ["Python"]
     assert refinery_list_projects() == [tagged_metadata]
     assert refinery_info() == {
-        "version": "0.7.0",
+        "version": "0.7.1",
         "schema_version": 2,
         "project_metadata_schema_version": 1,
         "tag_taxonomy_schema_version": 1,
@@ -770,3 +773,253 @@ def test_handoff_tools_enforce_project_access(
         else:
             refinery_delete_handoff(str(project), "one", revision)
     assert (vault / "projects" / "pybr" / "handoffs" / "one.md").read_bytes() == before
+
+
+def test_vault_context_supports_cross_project_memory_without_enabled_repositories(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    second = tmp_path / "second"
+    second.mkdir()
+    setup_project(second, vault, project_id="second")
+    context = VaultContext(str(vault), str(read_vault_id(vault)))
+    for project_id in ("pybr", "second"):
+        refinery_record_experience(
+            None,
+            title="Validated observation",
+            purpose="Support a shared principle",
+            status="completed",
+            body="Independent evidence",
+            experience_id="observation",
+            vault_context=replace(context, project_id=project_id),
+        )
+        disable_project(tmp_path / project_id)
+    second.rename(tmp_path / "retired-second")
+
+    results = refinery_search_experiences(None, all_projects=True, vault_context=context)
+    assert {item["project_id"] for item in results} == {"pybr", "second"}
+    selected = refinery_search_experiences(None, project_ids=["second"], vault_context=context)
+    assert [item["project_id"] for item in selected] == ["second"]
+    source = refinery_get_experience(None, "second/observation", vault_context=context)
+    assert source["body"] == "Independent evidence"
+    memory = refinery_record_memory(
+        None,
+        title="Shared principle",
+        summary="Verified in two projects",
+        shared=True,
+        memory_id="shared-principle",
+        source_experiences=["pybr/observation", "second/observation"],
+        vault_context=context,
+    )
+    assert memory["project_id"] is None
+    assert memory["path"] == "shared/memory/shared-principle.md"
+    readback = refinery_get_memory(None, "shared-principle", scope="shared", vault_context=context)
+    header = cast(dict[str, object], readback["header"])
+    assert header["source_experiences"] == ["pybr/observation", "second/observation"]
+    with pytest.raises(ValueError, match="stale"):
+        refinery_record_memory(
+            None,
+            title="Changed",
+            summary="Must not save",
+            shared=True,
+            memory_id="shared-principle",
+            expected_updated_at="stale",
+            vault_context=context,
+        )
+    updated = refinery_record_memory(
+        None,
+        title="Shared principle",
+        summary="Clarified wording",
+        shared=True,
+        memory_id="shared-principle",
+        expected_updated_at=str(memory["updated_at"]),
+        vault_context=context,
+    )
+    assert updated["updated_at"] != memory["updated_at"]
+    assert (
+        refinery_search_memory(None, scopes=["shared"], vault_context=context)[0]["summary"]
+        == "Clarified wording"
+    )
+    with pytest.raises(ValueError, match="disabled"):
+        refinery_search_memory(str(tmp_path / "pybr"))
+    assert not (vault / ".refinery.yaml").exists()
+    assert {p.name for p in (vault / "projects").iterdir() if p.is_dir()} == {"pybr", "second"}
+    assert refinery_validate()["valid"] is True
+
+
+def test_vault_context_preserves_provenance_and_requires_explicit_targets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    context = VaultContext(str(vault), str(read_vault_id(vault)))
+    with pytest.raises(ValueError, match="requires project_ids"):
+        refinery_search_experiences(None, vault_context=context)
+    with pytest.raises(ValueError, match="project-id/experience-id"):
+        refinery_get_experience(None, "observation", vault_context=context)
+    with pytest.raises(ValueError, match="explicit project_id"):
+        refinery_get_memory(None, "rule", vault_context=context)
+    with pytest.raises(ValueError, match="requires vault_context.project_id"):
+        refinery_get_project_metadata(None, vault_context=context)
+    with pytest.raises(ValueError, match="explicit project_id"):
+        refinery_record_memory(None, "Rule", "No target", vault_context=context)
+    with pytest.raises(ValueError, match="at least two projects"):
+        refinery_record_memory(
+            None,
+            "Rule",
+            "One project",
+            shared=True,
+            source_experiences=["pybr/one", "pybr/two"],
+            vault_context=context,
+        )
+    with pytest.raises(ValueError, match="Unknown source experience"):
+        refinery_record_memory(
+            None,
+            "Rule",
+            "Missing sources",
+            shared=True,
+            source_experiences=["pybr/one", "second/two"],
+            vault_context=context,
+        )
+    assert not (vault / "shared" / "memory" / "rule.md").exists()
+
+
+def test_vault_context_repairs_selected_project_and_taxonomy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    context = VaultContext(str(vault), str(read_vault_id(vault)), "pybr")
+    metadata = refinery_get_project_metadata(None, vault_context=context)
+    updated = refinery_update_project_metadata(
+        None,
+        str(metadata["updated_at"]),
+        summary="Corrected purpose",
+        vault_context=context,
+    )
+    assert refinery_get_project_metadata(None, vault_context=context) == updated
+    experience = refinery_record_experience(
+        None,
+        "Observation",
+        "Original purpose",
+        "completed",
+        "Evidence",
+        experience_id="observation",
+        tags=["task/search"],
+        vault_context=context,
+    )
+    refinery_record_experience(
+        None,
+        "Observation",
+        "Corrected purpose",
+        "completed",
+        "Evidence",
+        experience_id="observation",
+        expected_updated_at=experience["updated_at"],
+        vault_context=context,
+    )
+    assert (
+        refinery_search_experiences(None, vault_context=context)[0]["summary"]
+        == "Corrected purpose"
+    )
+    refinery_record_memory(
+        None,
+        "Project principle",
+        "Narrow scope",
+        source_experiences=["observation"],
+        vault_context=context,
+    )
+    assert refinery_get_memory(None, "project-principle", vault_context=context)["path"] == (
+        "projects/pybr/memory/project-principle.md"
+    )
+    taxonomy = refinery_browse_knowledge_tags(None, parent_tag="task", vault_context=context)
+    refinery_update_tag_description(
+        None,
+        "task/search",
+        "Knowledge retrieval",
+        expected_updated_at=taxonomy["taxonomy_updated_at"],
+        vault_context=context,
+    )
+    tags = refinery_search_knowledge_tags(None, ["retrieval"], vault_context=context)
+    assert tags["tags"][0]["description"] == "Knowledge retrieval"
+    assert tags["tags"][0]["experience_count"] == 1
+    assert refinery_validate()["valid"] is True
+
+
+@pytest.mark.parametrize(
+    "gate", ["missing", "mixed", "other-vault", "stale", "unknown-project", "metadata", "relative"]
+)
+def test_vault_context_rejects_invalid_access_before_read_or_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, gate: str
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    valid_context = VaultContext(str(vault), str(read_vault_id(vault)))
+    context: VaultContext | None = valid_context
+    project_path = None
+    if gate == "missing":
+        context = None
+    elif gate == "mixed":
+        project_path = str(tmp_path / "pybr")
+        disable_project(tmp_path / "pybr")
+    elif gate == "other-vault":
+        other = tmp_path / "other"
+        init_vault(other)
+        # Even a copied marker with the same ID cannot select a different directory.
+        (other / ".refinery-vault.yaml").write_bytes((vault / ".refinery-vault.yaml").read_bytes())
+        context = replace(valid_context, vault_path=str(other))
+    elif gate == "stale":
+        context = replace(valid_context, vault_id="0" * 32)
+    elif gate == "unknown-project":
+        context = replace(valid_context, project_id="unknown")
+    elif gate == "metadata":
+        (vault / "projects" / "pybr" / "project.yaml").write_text("{}\n", encoding="utf-8")
+        context = replace(valid_context, project_id="pybr")
+    elif gate == "relative":
+        context = replace(valid_context, vault_path=".")
+    before = {p: p.read_bytes() for p in vault.rglob("*") if p.is_file()}
+    with pytest.raises(ValueError):
+        refinery_search_memory(project_path, all_projects=True, vault_context=context)
+    with pytest.raises(ValueError):
+        refinery_update_tag_description(
+            project_path, "task/search", "Must not save", vault_context=context
+        )
+    assert {p: p.read_bytes() for p in vault.rglob("*") if p.is_file()} == before
+
+
+def test_empty_vault_has_maintenance_context_without_project_registration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("REFINERY_CONFIG", str(tmp_path / "config.yaml"))
+    vault = tmp_path / "vault"
+    init_vault(vault)
+    set_active_vault(vault)
+    status = refinery_vault_status(str(vault))
+    assert status["ready"] is True
+    context = VaultContext(**cast(dict[str, Any], status["vault_context"]))
+    assert refinery_search_memory(None, scopes=["shared"], vault_context=context) == []
+    assert refinery_search_experiences(None, all_projects=True, vault_context=context) == []
+    assert refinery_browse_knowledge_tags(None, all_projects=True, vault_context=context)["tags"]
+    assert refinery_list_projects() == []
+    assert not (vault / ".refinery.yaml").exists()
+    marker = vault / ".refinery-vault.yaml"
+    raw = yaml.safe_load(marker.read_text(encoding="utf-8"))
+    del raw["vault_id"]
+    marker.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    with pytest.raises(ValueError, match="requires a vault_id"):
+        refinery_vault_status(str(vault))
+
+
+def test_maintenance_context_is_rechecked_after_active_vault_switch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    context = VaultContext(str(vault), str(read_vault_id(vault)))
+    other = tmp_path / "other"
+    init_vault(other)
+    set_active_vault(other)
+    with pytest.raises(ValueError, match="path does not match"):
+        refinery_list_projects(vault_context=context)
+    with pytest.raises(ValueError, match="path does not match"):
+        refinery_validate(vault_context=context)
+    with pytest.raises(ValueError, match="path does not match"):
+        refinery_record_memory(None, "Rule", "Must not save", shared=True, vault_context=context)
+    assert not (other / "shared" / "memory" / "rule.md").exists()
+    assert not (vault / "shared" / "memory" / "rule.md").exists()

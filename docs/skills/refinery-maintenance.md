@@ -4,6 +4,16 @@
 全体監査ではvalidation、project metadata、evidence参照、重複・矛盾・陳腐化、taxonomyを点検します。
 指定対象の修復では対象と根拠だけを調べ、無関係なprojectやmemoryの清掃へ広げません。
 
+中央vaultそのものを開いて保守を依頼できます。`refinery_vault_status`へvault rootの絶対パスを
+渡し、返された`vault_context`を検索・更新へ引き継ぎます。この場合は`project_path: null`を
+使い、vault自身のproject登録や保守専用repoは作成しません。CLIでの入口確認は
+`knowledge-refinery vault status --json`です。各呼び出しでactive vaultのpathとIDを照合します。
+
+検索は依頼されたproject集合、shared scope、または全体監査の範囲を指定します。projectの
+metadata・experience・memoryを書くときはcontext内の`project_id`で保存先を明示します。
+repoの無効化はこの中央管理と独立していますが、無効repoの通常操作からの自動迂回は禁止です。
+APIの対象指定は[MCP tools](../mcp.md#vault-maintenance)を参照してください。
+
 監査・提案のみなら書き込まず、修復依頼では結論を変えない根拠のある修正まで進めます。
 Experience本文の更新は`refinery-experience`、memoryの作成・更新は`refinery-memory`へ委ねます。
 Shared memory、knowledge削除、memoryの大幅な書き換えには具体案への承認が必要です。

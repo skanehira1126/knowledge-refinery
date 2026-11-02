@@ -40,6 +40,10 @@ authorization, and completion; each `SKILL.md` owns its task-specific workflow.
   through another repo or hand-edited binding. Report the limitation and continue the user's work
   that does not depend on refinery. Configuration changes belong to `refinery-project` and require
   the corresponding user intent; a search or recording request does not authorize re-enabling.
+- When the user explicitly requests maintenance from the opened central vault, use
+  [direct vault maintenance](vault-maintenance.md) instead of the repo-status check. Carry its
+  verified context into experience, memory, metadata, and taxonomy work. This separate management
+  scope is never an automatic fallback for a disabled, unready, or mismatched product repository.
 - Never store secrets, credentials, access tokens, personal data, customer data, or unredacted
   sensitive logs in knowledge, metadata, tags, or copied evidence. Redact before saving; when safe
   redaction is impossible, keep only a non-sensitive description and limitation. Report an affected

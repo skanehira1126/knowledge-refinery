@@ -1,5 +1,8 @@
 ## Set up
 
+The central vault itself is not a product repository. For maintenance from an opened vault,
+use `refinery-maintenance` and its vault-context entrypoint instead of running project setup.
+
 Inspect `knowledge-refinery project status --target "$PROJECT_ROOT" --json` to establish the
 current binding and active vault before preparing setup. An unconfigured repo is expected here.
 

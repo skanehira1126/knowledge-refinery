@@ -46,6 +46,27 @@ def test_stdio_server_lists_expected_tools(
             async with ClientSession(reader, writer) as session:
                 await session.initialize()
                 result = await session.list_tools()
+                status = await session.call_tool(
+                    "refinery_vault_status", {"vault_path": str(vault)}
+                )
+                assert not status.isError and status.structuredContent is not None
+                context = status.structuredContent["vault_context"]
+                metadata = await session.call_tool(
+                    "refinery_get_project_metadata",
+                    {"project_path": None, "vault_context": {**context, "project_id": "product"}},
+                )
+                assert not metadata.isError and metadata.structuredContent is not None
+                assert metadata.structuredContent["project_id"] == "product"
+                invalid = await session.call_tool(
+                    "refinery_search_memory",
+                    {
+                        "project_path": None,
+                        "all_projects": True,
+                        "vault_context": {"vault_path": str(vault)},
+                    },
+                )
+                assert invalid.isError
+
                 created = await session.call_tool(
                     "refinery_create_handoff",
                     {
@@ -115,9 +136,13 @@ def test_stdio_server_lists_expected_tools(
             "refinery_update_tag_description",
             "refinery_update_project_metadata",
             "refinery_validate",
+            "refinery_vault_status",
         }
         descriptions = {tool.name: cleandoc(tool.description or "") for tool in result.tools}
         assert descriptions == {
+            "refinery_vault_status": (
+                "開いたvaultの絶対パスをactive vaultと照合し、保守用contextを返します。"
+            ),
             "refinery_create_handoff": (
                 "引き継ぎを新規保存します。旧版を指定した場合は同じ作業の旧版をアーカイブします。"
             ),
@@ -146,7 +171,7 @@ def test_stdio_server_lists_expected_tools(
                 "memory IDとscopeを指定してprojectまたはshared memoryを取得します。"
             ),
             "refinery_get_project_metadata": (
-                "有効なrepositoryに対応する中央project metadataを取得します。"
+                "repositoryまたはvault contextで指定したproject metadataを取得します。"
             ),
             "refinery_info": (
                 "MCP packageと文書schemaのversionを返し、CLIとのずれを確認できるようにします。"

@@ -1,6 +1,6 @@
 ---
 name: refinery-maintenance
-description: Knowledge Refinery vaultの定期棚卸し、品質監査、指定したナレッジ・metadata・taxonomyの修復に使う。通常の開発レビューや単発の保存確認、repo設定診断は対象外。
+description: Knowledge Refinery vaultを直接開いて行う保守、定期棚卸し、品質監査、指定したナレッジ・metadata・taxonomyの修復に使う。通常の開発レビューや単発の保存確認、repo設定診断は対象外。
 ---
 
 # Refinery maintenance
@@ -21,17 +21,19 @@ a repair request also authorizes supported factual fixes that preserve conclusio
   scans the active vault; it has no project or record filter. Report unrelated errors separately
   without treating them as permission for additional repairs.
 
-Vault-wide administrative validation and project listing can run independently of a repository.
-Repo-scoped knowledge or tag access requires the shared access check; never switch repositories
-to bypass an opt-out.
+For an opened central vault, establish the context in
+[direct vault maintenance](../vault-maintenance.md) before choosing tools. From a product repo,
+use the shared repo access check. Vault-wide validation and project listing remain available
+independently; never switch access routes to bypass a repo opt-out.
 
 ## Check the affected knowledge
 
 - For project metadata, inspect current values and propose partial factual updates. Keep
   purpose/domain tags lowercase kebab-case, technology names in `technologies`, and local paths
   or unsupported guesses out of metadata. Preserve the project ID.
-- For knowledge quality, search current project memory together with shared memory, then current
-  project experiences. Choose cross-project IDs with `refinery_list_projects` and pass `project_ids`;
+- For knowledge quality in a product repo, search current project memory together with shared
+  memory, then current project experiences. In direct vault maintenance, start with the requested
+  project set or shared scope. Choose cross-project IDs with `refinery_list_projects` and pass `project_ids`;
   use `all_projects: true` only for a necessary vault-wide review, never together with `project_ids`.
   Inspect relevant low-confidence records, duplicates, conflicts, stale principles, and source
   experiences. A moved or missing evidence reference is a limitation, not grounds to delete a conclusion.

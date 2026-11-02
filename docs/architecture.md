@@ -49,6 +49,10 @@ flowchart TB
 - active vaultはユーザー設定に1つ持ちます。設定ファイルは `REFINERY_CONFIG` で明示でき、未指定時は `${XDG_CONFIG_HOME:-$HOME/.config}/knowledge-refinery/config.yaml` を使います。`REFINERY_VAULT` でactive vaultを一時overrideできます。
 - repo-scoped MCP toolsは`project_path`を受け、server側で`enabled`、project metadata、repoと
   active vaultの`vault_id`一致を検証します。
+- 中央vaultを直接開いた明示的な保守では、`refinery_vault_status`で確認した`vault_context`
+  を使います。各呼び出しでactive vaultの実パスとIDを照合し、project対象の書き込みでは
+  context内の`project_id`も検証します。vault自身のproject登録は不要で、repoのopt-outを
+  変更しません。contextは対象識別であり、利用者承認やfilesystem権限の代わりではありません。
 - symlinkは人間の閲覧用であり、MCPとCLIの必須依存ではありません。
 - vault markerのmanagerとschemaを利用前に検証し、未対応schemaへの書き込みを拒否します。
 - 中央vaultの書き込みはatomic replaceとpath lockで破損を防ぎ、project metadata、experience、memory、tag taxonomyの更新は`expected_updated_at`による楽観的排他で競合上書きを拒否します。
@@ -58,8 +62,8 @@ flowchart TB
 
 ## データフロー
 
-1. Skillが `project status` でrepoの有効性を確認する。
-2. MCPが `project_path` からproject IDを導出する。
+1. Skillが `project status` でrepoの有効性を確認する。直接vault保守では `refinery_vault_status` を使う。
+2. MCPが `project_path` からproject IDを導出する。保守contextではvault identityと明示対象を検証する。
 3. domain処理がproject metadataまたはknowledge文書のYAML schemaとprovenanceを検証する。
 4. storage層が中央vaultへatomicに保存する。
 5. Git履歴を有効にしたvaultでは、vault Gitがknowledge履歴をproduct Gitとは別に追跡する。

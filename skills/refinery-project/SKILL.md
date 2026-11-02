@@ -19,6 +19,9 @@ variables stand for concrete values selected by the user or returned by tools, n
   depends on the current repository or machine state.
 - **State check:** run `knowledge-refinery project status --target "$PROJECT_ROOT" --json` and report
   the active vault, project ID, enabled state, and `vault_match`. A status-only request ends here.
+  If the opened directory is the central vault itself, use
+  `knowledge-refinery vault status --target "$VAULT_ROOT" --json` instead. It checks vault identity
+  without project registration. Requested knowledge maintenance belongs to `refinery-maintenance`.
 - **Diagnosis or repair:** inspect status and run `knowledge-refinery doctor --target "$PROJECT_ROOT"`.
   When MCP is available, obtain `refinery_info.version` and pass it with `--mcp-version` to doctor.
   Report failed checks and apply only the requested repair using documented CLI commands.

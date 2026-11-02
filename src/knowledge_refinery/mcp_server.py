@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 from typing import Literal
@@ -42,12 +43,14 @@ from knowledge_refinery.tag_ops import update_tag_description
 from knowledge_refinery.tag_ops import validate_tag_taxonomy
 from knowledge_refinery.vault_ops import PROJECT_METADATA
 from knowledge_refinery.vault_ops import PROJECT_METADATA_SCHEMA_VERSION
-from knowledge_refinery.vault_ops import context_from_vault
+from knowledge_refinery.vault_ops import VaultContext
+from knowledge_refinery.vault_ops import inspect_maintenance_vault
 from knowledge_refinery.vault_ops import list_project_metadata
 from knowledge_refinery.vault_ops import read_project_metadata
 from knowledge_refinery.vault_ops import read_vault_id
 from knowledge_refinery.vault_ops import resolve_project_id
 from knowledge_refinery.vault_ops import update_project_metadata
+from knowledge_refinery.vault_ops import validate_maintenance_context
 
 
 mcp = FastMCP(
@@ -57,7 +60,13 @@ mcp = FastMCP(
         "project単位のtoolには現在のrepository pathを渡してください。serverは"
         ".refinery.yamlと中央project metadataを検証し、連携が無効または不正な"
         "repositoryを拒否します。"
-        "判断前はcurrent projectとshared memoryを先に検索し、必要な場合だけselected projectsまたは"
+        "vaultを直接開いた明示的な保守ではrefinery_vault_statusでvault_contextを取得し、"
+        "knowledge/metadata/tag toolsへproject_path: nullと共に渡します。両contextは併用不可です。"
+        "vault_contextはrepoのopt-out失敗時の自動代替に使わないでください。"
+        "project対象の更新ではvault_context.project_idを明示します。shared昇格、重要改訂、"
+        "削除の承認要件は保守でも変わりません。"
+        "通常repoではcurrent projectとshared memoryを先に検索し、"
+        "必要な場合だけselected projectsまたは"
         "vault全体へ広げてください。更新では省略fieldを保持し、空listは明示clearです。"
         "handoffは明示された引き継ぎ操作専用です。通常のknowledge検索・記録には含めません。"
         "handoffの一覧・取得はproject_idによるactive vaultの参照で、repository pathは不要です。"
@@ -82,6 +91,39 @@ def _validated_project_id(vault: Path, project_path: str) -> str:
     return project_id
 
 
+def _knowledge_project_id(
+    vault: Path,
+    project_path: str | None,
+    vault_context: VaultContext | None,
+    *,
+    require_project: bool = False,
+) -> str | None:
+    if vault_context is None:
+        if project_path is None:
+            raise ValueError("Specify project_path or an explicit vault_context")
+        return _validated_project_id(vault, project_path)
+    if project_path is not None:
+        raise ValueError("project_path and vault_context cannot be used together")
+    validate_maintenance_context(vault, vault_context)
+    if require_project and vault_context.project_id is None:
+        raise ValueError("This operation requires vault_context.project_id")
+    return vault_context.project_id
+
+
+def _administrative_vault(vault_context: VaultContext | None) -> Path:
+    vault = get_active_vault()
+    if vault_context is not None:
+        validate_maintenance_context(vault, vault_context)
+    return vault
+
+
+@mcp.tool()
+def refinery_vault_status(vault_path: str) -> dict[str, object]:
+    """開いたvaultの絶対パスをactive vaultと照合し、保守用contextを返します。"""
+    context = inspect_maintenance_vault(Path(vault_path), get_active_vault())
+    return {"ready": True, "version": get_version(), "vault_context": asdict(context)}
+
+
 def _entry(entry: Any, vault: Path) -> dict[str, object]:
     return {
         "project_id": None if entry.scope == "shared" else entry.project_id,
@@ -100,31 +142,37 @@ def _entry(entry: Any, vault: Path) -> dict[str, object]:
 
 
 @mcp.tool()
-def refinery_list_projects() -> list[dict[str, object]]:
+def refinery_list_projects(vault_context: VaultContext | None = None) -> list[dict[str, object]]:
     """active vaultに登録されたprojectの識別・検索用metadataを一覧取得します。"""
-    return [metadata.as_dict() for metadata in list_project_metadata(get_active_vault())]
+    vault = _administrative_vault(vault_context)
+    return [metadata.as_dict() for metadata in list_project_metadata(vault)]
 
 
 @mcp.tool()
-def refinery_get_project_metadata(project_path: str) -> dict[str, object]:
-    """有効なrepositoryに対応する中央project metadataを取得します。"""
+def refinery_get_project_metadata(
+    project_path: str | None, vault_context: VaultContext | None = None
+) -> dict[str, object]:
+    """repositoryまたはvault contextで指定したproject metadataを取得します。"""
     vault = get_active_vault()
-    project_id = _validated_project_id(vault, project_path)
+    project_id = _knowledge_project_id(vault, project_path, vault_context, require_project=True)
+    assert project_id is not None
     return read_project_metadata(vault, project_id).as_dict()
 
 
 @mcp.tool()
 def refinery_update_project_metadata(
-    project_path: str,
+    project_path: str | None,
     expected_updated_at: str,
     name: str | None = None,
     summary: str | None = None,
     tags: list[str] | None = None,
     technologies: list[str] | None = None,
+    vault_context: VaultContext | None = None,
 ) -> dict[str, object]:
     """project metadataを部分更新します。省略fieldは保持し、空listは対象listを消去します。"""
     vault = get_active_vault()
-    project_id = _validated_project_id(vault, project_path)
+    project_id = _knowledge_project_id(vault, project_path, vault_context, require_project=True)
+    assert project_id is not None
     return update_project_metadata(
         vault,
         project_id,
@@ -155,13 +203,14 @@ def refinery_info() -> dict[str, object]:
 
 @mcp.tool()
 def refinery_browse_knowledge_tags(
-    project_path: str,
+    project_path: str | None,
     parent_tag: str | None = None,
     all_projects: bool = False,
+    vault_context: VaultContext | None = None,
 ) -> TagBrowseResult:
     """Knowledge tagを指定階層の直下だけ、説明と利用件数を付けて取得します。"""
     vault = get_active_vault()
-    project_id = _validated_project_id(vault, project_path)
+    project_id = _knowledge_project_id(vault, project_path, vault_context)
     return browse_knowledge_tags(
         vault,
         project_id,
@@ -172,13 +221,14 @@ def refinery_browse_knowledge_tags(
 
 @mcp.tool()
 def refinery_search_knowledge_tags(
-    project_path: str,
+    project_path: str | None,
     terms: list[str],
     all_projects: bool = False,
+    vault_context: VaultContext | None = None,
 ) -> TagSearchResult:
     """Knowledge tagのpathと説明をAND条件の語句で検索し、利用件数も取得します。"""
     vault = get_active_vault()
-    project_id = _validated_project_id(vault, project_path)
+    project_id = _knowledge_project_id(vault, project_path, vault_context)
     return search_knowledge_tags(
         vault,
         project_id,
@@ -189,15 +239,15 @@ def refinery_search_knowledge_tags(
 
 @mcp.tool()
 def refinery_update_tag_description(
-    project_path: str,
+    project_path: str | None,
     tag: str,
     description: str,
     expected_updated_at: str | None = None,
+    vault_context: VaultContext | None = None,
 ) -> dict[str, object]:
     """Knowledge tagの説明をtaxonomyの現在revisionを使って登録・更新します。"""
     vault = get_active_vault()
-    project_id = _validated_project_id(vault, project_path)
-    context_from_vault(vault, project_id)
+    _knowledge_project_id(vault, project_path, vault_context)
     taxonomy = update_tag_description(
         vault,
         tag=tag,
@@ -213,7 +263,7 @@ def refinery_update_tag_description(
 
 @mcp.tool()
 def refinery_search_experiences(
-    project_path: str,
+    project_path: str | None,
     terms: list[str] | None = None,
     project_ids: list[str] | None = None,
     tags: list[str] | None = None,
@@ -225,10 +275,11 @@ def refinery_search_experiences(
     recorded_from: str | None = None,
     recorded_to: str | None = None,
     all_projects: bool = False,
+    vault_context: VaultContext | None = None,
 ) -> list[dict[str, object]]:
     """experienceを新しい順に検索します。project_idsとall_projectsは併用できません。"""
     vault = get_active_vault()
-    project_id = _validated_project_id(vault, project_path)
+    project_id = _knowledge_project_id(vault, project_path, vault_context)
     filters = SearchFilters(
         document_ids=tuple(_list(experience_ids)),
         related_experiences=tuple(_list(related_experiences)),
@@ -254,12 +305,16 @@ def refinery_search_experiences(
 
 
 @mcp.tool()
-def refinery_get_experience(project_path: str, source: str) -> dict[str, object]:
+def refinery_get_experience(
+    project_path: str | None, source: str, vault_context: VaultContext | None = None
+) -> dict[str, object]:
     """experience IDまたはproject-id/experience-idを指定してexperienceを取得します。"""
     vault = get_active_vault()
-    current_project_id = _validated_project_id(vault, project_path)
+    current_project_id = _knowledge_project_id(vault, project_path, vault_context)
     source_project_id, separator, experience_id = source.partition("/")
     if not separator:
+        if current_project_id is None:
+            raise ValueError("Vault experience get requires project-id/experience-id")
         source_project_id = current_project_id
         experience_id = source
     elif not source_project_id or not experience_id or "/" in experience_id:
@@ -270,7 +325,7 @@ def refinery_get_experience(project_path: str, source: str) -> dict[str, object]
 
 @mcp.tool()
 def refinery_record_experience(
-    project_path: str,
+    project_path: str | None,
     title: str,
     purpose: str,
     status: ExperienceStatus,
@@ -283,10 +338,12 @@ def refinery_record_experience(
     experience_id: str | None = None,
     expected_updated_at: str | None = None,
     clear_confidence: bool = False,
+    vault_context: VaultContext | None = None,
 ) -> dict[str, str]:
     """experienceを作成・更新します。更新の省略fieldは保持し、空listはclearします。"""
     vault = get_active_vault()
-    project_id = _validated_project_id(vault, project_path)
+    project_id = _knowledge_project_id(vault, project_path, vault_context, require_project=True)
+    assert project_id is not None
     path = upsert_experience_at(
         vault,
         project_id,
@@ -316,7 +373,7 @@ def refinery_record_experience(
 
 @mcp.tool()
 def refinery_search_memory(
-    project_path: str,
+    project_path: str | None,
     terms: list[str] | None = None,
     project_ids: list[str] | None = None,
     tags: list[str] | None = None,
@@ -325,10 +382,11 @@ def refinery_search_memory(
     scopes: list[MemoryScope] | None = None,
     confidences: list[Confidence] | None = None,
     all_projects: bool = False,
+    vault_context: VaultContext | None = None,
 ) -> list[dict[str, object]]:
     """project/shared memoryを新しい順に検索します。結果のscopeをexact getへ渡します。"""
     vault = get_active_vault()
-    project_id = _validated_project_id(vault, project_path)
+    project_id = _knowledge_project_id(vault, project_path, vault_context)
     entries = search_documents_at(
         vault,
         project_id,
@@ -350,14 +408,15 @@ def refinery_search_memory(
 
 @mcp.tool()
 def refinery_get_memory(
-    project_path: str,
+    project_path: str | None,
     memory_id: str,
     scope: MemoryScope = "project",
     project_id: str | None = None,
+    vault_context: VaultContext | None = None,
 ) -> dict[str, object]:
     """memory IDとscopeを指定してprojectまたはshared memoryを取得します。"""
     vault = get_active_vault()
-    current_project_id = _validated_project_id(vault, project_path)
+    current_project_id = _knowledge_project_id(vault, project_path, vault_context)
     path, header, body = read_memory_at(
         vault,
         current_project_id,
@@ -370,7 +429,7 @@ def refinery_get_memory(
 
 @mcp.tool()
 def refinery_record_memory(
-    project_path: str,
+    project_path: str | None,
     title: str,
     summary: str,
     source_experiences: list[str] | None = None,
@@ -381,10 +440,11 @@ def refinery_record_memory(
     memory_id: str | None = None,
     expected_updated_at: str | None = None,
     clear_confidence: bool = False,
+    vault_context: VaultContext | None = None,
 ) -> dict[str, object]:
     """memoryを作成・更新します。更新の省略fieldは保持し、空listはclearします。"""
     vault = get_active_vault()
-    project_id = _validated_project_id(vault, project_path)
+    project_id = _knowledge_project_id(vault, project_path, vault_context)
     path = upsert_memory_at(
         vault,
         project_id,
@@ -508,9 +568,9 @@ def refinery_delete_handoff(
 
 
 @mcp.tool()
-def refinery_validate() -> dict[str, object]:
+def refinery_validate(vault_context: VaultContext | None = None) -> dict[str, object]:
     """active vaultのtaxonomy、project metadata、experience、memory、handoffを検証します。"""
-    vault = get_active_vault()
+    vault = _administrative_vault(vault_context)
     errors: list[dict[str, str]] = []
     checked = 0
     seen_ids: dict[tuple[str, str, str], Path] = {}

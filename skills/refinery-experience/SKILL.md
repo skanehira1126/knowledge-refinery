@@ -6,7 +6,7 @@ description: Knowledge Refineryのナレッジ検索、または再利用でき�
 # Refinery experience
 
 Read the [shared operating rules](../operating-rules.md) for authorization,
-blocked operations, and completion. Input is the current repo and a knowledge question or an
+blocked operations, and completion. Input is the current repo or verified vault-maintenance context and a knowledge question or an
 inspected attempt with its evidence. Search-only requests finish with relevant findings and source
 IDs. Read the recording reference only when creating or updating an experience.
 
@@ -17,10 +17,14 @@ that could affect a design choice, diagnosis, comparison, or known constraint. O
 work does not need a search merely because it started; skip unrelated lookups for mechanical edits.
 Reuse relevant results already inspected while their sources and the question remain unchanged.
 
-Search current project memory together with shared memory, then current project experiences.
+In a repository, search current project memory together with shared memory, then current project experiences.
 Expand beyond the project only when the local result is insufficient: choose IDs with
 `refinery_list_projects` and pass `project_ids`; use `all_projects: true` only when no bounded
 project set is defensible. Never combine `project_ids` with `all_projects: true`.
+
+In direct vault maintenance, retain the verified context and start with the requested project set
+or shared scope. Select `vault_context.project_id` before writing a project's experience; no local
+product repo or new registration is required.
 
 ## Record
 

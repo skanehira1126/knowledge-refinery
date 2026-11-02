@@ -60,6 +60,37 @@ class ProjectContext:
 
 
 @dataclass(frozen=True)
+class VaultContext:
+    """Identify an explicit vault-maintenance scope, independent of repository opt-in."""
+
+    vault_path: str
+    vault_id: str
+    project_id: str | None = None
+
+
+def inspect_maintenance_vault(vault: Path, active_vault: Path) -> VaultContext:
+    """Verify the opened vault against the active vault without registering a project."""
+    if not vault.is_absolute():
+        raise ValueError("vault_path must be an absolute vault root path")
+    root = validate_vault_root(vault)
+    if root != validate_vault_root(active_vault):
+        raise ValueError("Maintenance vault path does not match the active vault")
+    vault_id = read_vault_id(root)
+    if vault_id is None:
+        raise ValueError("Maintenance requires a vault_id; migrate the vault with vault init")
+    return VaultContext(str(root), vault_id)
+
+
+def validate_maintenance_context(vault: Path, context: VaultContext) -> None:
+    """Reject stale vault identity and invalid explicitly selected project metadata."""
+    current = inspect_maintenance_vault(Path(context.vault_path), vault)
+    if current.vault_id != context.vault_id:
+        raise ValueError("Maintenance vault_id does not match the active vault")
+    if context.project_id is not None:
+        read_project_metadata(vault, context.project_id)
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     """Represent the repository-local project configuration."""
 
@@ -817,6 +848,9 @@ def _vault_readme() -> str:
 
 Personal, cross-project experience repository managed by knowledge-refinery.
 
+Open this vault directly and use the Plugin's refinery-maintenance skill for knowledge upkeep.
+`knowledge-refinery vault status --json` verifies the maintenance entrypoint without project setup.
+
 - `projects/<project_id>/project.yaml`: project identity and discovery metadata
 - `projects/<project_id>/experiences`: integrated attempt and outcome records
 - `projects/<project_id>/memory`: reusable project-specific principles
@@ -831,6 +865,10 @@ def _vault_agents() -> str:
 - These rules govern knowledge in this vault, not product implementation. Respect runtime
   permissions and explicit user scope; search-only, diagnosis-only, and proposal-only requests
   are read-only.
+- For explicitly requested vault maintenance, use the Plugin's refinery-maintenance skill and
+  refinery_vault_status to verify the opened vault. Pass its vault_context with project_path: null
+  to knowledge tools. Do not register this vault as a product project or use this route as an
+  automatic fallback for a product repository's opt-out.
 - Treat each experience as one integrated account of purpose, attempts, observations,
   evaluation, and future hypotheses.
 - Do not require product code or evidence files to be committed before recording an

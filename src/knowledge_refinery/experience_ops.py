@@ -21,6 +21,7 @@ from knowledge_refinery.storage_ops import interprocess_lock
 from knowledge_refinery.vault_ops import ProjectContext
 from knowledge_refinery.vault_ops import context_from_vault
 from knowledge_refinery.vault_ops import resolve_project_context
+from knowledge_refinery.vault_ops import validate_vault_root
 
 
 EXPERIENCE_STATUS_CHOICES = ("completed", "inconclusive", "abandoned", "superseded")
@@ -348,7 +349,8 @@ def upsert_memory(
     """Create or update project or shared memory for a repository project."""
     context = resolve_project_context(project)
     return _upsert_memory(
-        context,
+        context.vault_root,
+        context.project_id,
         title=title,
         summary=summary,
         memory_id=memory_id,
@@ -365,7 +367,7 @@ def upsert_memory(
 
 def upsert_memory_at(
     vault: Path,
-    project_id: str,
+    project_id: str | None,
     *,
     title: str,
     summary: str,
@@ -380,9 +382,12 @@ def upsert_memory_at(
     clear_confidence: bool = False,
 ) -> Path:
     """Create or update memory at an explicit vault and project ID."""
-    context = context_from_vault(vault, project_id)
+    vault = validate_vault_root(vault)
+    if project_id is not None:
+        context_from_vault(vault, project_id)
     return _upsert_memory(
-        context,
+        vault,
+        project_id,
         title=title,
         summary=summary,
         memory_id=memory_id,
@@ -397,8 +402,17 @@ def upsert_memory_at(
     )
 
 
+def _memory_root(vault: Path, project_id: str | None, *, shared: bool) -> Path:
+    if shared:
+        return vault / "shared" / "memory"
+    if project_id is None:
+        raise ValueError("project memory requires an explicit project_id")
+    return context_from_vault(vault, project_id).project_store / "memory"
+
+
 def _upsert_memory(
-    context: ProjectContext,
+    vault: Path,
+    project_id: str | None,
     *,
     title: str,
     summary: str,
@@ -421,7 +435,7 @@ def _upsert_memory(
     if clear_confidence and confidence is not None:
         raise ValueError("confidence and clear_confidence cannot be used together")
     _validate_confidence(confidence)
-    root = context.vault_root / "shared" / "memory" if shared else context.project_store / "memory"
+    root = _memory_root(vault, project_id, shared=shared)
     path = _safe_child(root, expected_filename)
     with interprocess_lock(path):
         current: dict[str, object] | None = None
@@ -446,14 +460,13 @@ def _upsert_memory(
         )
         if not effective_sources:
             raise ValueError("memory requires at least one --source-experience")
-        _validate_memory_sources(context, effective_sources, shared=shared)
         effective_tags = _preserved_string_list(current, "tags", tags)
         effective_confidence = _effective_confidence(current, confidence, clear=clear_confidence)
         header: dict[str, object] = {
             "schema_version": 2,
             "memory_id": document_id,
             "scope": "shared" if shared else "project",
-            "project_id": None if shared else context.project_id,
+            "project_id": None if shared else project_id,
             "title": title,
             "summary": summary,
             "source_experiences": effective_sources,
@@ -461,7 +474,7 @@ def _upsert_memory(
             "tags": effective_tags,
             "confidence": effective_confidence,
         }
-        validate_document_header(header, kind="memory")
+        validate_memory_source_references(vault, header)
         atomic_write_text(path, _render(header, body or summary))
     return path
 
@@ -482,7 +495,8 @@ def search_documents(
         raise ValueError(f"Unsupported document kind: {kind}")
     context = resolve_project_context(project)
     return _search_documents(
-        context,
+        context.vault_root,
+        context.project_id,
         kind=kind,
         terms=terms,
         project_ids=project_ids,
@@ -495,7 +509,7 @@ def search_documents(
 
 def search_documents_at(
     vault: Path,
-    current_project_id: str,
+    current_project_id: str | None,
     *,
     kind: str,
     terms: list[str],
@@ -506,9 +520,14 @@ def search_documents_at(
     filters: SearchFilters | None = None,
 ) -> list[SearchEntry]:
     """Search knowledge documents at an explicit vault and current project."""
-    context = context_from_vault(vault, current_project_id)
+    vault = validate_vault_root(vault)
+    if current_project_id is not None:
+        context_from_vault(vault, current_project_id)
+    elif not (project_ids or all_projects or (filters and filters.scopes == ("shared",))):
+        raise ValueError("Vault search requires project_ids, all_projects, or shared-only scopes")
     return _search_documents(
-        context,
+        vault,
+        current_project_id,
         kind=kind,
         terms=terms,
         project_ids=project_ids,
@@ -520,7 +539,8 @@ def search_documents_at(
 
 
 def _search_documents(
-    context: ProjectContext,
+    vault: Path,
+    current_project_id: str | None,
     *,
     kind: str,
     terms: list[str],
@@ -542,9 +562,9 @@ def _search_documents(
         filters=active_filters,
     )
     for selected_project_id in project_ids:
-        context_from_vault(context.vault_root, selected_project_id)
-    selected = project_ids or ([context.project_id] if not all_projects else [])
-    roots = _search_roots(context, kind, selected, all_projects=all_projects)
+        context_from_vault(vault, selected_project_id)
+    selected = project_ids or ([current_project_id] if current_project_id else [])
+    roots = _search_roots(vault, kind, selected, all_projects=all_projects)
 
     entries: list[SearchEntry] = []
     lowered_terms = [term.casefold() for term in terms]
@@ -649,26 +669,26 @@ def read_experience_at(
 
 def read_memory_at(
     vault: Path,
-    current_project_id: str,
+    current_project_id: str | None,
     memory_id: str,
     *,
     scope: str,
     project_id: str | None = None,
 ) -> tuple[Path, dict[str, object], str]:
     """Read and validate one project or shared memory document."""
-    context = context_from_vault(vault, current_project_id)
+    vault = validate_vault_root(vault)
+    if current_project_id is not None:
+        context_from_vault(vault, current_project_id)
     _validate_slugs([memory_id], field="memory_id")
     if scope == "shared":
         if project_id is not None:
             raise ValueError("project_id must be omitted for shared memory")
-        root = context.vault_root / "shared" / "memory"
         expected_project_id: str | None = None
     elif scope == "project":
         expected_project_id = project_id or current_project_id
-        target = context_from_vault(context.vault_root, expected_project_id)
-        root = target.project_store / "memory"
     else:
         raise ValueError("scope must be project or shared")
+    root = _memory_root(vault, expected_project_id, shared=scope == "shared")
     path = _find_document_path(root, memory_id)
     header, body = _read_exact_document(path, kind="memory")
     if header.get("memory_id") != memory_id or header.get("scope") != scope:
@@ -697,15 +717,15 @@ def _find_document_path(root: Path, document_id: str) -> Path:
 
 
 def _search_roots(
-    context: ProjectContext, kind: str, selected: list[str], *, all_projects: bool
+    vault: Path, kind: str, selected: list[str], *, all_projects: bool
 ) -> list[tuple[str, Path]]:
     roots: list[tuple[str, Path]] = []
-    for project_dir in sorted((context.vault_root / "projects").iterdir()):
-        if not project_dir.is_dir() or (selected and project_dir.name not in selected):
+    for project_dir in sorted((vault / "projects").iterdir()):
+        if not project_dir.is_dir() or (not all_projects and project_dir.name not in selected):
             continue
         roots.append((project_dir.name, project_dir / kind))
     if kind == "memory":
-        roots.append(("shared", context.vault_root / "shared" / "memory"))
+        roots.append(("shared", vault / "shared" / "memory"))
     return roots
 
 
@@ -1030,21 +1050,6 @@ def _validate_project_source_format(
         project_id, _ = _split_source_reference(source)
         if project_id is not None and project_id != current_project_id:
             raise ValueError("project memory cannot reference another project's experience")
-
-
-def _validate_memory_sources(
-    context: ProjectContext, source_experiences: list[str], *, shared: bool
-) -> None:
-    if shared:
-        _validate_shared_source_format(list(source_experiences))
-    else:
-        _validate_project_source_format(list(source_experiences), context.project_id)
-
-    for source in source_experiences:
-        qualified_project, experience_id = _split_source_reference(source)
-        project_id = qualified_project or context.project_id
-        if not _experience_exists(context.vault_root, project_id, experience_id):
-            raise ValueError(f"Unknown source experience: {project_id}/{experience_id}")
 
 
 def _experience_exists(vault: Path, project_id: str, experience_id: str) -> bool:

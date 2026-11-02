@@ -8,23 +8,76 @@ metadata、repoとactive vaultの`vault_id`一致を検証します。
 |---|---|---|
 | `refinery_list_projects` | active vaultのproject metadata一覧 | 管理tool |
 | `refinery_info` | MCP package/schema versionとactive vault ID | 管理tool |
-| `refinery_get_project_metadata` | 現在repoのproject metadata取得 | `project_path` |
-| `refinery_update_project_metadata` | project metadataのrevision付き更新 | `project_path` |
-| `refinery_browse_knowledge_tags` | 指定した親tagの直下を説明・利用件数付きで取得 | `project_path` |
-| `refinery_search_knowledge_tags` | tag pathと説明を語句検索 | `project_path` |
-| `refinery_update_tag_description` | tag説明のrevision付き登録・更新 | `project_path` |
-| `refinery_search_experiences` | experienceの構造化/全文検索 | `project_path` |
-| `refinery_get_experience` | experience IDまたは`project-id/experience-id`の本文取得 | `project_path` |
-| `refinery_record_experience` | experienceの作成・revision付き更新 | `project_path` |
-| `refinery_search_memory` | project/shared memory検索 | `project_path` |
-| `refinery_get_memory` | scopeとIDを指定したmemory本文取得 | `project_path` |
-| `refinery_record_memory` | project/shared memoryの作成・revision付き更新 | `project_path` |
+| `refinery_vault_status` | 開いたvaultを照合し保守contextを取得 | `vault_path` |
+| `refinery_get_project_metadata` | 現在repoのproject metadata取得 | repo / vault context |
+| `refinery_update_project_metadata` | project metadataのrevision付き更新 | repo / vault context |
+| `refinery_browse_knowledge_tags` | 指定した親tagの直下を説明・利用件数付きで取得 | repo / vault context |
+| `refinery_search_knowledge_tags` | tag pathと説明を語句検索 | repo / vault context |
+| `refinery_update_tag_description` | tag説明のrevision付き登録・更新 | repo / vault context |
+| `refinery_search_experiences` | experienceの構造化/全文検索 | repo / vault context |
+| `refinery_get_experience` | experience IDまたは`project-id/experience-id`の本文取得 | repo / vault context |
+| `refinery_record_experience` | experienceの作成・revision付き更新 | repo / vault context |
+| `refinery_search_memory` | project/shared memory検索 | repo / vault context |
+| `refinery_get_memory` | scopeとIDを指定したmemory本文取得 | repo / vault context |
+| `refinery_record_memory` | project/shared memoryの作成・revision付き更新 | repo / vault context |
 | `refinery_create_handoff` | 引き継ぎsnapshotの作成と旧版のアーカイブ | `project_path` |
 | `refinery_list_handoffs` | 全projectまたは指定projectの引き継ぎmetadata一覧 | vault参照（任意の`project_id`） |
 | `refinery_get_handoff` | project IDと引き継ぎIDによる取得 | vault参照（`project_id`） |
 | `refinery_archive_handoff` | revisionを指定した引き継ぎのアーカイブ | `project_path` |
 | `refinery_delete_handoff` | revisionを指定したarchived引き継ぎ1件の削除 | `project_path` |
 | `refinery_validate` | active vaultのYAMLとprovenance検証 | 管理tool |
+
+## vaultを直接開く保守入口 {#vault-maintenance}
+
+vaultの棚卸し・横断参照・修復では、vaultをprojectとして登録せずに管理できます。
+通常のrepo操作は従来どおり`project_path`を使います。明示的なvault保守では
+`refinery_vault_status(vault_path="/absolute/path/to/vault")`で取得した`vault_context`を使い、
+`project_path: null`を明示します。戻り値は次の形です。
+
+```json
+{
+  "ready": true,
+  "version": "0.7.1",
+  "vault_context": {
+    "vault_path": "/absolute/path/to/vault",
+    "vault_id": "0123456789abcdef0123456789abcdef",
+    "project_id": null
+  }
+}
+```
+
+例のIDを転記せず、実際のstatus応答を使います。contextのpathは絶対パスかつactive vaultの
+実パスと一致し、markerのIDも一致する必要があります。別directoryにコピーした同じIDのvault、
+古いID、IDなしのlegacy vaultは拒否します。必要な移行やactive vault切り替えは別の設定操作です。
+各toolは再検査し、`project_path`との併用、両contextの欠落を拒否します。
+`refinery_list_projects`と`refinery_validate`も任意の`vault_context`を受け取り照合します。
+両toolは引数なしなら従来どおりactive vault全体が対象です。
+
+| 操作 | vault contextでの対象指定 |
+|---|---|
+| experience / memory検索 | `project_ids`、`all_projects: true`、またはcontext内の`project_id`。sharedのみなら`scopes: [shared]` |
+| experience取得 | `source: project-id/experience-id`。contextにproject IDがあれば非修飾IDも可 |
+| memory取得 | `scope`と`memory_id`。projectなら`project_id`またはcontext内のID、sharedならtoolの`project_id`は省略 |
+| project metadata取得・更新、experience保存、project memory保存 | context内の`project_id`が必須。登録済みmetadataを検証 |
+| shared memory保存 | `shared: true`。context内のproject IDは不要 |
+| tag参照・検索 | context内の`project_id`または`all_projects: true` |
+| tag説明の更新 | vault全体のtaxonomyを更新 |
+
+保存先となるprojectは`refinery_list_projects`から選びます。たとえばstatusで返された
+contextを`CONTEXT`とすると、MCP呼び出しの引数は次の形です。
+
+```text
+refinery_search_memory(project_path=null, vault_context=CONTEXT, scopes=["shared"])
+refinery_search_experiences(project_path=null, vault_context=CONTEXT, project_ids=["project-a", "project-b"])
+refinery_get_experience(project_path=null, vault_context=CONTEXT, source="project-a/trial")
+refinery_get_memory(project_path=null, vault_context=CONTEXT, memory_id="principle", scope="shared")
+```
+
+このcontextは対象識別であり、ユーザー承認やOSのアクセス権を表すtokenではありません。
+中央に保存済みの資料は、元repoが無効化・移動していても管理できます。repoの設定やopt-outは
+変更せず、通常repoからの検索・記録が拒否された際の自動フォールバックには使いません。
+共有原則の作成・昇格、重要改訂、削除の承認要件と、provenance・revision検査は維持します。
+Knowledge削除toolは追加せず、handoffの作成・整理もrepo-scopedのままです。
 
 ## 検索スコープ
 
@@ -91,6 +144,8 @@ tagはlowercase kebab-caseで目的・領域を表し、技術名は `technologi
 `refinery_info.version` はMCPを提供するPlugin側packageのversionです。PATH上CLIの `knowledge-refinery doctor --mcp-version VERSION` へ渡し、不一致なら両方を同じreleaseへ更新します。
 
 ## 拒否条件
+
+最初の5条件は通常のrepo contextに対する検査です。vault contextの対象識別・project指定は上記の契約に従います。
 
 - `.refinery.yaml` がない。
 - schemaまたはproject IDが不正。

@@ -1,6 +1,6 @@
 {
   "name": "knowledge-refinery",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "複数projectのexperienceとmemoryをローカル中央vaultで管理するrefinery",
   "author": {
     "name": "Shinichi Kanehira",

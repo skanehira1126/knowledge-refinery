@@ -37,7 +37,7 @@ vaultの棚卸し・横断参照・修復では、vaultをprojectとして登録
 ```json
 {
   "ready": true,
-  "version": "0.7.1",
+  "version": "0.7.2",
   "vault_context": {
     "vault_path": "/absolute/path/to/vault",
     "vault_id": "0123456789abcdef0123456789abcdef",

@@ -43,13 +43,16 @@ from knowledge_refinery.issue_cli import configure_issue_parser
 from knowledge_refinery.tag_ops import browse_knowledge_tags
 from knowledge_refinery.tag_ops import search_knowledge_tags
 from knowledge_refinery.tag_ops import update_tag_description
+from knowledge_refinery.vault_ops import PROJECT_CONFIG
 from knowledge_refinery.vault_ops import context_from_vault
 from knowledge_refinery.vault_ops import disable_project
 from knowledge_refinery.vault_ops import enable_project
 from knowledge_refinery.vault_ops import init_vault
 from knowledge_refinery.vault_ops import inspect_maintenance_vault
 from knowledge_refinery.vault_ops import inspect_project
+from knowledge_refinery.vault_ops import read_project_config
 from knowledge_refinery.vault_ops import read_project_metadata
+from knowledge_refinery.vault_ops import resolve_project_context
 from knowledge_refinery.vault_ops import resolve_project_id
 from knowledge_refinery.vault_ops import setup_project
 from knowledge_refinery.vault_ops import update_project_metadata
@@ -65,6 +68,14 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     configure_issue_parser(subparsers.add_parser("issue", help="Manage vault-wide issues"))
+
+    context_parser = subparsers.add_parser("context", help="Read project domain context")
+    context_commands = context_parser.add_subparsers(required=True)
+    context_show = context_commands.add_parser("show", help="Print the project's context.md")
+    location = context_show.add_mutually_exclusive_group()
+    location.add_argument("--project", "--target", default=".", help="project working directory")
+    location.add_argument("--hook-input", action="store_true", help="read Codex hook cwd on stdin")
+    context_show.set_defaults(handler=run_context_show)
 
     vault_parser = subparsers.add_parser("vault", help="Manage the central refinery repository")
     vault_subparsers = vault_parser.add_subparsers(dest="vault_command", required=True)
@@ -499,6 +510,38 @@ def read_body(args: argparse.Namespace) -> str | None:
     if args.body_file is not None:
         return Path(args.body_file).read_text(encoding="utf-8")
     return args.body
+
+
+def run_context_show(args: argparse.Namespace) -> int:
+    """Print the nearest configured project's optional session context."""
+    cwd = Path(args.project)
+    if args.hook_input:
+        event = json.load(sys.stdin)
+        location = event.get("cwd") if isinstance(event, dict) else None
+        if not isinstance(location, str) or not Path(location).is_absolute():
+            raise ValueError("Expected an absolute cwd in Codex hook input")
+        cwd = Path(location)
+    cwd = cwd.expanduser().resolve()
+    for root in (cwd, *cwd.parents):
+        if (root / PROJECT_CONFIG).is_file():
+            break
+        if (root / ".git").exists():
+            return 0
+    else:
+        return 0
+    if not read_project_config(root).enabled:
+        return 0
+    context = resolve_project_context(root, get_active_vault())
+    path = context.project_store / "context.md"
+    if path.resolve() != path:
+        raise ValueError(f"Project context must be stored directly in its vault project: {path}")
+    try:
+        body = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return 0
+    if body.strip():
+        sys.stdout.write(body)
+    return 0
 
 
 def run_vault_init(args: argparse.Namespace) -> int:

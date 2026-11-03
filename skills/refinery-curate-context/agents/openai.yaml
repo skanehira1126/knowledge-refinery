@@ -1,0 +1,6 @@
+interface:
+  display_name: "Refinery Curate Context"
+  short_description: "既存のナレッジから作業開始時に必要なドメイン知識を数行に絞る"
+  default_prompt: "$refinery-curate-contextを使って、このprojectの既存ナレッジから分析の前提を数行に絞り、context.mdに反映してください。"
+policy:
+  allow_implicit_invocation: false

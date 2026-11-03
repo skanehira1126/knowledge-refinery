@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refinery Issue"
+  short_description: "課題・TODOをvaultに保存し、進捗・project紐付け・タグを管理します。"
+  default_prompt: "$refinery-issueを使って、指定したprojectの進行中issueを一覧してください。今回は更新しないでください。"

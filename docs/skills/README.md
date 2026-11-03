@@ -1,12 +1,14 @@
 # Skills
 
-次の5 skillsで構成します。
+次の7 skillsで構成します。
 
 - `refinery-project`: repoの導入、有効化、無効化、診断
 - `refinery-experience`: 過去のナレッジ検索と、意味のある試行のexperience記録。検索のみなら書き込まない
 - `refinery-memory`: 原則2件以上の反復根拠からproject memoryを抽出し、承認された候補だけをshared memoryへ昇格
 - `refinery-maintenance`: 定期棚卸し、vault品質監査、指定対象のナレッジ修復
 - `refinery-handoff`: 明示呼び出しによる作業の引き継ぎの作成・再開・整理
+- `refinery-issue`: vault単位の課題・TODOの作成、一覧、進捗更新、project紐付け、タグ管理
+- [`refinery-curate-context`](refinery-curate-context.md): 明示呼び出しで既存のナレッジからprojectの初期コンテキストを抽出
 
 旧 `session/raw/flow/review/stock` フローはV2の配布対象ではありません。プロダクトGitの採否と経験の価値を分離し、中央refinery repoへ直接記録します。
 

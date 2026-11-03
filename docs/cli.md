@@ -22,6 +22,26 @@ active vaultとのpath不一致はexit 2です。project登録やactive vaultの
 保守の検索・更新には[MCPのvault context](mcp.md#vault-maintenance)を使います。
 既存のexperience／memory／tag CLIは引き続きrepo-scopedです。
 
+## context
+
+分析の前提として毎回必要なドメイン知識は、中央vaultの `projects/<project_id>/context.md` に
+UTF-8のMarkdownで数行だけ記載します。たとえば「注文日別集計の件数が空欄の日は未収集」
+のように、データセットと値の意味を一緒に書きます。このファイルは任意で、必要なprojectだけに作成します。
+既存のナレッジから本文を作るには、[`$refinery-curate-context`](skills/refinery-curate-context.md) を明示して依頼します。
+
+```bash
+knowledge-refinery context show
+knowledge-refinery context show --project "$PROJECT_ROOT"
+```
+
+CLIは現在のディレクトリ（または指定パス）からrepo内の設定を探し、紐付けられたactive vaultの
+本文だけを標準出力に返します。未設定repo、無効な連携、ファイルなし、空白だけの本文では
+何も出力せず正常終了します。vaultの不一致や読み取りエラーは標準エラーで確認できます。
+
+プラグイン同梱の `SessionStart` hook をCodexの `/hooks` またはデスクトップの
+`Settings → Hooks` で信頼すると、新規チャットの開始時（`startup`）と履歴圧縮後（`compact`）に
+この本文が追加コンテキストとして渡ります。ファイルの編集は次の発火時から反映されます。
+
 ## project lifecycle
 
 ```text

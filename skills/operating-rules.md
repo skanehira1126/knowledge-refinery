@@ -32,6 +32,9 @@ authorization, and completion; each `SKILL.md` owns its task-specific workflow.
 - Handoff list/get are vault-scoped reads: use the active vault and `project_id`, without a local
   repository or repo-status preflight. Local disablement does not remove access to saved handoffs.
   Handoff creation, archive, and deletion remain repo-scoped and follow the gate below.
+- Issue operations are vault-scoped reads and writes through `refinery-issue`, without a local
+  repository or repo-status preflight. Repo disablement does not block issue access. Automatic
+  knowledge recording guidance does not authorize issue mutations; follow the current request.
 - Before repo-scoped knowledge access, resolve the current repository to an absolute `PROJECT_ROOT`
   and run `knowledge-refinery project status --target "$PROJECT_ROOT" --json`. Use repo-scoped
   tools only when `ready`, `enabled`, and `vault_match` are true, and pass that absolute path as

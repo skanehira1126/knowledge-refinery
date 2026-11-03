@@ -1,3 +1,4 @@
+import io
 import json
 from pathlib import Path
 
@@ -6,6 +7,66 @@ import yaml
 
 from knowledge_refinery.cli import build_parser
 from knowledge_refinery.cli import main
+from knowledge_refinery.vault_ops import init_vault
+from knowledge_refinery.vault_ops import setup_project
+
+
+def test_context_show_uses_session_project_and_preserves_body(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    vault = tmp_path / "vault"
+    repo = tmp_path / "data"
+    cwd = repo / "analysis"
+    cwd.mkdir(parents=True)
+    init_vault(vault)
+    monkeypatch.setenv("REFINERY_VAULT", str(vault))
+    setup_project(repo, vault, project_id="data")
+    path = vault / "projects/data/context.md"
+    body = "注文数の空欄は未収集。\n\n  集計時にゼロ補完しない。"
+    path.write_text(body, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"cwd": str(cwd)})))
+    assert main(["context", "show", "--hook-input"]) == 0
+    assert capsys.readouterr() == (body, "")
+
+    monkeypatch.chdir(cwd)
+    assert main(["context", "show"]) == 0
+    assert capsys.readouterr() == (body, "")
+    other = tmp_path / "other"
+    init_vault(other)
+    monkeypatch.setenv("REFINERY_VAULT", str(other))
+    assert main(["context", "show"]) != 0
+    out, err = capsys.readouterr()
+    assert not out and err
+
+
+def test_context_show_is_silent_without_applicable_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    vault = tmp_path / "vault"
+    repo = tmp_path / "data"
+    repo.mkdir()
+    init_vault(vault)
+    monkeypatch.setenv("REFINERY_VAULT", str(vault))
+    setup_project(repo, vault, project_id="data")
+    monkeypatch.chdir(repo)
+    path = vault / "projects/data/context.md"
+    assert main(["context", "show"]) == 0
+    assert not path.exists()
+    assert capsys.readouterr() == ("", "")
+    path.write_text(" \n\t", encoding="utf-8")
+    assert main(["context", "show"]) == 0
+    assert capsys.readouterr() == ("", "")
+
+    path.write_text("parent context", encoding="utf-8")
+    nested = repo / "nested"
+    (nested / ".git").mkdir(parents=True)
+    assert main(["context", "show", "--project", str(nested)]) == 0
+    assert capsys.readouterr() == ("", "")
+    assert main(["project", "disable", "--target", str(repo)]) == 0
+    capsys.readouterr()
+    assert main(["context", "show"]) == 0
+    assert capsys.readouterr() == ("", "")
 
 
 def test_parser_rejects_removed_deep_search_command(capsys: pytest.CaptureFixture[str]) -> None:
@@ -589,7 +650,7 @@ def test_cli_can_disable_status_and_reenable_project(
     assert drift["runtime"][-1] == {
         "name": "version_match",
         "ok": False,
-        "detail": "cli=0.7.1, mcp=0.1.0",
+        "detail": "cli=0.7.2, mcp=0.1.0",
     }
 
 

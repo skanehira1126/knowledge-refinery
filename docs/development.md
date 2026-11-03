@@ -12,7 +12,7 @@ bash scripts/validate.sh
 - `mkdocs build --strict`
 - 配布構成とPlugin/Python versionの整合性検査
 - Plugin manifest validator
-- 6つの配布Skill validator
+- 7つの配布Skillの検証
 
 `CODEX_HOME` が未設定の場合は `~/.codex` を使います。
 ローカルのpytestは選択中のPythonで実行し、CIではPython 3.11・3.12・3.13・3.14を検証します。

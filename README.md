@@ -63,12 +63,17 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 - 成功、失敗、不採用案をexperienceとして記録する
 - experienceから再利用可能なproject memoryとshared memoryを抽出する
 - 現在のrepoから、必要に応じて他repoのknowledgeまで検索する
+- 新規チャットの開始時と履歴圧縮後に、vaultの短い[プロジェクトコンテキスト](docs/cli.md#context)をCodexへ渡す
 - 任意でCodexを使い、中央vaultの検証済みsnapshotから根拠付きの深い検索を行う
 - repoごとに利用を無効化・再有効化する
 - 中央vaultを独立したGit repositoryとして履歴管理する
 - 中央vaultを直接開き、project登録なしで横断検索・棚卸し・承認済みの知識更新を行う
 - 特定の作業の状態をhandoffに保存し、新しいチャットで再評価して再開する
 - `refinery-issue` SkillやCLIで独立したissueを管理し、複数projectの紐付け、進捗・タグ・更新履歴を追跡する
+
+初期コンテキストを整えるときは「`$refinery-curate-context` を使って、このprojectの既存ナレッジから
+分析の前提を数行に絞り、`context.md` に反映してください」と依頼します。候補だけの提案にも対応します。
+使い方は [refinery-curate-context](docs/skills/refinery-curate-context.md) を参照してください。
 
 ## 課題を管理する
 

@@ -14,6 +14,7 @@ from knowledge_refinery import get_version  # noqa: E402
 
 
 EXPECTED_SKILLS = {
+    "refinery-curate-context",
     "refinery-project",
     "refinery-experience",
     "refinery-memory",
@@ -96,14 +97,16 @@ def _validate_skills() -> None:
         default_prompt = interface.get("default_prompt")
         if not isinstance(default_prompt, str) or f"${name}" not in default_prompt:
             raise ValueError(f"Skill default prompt must invoke ${name}")
-        if name == "refinery-handoff":
-            _validate_handoff_skill(agent)
+        if name in {"refinery-handoff", "refinery-curate-context"}:
+            _validate_explicit_skill(name, agent)
 
 
-def _validate_handoff_skill(agent: dict[str, object]) -> None:
+def _validate_explicit_skill(name: str, agent: dict[str, object]) -> None:
     policy = agent.get("policy")
     if not isinstance(policy, dict) or policy.get("allow_implicit_invocation") is not False:
-        raise ValueError("refinery-handoff must require explicit invocation")
+        raise ValueError(f"{name} must require explicit invocation")
+    if name != "refinery-handoff":
+        return
     for reference in ("create.md", "resume.md", "cleanup.md"):
         if not (ROOT / "skills/refinery-handoff/references" / reference).is_file():
             raise ValueError(f"Handoff workflow reference is missing: {reference}")

@@ -82,5 +82,6 @@ nav:
       - refinery-maintenance: skills/refinery-maintenance.md
       - refinery-handoff: skills/refinery-handoff.md
       - refinery-issue: skills/refinery-issue.md
+      - refinery-curate-context: skills/refinery-curate-context.md
   - コントリビューション:
       - 開発・リリース: development.md

@@ -12,7 +12,7 @@ flowchart TB
     end
 
     subgraph Plugin["Global Plugin"]
-        SK["6 Skills<br/>handoffは明示呼び出し専用"]
+        SK["7 Skills<br/>refinery-handoff と refinery-curate-context は明示呼び出し専用"]
         MCP["local stdio MCP"]
     end
 

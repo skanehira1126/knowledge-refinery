@@ -20,6 +20,6 @@ uv run --extra docs mkdocs build --strict
 uv run python scripts/validate_distribution.py
 uv run python "${plugin_creator}/scripts/validate_plugin.py" .
 
-for skill in refinery-project refinery-experience refinery-memory refinery-maintenance refinery-handoff refinery-issue; do
+for skill in refinery-project refinery-experience refinery-memory refinery-maintenance refinery-handoff refinery-issue refinery-curate-context; do
   uv run python "${skill_creator}/scripts/quick_validate.py" "skills/${skill}"
 done

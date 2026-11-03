@@ -12,7 +12,7 @@ flowchart TB
     end
 
     subgraph Plugin["Global Plugin"]
-        SK["5 Skills<br/>handoffは明示呼び出し専用"]
+        SK["6 Skills<br/>handoffは明示呼び出し専用"]
         MCP["local stdio MCP"]
     end
 
@@ -77,7 +77,7 @@ issueはprojectに所有させず、active vault直下の`issues.json`へ独立�
 issueコマンドは保存データのschema・ID重複・履歴を読み込み時に検証します。
 
 `issue_ops.py`がドメイン処理と永続化を所有し、`issue_cli.py`がCLIの入力・出力を担当します。
-今回はローカルCLIのみで提供し、MCP toolsやリモート通信は追加しません。
+`refinery-issue` SkillからローカルCLIを使います。issue専用のMCP toolsやリモート通信はありません。
 ローカルrepoのパスや設定を必要とせず、project IDで紐付けるvault単位の操作です。
 そのためrepoの`enabled`はissueの閲覧・更新権限を表しません。
 

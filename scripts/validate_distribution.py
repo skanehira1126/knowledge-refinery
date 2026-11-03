@@ -19,6 +19,7 @@ EXPECTED_SKILLS = {
     "refinery-memory",
     "refinery-maintenance",
     "refinery-handoff",
+    "refinery-issue",
 }
 
 

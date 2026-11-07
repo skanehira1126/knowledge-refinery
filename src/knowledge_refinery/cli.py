@@ -40,6 +40,7 @@ from knowledge_refinery.handoff_ops import delete_handoff_at
 from knowledge_refinery.handoff_ops import list_handoffs_at
 from knowledge_refinery.handoff_ops import read_handoff_at
 from knowledge_refinery.issue_cli import configure_issue_parser
+from knowledge_refinery.session_cli import configure_session_parser
 from knowledge_refinery.tag_ops import browse_knowledge_tags
 from knowledge_refinery.tag_ops import search_knowledge_tags
 from knowledge_refinery.tag_ops import update_tag_description
@@ -68,6 +69,9 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     configure_issue_parser(subparsers.add_parser("issue", help="Manage vault-wide issues"))
+    configure_session_parser(
+        subparsers.add_parser("session", help="Extract local session evidence")
+    )
 
     context_parser = subparsers.add_parser("context", help="Read project domain context")
     context_commands = context_parser.add_subparsers(required=True)

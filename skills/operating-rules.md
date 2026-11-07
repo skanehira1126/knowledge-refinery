@@ -11,6 +11,9 @@ authorization, and completion; each `SKILL.md` owns its task-specific workflow.
 - A search-only, diagnosis-only, or proposal-only request is read-only. Do not also record knowledge, update
   metadata or tags, repair configuration, or enable a tool. Record experience or project memory
   when explicitly requested or authorized by the repository's opted-in managed guidance.
+- Session review and improvement proposals run on the Codex host. Local extraction and reports
+  need no vault or repo-status preflight; they do not grant knowledge-write permission. Apply the
+  repo-scoped gate only when accessing existing knowledge through the relevant skill.
 - Handoff operations use the explicitly invoked `refinery-handoff` skill. Its snapshots are
   separate from experience/memory and are not covered by automatic knowledge recording or search.
   Archive and deletion follow the current request's targets and conditions; a prior handoff is

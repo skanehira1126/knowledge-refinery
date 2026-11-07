@@ -127,3 +127,13 @@ handoffはprojectごとの専用領域に保存され、通常のexperience／me
 - [トラブルシューティング](docs/troubleshooting.md)
 
 開発時の検証は`bash scripts/validate.sh`でまとめて実行できます。
+
+## セッション解析と改善提案
+
+`$knowledge-refinery:refinery-review-session` を明示して終了済みセッションを解析し、
+`$knowledge-refinery:refinery-propose-improvements` を明示してレポートからSkill・既存CLI拡張・
+AGENTS.md・既存機能の再利用・見送りを比較できます。
+解析はCodex側で行い、ローカル抽出は `knowledge-refinery session extract` を使います。
+vault設定やMCP接続は不要です。知見の検索・保存は既存の利用条件に従い、レポートを自動保存しません。
+使い方は[セッション解析](docs/skills/refinery-review-session.md)と
+[改善提案](docs/skills/refinery-propose-improvements.md)を参照してください。

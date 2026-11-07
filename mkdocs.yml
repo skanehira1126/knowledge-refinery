@@ -73,6 +73,7 @@ nav:
       - トラブルシューティング: troubleshooting.md
   - リファレンス:
       - CLI: cli.md
+      - セッション解析JSON: session-analysis.md
       - MCP tools: mcp.md
       - YAML schema: schema.md
       - Skills: skills/README.md
@@ -83,5 +84,7 @@ nav:
       - refinery-handoff: skills/refinery-handoff.md
       - refinery-issue: skills/refinery-issue.md
       - refinery-curate-context: skills/refinery-curate-context.md
+      - refinery-review-session: skills/refinery-review-session.md
+      - refinery-propose-improvements: skills/refinery-propose-improvements.md
   - コントリビューション:
       - 開発・リリース: development.md

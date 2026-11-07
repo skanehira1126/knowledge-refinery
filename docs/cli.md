@@ -216,3 +216,23 @@ knowledge-refinery issue show "$ISSUE_ID" --json
 全体への操作なので、特定issueだけ変更する場合は`issue update`を使います。
 未使用タグの登録や説明管理は提供しません。既存の`tag browse/search/describe`は
 experience／memory用であり、issueタグには影響しません。
+
+## session
+
+Codexホストでローカルログを抽出・検索・集計します。vault設定とMCP接続は不要です。
+
+```bash
+knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/analysis.json
+knowledge-refinery session extract /path/to/rollout.jsonl --include-children --output /tmp/tree.json
+knowledge-refinery session search /tmp/analysis.json --tool exec_command
+knowledge-refinery session search /tmp/analysis.json --skill refinery-experience
+knowledge-refinery session show /tmp/analysis.json --call-id call-001 --before 2 --after 2
+knowledge-refinery session stats /tmp/tree.json --include-children
+```
+
+保存時は本文を切り詰めず、表示時にlimit・offset・max-charsで範囲を選びます。
+未知形式・追加キーはunparsedへ保持し、reasoning本文・暗号化内容は除外します。
+出力先は新規ファイルだけで、stdoutは短い保存結果です。正常はexit 0、不正引数・I/O失敗・
+metadata欠落／混在・読取中の更新はexit 2。不正JSONの行は警告と原文を保存するためexit 0でも完全解析とは限りません。
+
+スキーマ、検索条件、重複・親子関係・件数の定義は[セッション解析JSONとCLI](session-analysis.md)を参照してください。

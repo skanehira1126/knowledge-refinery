@@ -15,6 +15,8 @@ from knowledge_refinery import get_version  # noqa: E402
 
 EXPECTED_SKILLS = {
     "refinery-curate-context",
+    "refinery-review-session",
+    "refinery-propose-improvements",
     "refinery-project",
     "refinery-experience",
     "refinery-memory",
@@ -97,7 +99,12 @@ def _validate_skills() -> None:
         default_prompt = interface.get("default_prompt")
         if not isinstance(default_prompt, str) or f"${name}" not in default_prompt:
             raise ValueError(f"Skill default prompt must invoke ${name}")
-        if name in {"refinery-handoff", "refinery-curate-context"}:
+        if name in {
+            "refinery-handoff",
+            "refinery-curate-context",
+            "refinery-review-session",
+            "refinery-propose-improvements",
+        }:
             _validate_explicit_skill(name, agent)
 
 

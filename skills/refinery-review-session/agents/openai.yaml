@@ -1,0 +1,4 @@
+interface:
+  default_prompt: "$refinery-review-session を使って、指定した資料を根拠付きで検討してください。"
+policy:
+  allow_implicit_invocation: false

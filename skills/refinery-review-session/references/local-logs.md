@@ -11,7 +11,7 @@
 ## ローカルCLIで抽出する
 
 Codexが動作するホストで既存CLIを実行する。MCPサーバーへローカルログを読ませない。
-仕様・フィールド・検索条件の詳細が必要なら[解析JSON仕様](../../../docs/session-analysis.md)を読む。
+出力のフィールド・検索条件・件数の解釈が必要なら[解析JSONの読み方](session-analysis.md)を読む。
 
 ```bash
 knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/session-analysis.json

@@ -13,6 +13,11 @@ from knowledge_refinery.session_query import session_stats
 from knowledge_refinery.session_query import show_records
 
 
+@pytest.fixture(autouse=True)
+def isolated_codex_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+
+
 def record(kind: str, **payload: Any) -> dict[str, Any]:
     return {"type": kind, "timestamp": "2026-11-07T00:00:00Z", "payload": payload}
 
@@ -250,7 +255,7 @@ def test_subagents_scope_missing_logs_and_same_call_ids(tmp_path: Path) -> None:
         call(),
         output(),
     )
-    child = write_log(
+    write_log(
         logs / "child.jsonl",
         meta("child", "parent"),
         call(),
@@ -266,14 +271,11 @@ def test_subagents_scope_missing_logs_and_same_call_ids(tmp_path: Path) -> None:
     assert {c["chat_id"] for c in bundle["chats"]} == {"parent", "child", "grand"}
     assert {c["session_id"] for c in bundle["chats"]} == {"shared"}
     assert all(link["status"] == "matched" for link in bundle["child_links"])
-    assert session_stats(bundle)["calls"] == 2
-    assert session_stats(bundle, include_children=True)["calls"] == 5
-    assert session_stats(bundle, chat_id="child", include_children=True)["calls"] == 3
-    result = search_records(bundle, filters={"call_id": "c1"}, include_children=True)
+    assert session_stats(bundle, include_children=False)["calls"] == 2
+    assert session_stats(bundle)["calls"] == 5
+    assert session_stats(bundle, chat_id="child")["calls"] == 3
+    result = search_records(bundle, filters={"call_id": "c1"})
     assert result["total"] == 6
-    explicit = extract_session(parent, children=[child])
-    assert len(explicit["chats"]) == 2
-    assert any(link["status"] == "not_loaded" for link in explicit["child_links"])
 
 
 def test_show_neighbors_related_ids_and_paging(tmp_path: Path) -> None:
@@ -354,15 +356,12 @@ def test_concurrent_change_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         extract_session(path)
 
 
-def test_unrelated_and_conflicting_child_sources_rejected(tmp_path: Path) -> None:
+def test_conflicting_discovered_child_sources_rejected(tmp_path: Path) -> None:
     parent = write_log(tmp_path / "parent.jsonl", meta("parent"))
-    unrelated = write_log(tmp_path / "unrelated.jsonl", meta("other"))
-    with pytest.raises(ValueError, match="not a verified descendant"):
-        extract_session(parent, children=[unrelated])
-    child = write_log(tmp_path / "child.jsonl", meta("child", "parent"))
-    conflict = write_log(tmp_path / "conflict.jsonl", meta("child", "parent"), call())
+    write_log(tmp_path / "child.jsonl", meta("child", "parent"))
+    write_log(tmp_path / "conflict.jsonl", meta("child", "parent"), call())
     with pytest.raises(ValueError, match="Conflicting rollout"):
-        extract_session(parent, children=[child, conflict])
+        extract_session(parent, discovery_roots=[tmp_path])
 
 
 def test_explicit_event_ids_and_async_process_references(tmp_path: Path) -> None:
@@ -446,7 +445,6 @@ def test_cli_child_discovery_and_same_chat_neighbors(
                 "session",
                 "extract",
                 str(parent),
-                "--include-children",
                 "--sessions-dir",
                 str(logs),
                 "--output",
@@ -476,7 +474,7 @@ def test_cli_child_discovery_and_same_chat_neighbors(
     )
     view = json.loads(capsys.readouterr().out)
     assert all(r["chat_id"] == "child" for r in view["neighbors"])
-    assert main(["session", "stats", str(target), "--include-children"]) == 0
+    assert main(["session", "stats", str(target)]) == 0
     assert json.loads(capsys.readouterr().out)["calls"] == 2
 
 
@@ -548,9 +546,58 @@ def test_cli_archive_discovery_requires_explicit_root(
     write_log(sessions / "child.jsonl", meta("child", "parent"))
     write_log(archive / "archived.jsonl", meta("archived", "parent"))
     target = tmp_path / "analysis.json"
-    args = ["session", "extract", str(parent), "--include-children", "--output", str(target)]
+    args = ["session", "extract", str(parent), "--output", str(target)]
     if include_archive:
         args.extend(["--sessions-dir", str(sessions), "--sessions-dir", str(archive)])
     assert main(args) == 0
     chats = {chat["chat_id"] for chat in json.loads(target.read_text())["chats"]}
     assert chats == ({"parent", "child", "archived"} if include_archive else {"parent", "child"})
+
+
+@pytest.mark.parametrize("command", ["search", "show", "stats"])
+@pytest.mark.parametrize(
+    ("scope", "expected"),
+    [
+        ([], {"parent", "child", "grand"}),
+        (["--exclude-children"], {"parent"}),
+        (["--chat-id", "child"], {"child", "grand"}),
+        (["--chat-id", "child", "--exclude-children"], {"child"}),
+    ],
+)
+def test_cli_query_descendant_scope(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+    scope: list[str],
+    expected: set[str],
+) -> None:
+    logs = tmp_path / "codex" / "sessions"
+    parent = write_log(logs / "parent.jsonl", meta("parent"), call(), output())
+    write_log(logs / "child.jsonl", meta("child", "parent"), call(), output())
+    write_log(logs / "grand.jsonl", meta("grand", "child"), call(), output())
+    target = tmp_path / "analysis.json"
+    assert main(["session", "extract", str(parent), "--output", str(target)]) == 0
+    assert json.loads(capsys.readouterr().out)["chats"] == 3
+    filters = ["--call-id", "c1"] if command == "show" else []
+    assert main(["session", command, str(target), *scope, *filters]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert set(result["chat_ids"]) == expected
+    if command == "stats":
+        assert result["calls"] == len(expected)
+    else:
+        assert {r["chat_id"] for r in result["records"]} == expected
+
+
+def test_cli_extract_excludes_descendants(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    logs = tmp_path / "codex" / "sessions"
+    parent = write_log(logs / "parent.jsonl", meta("parent"), call(), output())
+    write_log(logs / "child.jsonl", meta("child", "parent"), call(), output())
+    target = tmp_path / "analysis.json"
+    args = ["session", "extract", str(parent), "--exclude-children", "--output", str(target)]
+    assert main([*args, "--sessions-dir", str(logs)]) == 2
+    assert not target.exists()
+    capsys.readouterr()
+    assert main(args) == 0
+    assert {c["chat_id"] for c in json.loads(target.read_text())["chats"]} == {"parent"}

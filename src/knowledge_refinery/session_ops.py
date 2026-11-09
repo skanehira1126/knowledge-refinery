@@ -518,17 +518,13 @@ def discover_children(roots: list[Path], parent_id: str) -> list[Path]:
     return sorted(selected)
 
 
-def extract_session(
-    path: Path, *, children: list[Path] | None = None, discovery_roots: list[Path] | None = None
-) -> dict[str, Any]:
-    """Build an analysis bundle from a root chat and explicitly selected descendants."""
+def extract_session(path: Path, *, discovery_roots: list[Path] | None = None) -> dict[str, Any]:
+    """Build an analysis bundle from a root chat and descendants found in discovery roots."""
     from knowledge_refinery.session_links import build_links
 
     root = read_rollout(path)
     root_id = root["chat"]["chat_id"]
-    paths = list(children or [])
-    if discovery_roots is not None:
-        paths.extend(discover_children(discovery_roots, root_id))
+    paths = discover_children(discovery_roots, root_id) if discovery_roots is not None else []
     loaded = {root_id: root}
     warnings = []
     for child_path in dict.fromkeys(p.expanduser().resolve() for p in paths):

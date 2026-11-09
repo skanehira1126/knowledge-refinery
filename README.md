@@ -135,6 +135,7 @@ handoffはprojectごとの専用領域に保存され、通常のexperience／me
 AGENTS.md・既存機能の再利用・見送りを比較できます。
 解析はCodex側で行い、`knowledge-refinery session` CLIを必須とします。
 ローカル抽出には `knowledge-refinery session extract` を使います。
+extract/search/show/statsは既定で子孫を含め、`--exclude-children`で起点のチャットだけに限定します。
 vault設定やMCP接続は不要です。知見の検索・保存は既存の利用条件に従い、レポートを自動保存しません。
 使い方は[セッション解析](docs/skills/refinery-review-session.md)と
 [改善提案](docs/skills/refinery-propose-improvements.md)を参照してください。

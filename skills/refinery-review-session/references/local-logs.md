@@ -15,7 +15,7 @@ Codexが動作するホストで `knowledge-refinery session` を使う。未導
 `uv tool install git+https://github.com/skanehira1126/knowledge-refinery.git`、
 sessionコマンドがない古い版なら `uv tool upgrade knowledge-refinery` で導入・更新する。
 CLIが利用可能になってから抽出へ進む。MCPサーバーへローカルログを読ませない。
-出力のフィールド・検索条件・件数の解釈が必要なら[解析JSONの読み方](session-analysis.md)を読む。
+引数・既定値・出力の解釈は[CLIと解析JSONの読み方](session-analysis.md)を参照する。
 
 ```bash
 knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/session-analysis.json
@@ -40,11 +40,13 @@ searchのヒット件数やラッパー内のコード中の呼出し数を実�
 
 ## サブエージェント
 
-依頼範囲に子の内部分析が必要な場合はextractのinclude-children、またはchildで対象ログを追加する。
+extractは既定で対象チャットの子孫も探索・保存する。親だけを対象にする場合は
+`--exclude-children` を指定する。
 自動探索の既定は `sessions/` のみ。アーカイブも対象とする明示依頼では
 `--sessions-dir` に必要な探索先を指定する。
 子孫のmetadataで親IDを確認し、チャット固有IDと共有session IDを区別する。
-検索・集計は既定でrootだけ。chat-idで子を選び、include-childrenで取得済み子孫を含める。
+search/show/statsも既定で取得済み子孫を含める。`--chat-id`で起点を選び、
+`--exclude-children`でそのチャットだけに限定する。
 親子を含む集計か親だけかをレポートに明記する。child_linksのnot_loaded／ambiguousを確認し、
 未取得の子を「0回」としない。継承した親の履歴はcontext_onlyとして件数から除かれる。
 ownership_unresolvedなら子の実行回数を断定せず、必要な前提はinclude-contextで読む。

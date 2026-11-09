@@ -12,13 +12,10 @@ MCPによるローカルセッション読取は行わず、vaultの設定・接
 
 ```bash
 knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/analysis.json
-knowledge-refinery session extract /path/to/rollout.jsonl --include-children --output /tmp/tree.json
+knowledge-refinery session extract /path/to/rollout.jsonl --exclude-children --output /tmp/root.json
 # 探索場所を指定する場合。複数指定可能
-knowledge-refinery session extract /path/to/rollout.jsonl --include-children \
+knowledge-refinery session extract /path/to/rollout.jsonl \
   --sessions-dir /path/to/sessions --sessions-dir /path/to/archived_sessions --output /tmp/tree.json
-# 子のログを明示する場合。孫を含めるには途中の親も指定する
-knowledge-refinery session extract /path/to/rollout.jsonl --child /path/to/child.jsonl \
-  --output /tmp/selected.json
 ```
 
 `--output`は必須です。本文を切り詰めず、既存ファイル・symlinkへの上書きを拒否し、
@@ -125,11 +122,11 @@ child_linksのstatusはmatched / metadata_only / not_loaded / ambiguousです。
 子ログがなくても親の起動記録を残し、子の呼出し数を0回と断定しません。
 metadataで親子関係が確認でき、起動元だけ不明ならmetadata_onlyです。
 
-自動探索は`--include-children`を指定したときだけ行います。既定はCODEX_HOME（未設定なら~/.codex）の
+子孫は既定で自動探索します。`--exclude-children`で起点のチャットだけ抽出します。既定はCODEX_HOME（未設定なら~/.codex）の
 sessionsだけで、各JSONLの先頭metadataだけ読み、親IDで子孫を絞ってから本文を読みます。
 archived_sessionsも探す場合は、上の例のように `--sessions-dir` で明示します。
 先頭行がmetadataでないファイルや読取不可の候補は発見できないため、探索の完全性は保証しません。
-`--child`による明示入力も使えます。複数の異なるログが同一chat IDを持つ場合は、自動選択せずエラーにします。
+`--sessions-dir`は既定の探索先を置き換えます。`--exclude-children`とは併用できません。複数の異なるログが同一chat IDを持つ場合は、自動選択せずエラーにします。
 一致する複製は1チャットにまとめ、duplicate_source警告を残します。
 
 ### 子に引き継がれた親の履歴
@@ -152,11 +149,12 @@ knowledge-refinery session search /tmp/analysis.json --skill refinery-experience
 knowledge-refinery session search /tmp/analysis.json --text timeout --limit 10 --offset 0
 knowledge-refinery session show /tmp/analysis.json --call-id call-001 --before 2 --after 2
 knowledge-refinery session show /tmp/analysis.json --record-id 'chat-id:L12' --max-chars 8000
-knowledge-refinery session search /tmp/tree.json --chat-id child-id --include-children --kind call
+knowledge-refinery session search /tmp/tree.json --chat-id child-id --kind call
 knowledge-refinery session search /tmp/analysis.json --kind unparsed --include-unparsed
 ```
 
-既定の対象はrootだけ。`--chat-id`で別チャット、`--include-children`で取得済み子孫も対象にします。
+既定の対象はrootと取得済みの子孫です。`--chat-id`で別チャットを起点に選び、
+`--exclude-children`で選んだチャットだけを対象にします。
 未取得の子ログを検索時に読み足しません。record/call/item/turn IDは専用optionで区別し、複数ヒットを隠しません。
 ツール名（namespaceを含む）は完全一致、Skillは短い名前またはplugin:skillの完全一致です。本文は大文字・小文字を区別する部分一致。
 指定したfilterはAND条件です。重複記録は既定で検索対象外、`--include-duplicates`で含めます。
@@ -174,8 +172,8 @@ limit既定20、offset既定0、max-chars既定2000で、previewだけを短縮�
 
 ```bash
 knowledge-refinery session stats /tmp/analysis.json
-knowledge-refinery session stats /tmp/tree.json --include-children
-knowledge-refinery session stats /tmp/tree.json --chat-id child-id --include-children
+knowledge-refinery session stats /tmp/tree.json --exclude-children
+knowledge-refinery session stats /tmp/tree.json --chat-id child-id
 ```
 
 callsは重複を除いた呼出し要求の数です。ツール別にcalls・with_result・missing_result・ambiguous、

@@ -10,6 +10,7 @@ $knowledge-refinery:refinery-review-session を使い、終了済みセッショ
 
 ID・リンク・ログパスを受け、アプリは対象・終了状態の確認に使います。
 解析には[既存CLI](../session-analysis.md)が必須で、未導入・古い版なら導入・更新します。
+4コマンドとも既定で子孫を含め、`--exclude-children`で起点のチャットだけに限定します。
 ローカルログを全文保存し、search/showで必要な根拠を読み、statsで集計します。解析はCodex側で行い、
 MCPサーバーにログを読ませません。vault未設定・連携無効でもローカル解析は利用できます。
 

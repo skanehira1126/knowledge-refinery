@@ -22,10 +22,7 @@ def configure_session_parser(parser: argparse.ArgumentParser) -> None:
         "--output", type=Path, required=True, help="new private analysis JSON file"
     )
     extract.add_argument(
-        "--child", type=Path, action="append", default=[], help="explicit descendant rollout"
-    )
-    extract.add_argument(
-        "--include-children", action="store_true", help="discover descendant metadata"
+        "--exclude-children", action="store_true", help="extract only the root chat"
     )
     extract.add_argument(
         "--sessions-dir",
@@ -34,25 +31,21 @@ def configure_session_parser(parser: argparse.ArgumentParser) -> None:
         help="discovery root (repeatable; defaults to CODEX_HOME/sessions)",
     )
     extract.set_defaults(handler=run_session_extract)
-    for name in ("search", "show", "stats"):
-        command = commands.add_parser(name, help=f"{name.title()} saved analysis evidence")
-        command.add_argument("path", type=Path, help="saved analysis JSON")
-        command.add_argument("--chat-id", help="chat to query (defaults to root chat)")
-        command.add_argument(
-            "--include-children", action="store_true", help="include loaded descendants"
-        )
-        command.set_defaults(handler=run_session_query, operation=name)
-        if name != "stats":
-            _query_options(command, show=name == "show")
 
-
-def _query_options(parser: argparse.ArgumentParser, *, show: bool) -> None:
-    ids = parser.add_mutually_exclusive_group(required=show)
-    for name in ("record-id", "call-id", "item-id", "turn-id"):
-        ids.add_argument("--" + name)
-    parser.add_argument("--tool", help="exact call name or server/tool for an MCP execution event")
-    parser.add_argument("--skill", help="exact skill name or plugin:skill")
-    parser.add_argument(
+    search = commands.add_parser("search", help="Find records in saved analysis JSON")
+    search.add_argument("path", type=Path, help="saved analysis JSON")
+    search.add_argument("--chat-id", help="scope root (defaults to the extracted root chat)")
+    search.add_argument(
+        "--exclude-children", action="store_true", help="query only the selected chat"
+    )
+    search_ids = search.add_mutually_exclusive_group(required=False)
+    search_ids.add_argument("--record-id")
+    search_ids.add_argument("--call-id")
+    search_ids.add_argument("--item-id")
+    search_ids.add_argument("--turn-id")
+    search.add_argument("--tool", help="exact call name or server/tool for an MCP execution event")
+    search.add_argument("--skill", help="exact skill name or plugin:skill")
+    search.add_argument(
         "--skill-kind",
         choices=[
             "named_reference",
@@ -62,39 +55,93 @@ def _query_options(parser: argparse.ArgumentParser, *, show: bool) -> None:
             "path_reference",
         ],
     )
-    parser.add_argument("--kind", choices=sorted(KINDS))
-    parser.add_argument("--text", help="literal, case-sensitive search in known evidence text")
-    parser.add_argument(
+    search.add_argument("--kind", choices=sorted(KINDS))
+    search.add_argument("--text", help="literal, case-sensitive search in known evidence text")
+    search.add_argument(
         "--include-unparsed", action="store_true", help="explicitly expose/search unparsed text"
     )
-    parser.add_argument("--include-duplicates", action="store_true")
-    parser.add_argument(
+    search.add_argument("--include-duplicates", action="store_true")
+    search.add_argument(
         "--include-context",
         action="store_true",
         help="include inherited or unowned context records",
     )
-    parser.add_argument("--limit", type=int, default=20)
-    parser.add_argument("--offset", type=int, default=0)
-    parser.add_argument(
+    search.add_argument("--limit", type=int, default=20)
+    search.add_argument("--offset", type=int, default=0)
+    search.add_argument(
         "--max-chars",
         type=int,
         default=2000,
         help="preview limit per record; does not alter saved data",
     )
-    if show:
-        parser.add_argument("--before", type=int, default=0)
-        parser.add_argument("--after", type=int, default=0)
+    search.set_defaults(handler=run_session_query, operation="search")
+
+    show = commands.add_parser(
+        "show", help="Show identified records, neighbors, and related evidence"
+    )
+    show.add_argument("path", type=Path, help="saved analysis JSON")
+    show.add_argument("--chat-id", help="scope root (defaults to the extracted root chat)")
+    show.add_argument(
+        "--exclude-children", action="store_true", help="query only the selected chat"
+    )
+    show_ids = show.add_mutually_exclusive_group(required=True)
+    show_ids.add_argument("--record-id")
+    show_ids.add_argument("--call-id")
+    show_ids.add_argument("--item-id")
+    show_ids.add_argument("--turn-id")
+    show.add_argument("--tool", help="exact call name or server/tool for an MCP execution event")
+    show.add_argument("--skill", help="exact skill name or plugin:skill")
+    show.add_argument(
+        "--skill-kind",
+        choices=[
+            "named_reference",
+            "body_provided",
+            "catalog_entry",
+            "read_candidate",
+            "path_reference",
+        ],
+    )
+    show.add_argument("--kind", choices=sorted(KINDS))
+    show.add_argument("--text", help="literal, case-sensitive search in known evidence text")
+    show.add_argument(
+        "--include-unparsed", action="store_true", help="explicitly expose/search unparsed text"
+    )
+    show.add_argument("--include-duplicates", action="store_true")
+    show.add_argument(
+        "--include-context",
+        action="store_true",
+        help="include inherited or unowned context records",
+    )
+    show.add_argument("--limit", type=int, default=20)
+    show.add_argument("--offset", type=int, default=0)
+    show.add_argument(
+        "--max-chars",
+        type=int,
+        default=2000,
+        help="preview limit per record; does not alter saved data",
+    )
+    show.add_argument("--before", type=int, default=0)
+    show.add_argument("--after", type=int, default=0)
+    show.set_defaults(handler=run_session_query, operation="show")
+
+    stats = commands.add_parser("stats", help="Count calls and evidence in saved analysis JSON")
+    stats.add_argument("path", type=Path, help="saved analysis JSON")
+    stats.add_argument("--chat-id", help="scope root (defaults to the extracted root chat)")
+    stats.add_argument(
+        "--exclude-children", action="store_true", help="query only the selected chat"
+    )
+    stats.set_defaults(handler=run_session_query, operation="stats")
 
 
 def run_session_extract(args: argparse.Namespace) -> int:
     """Save full evidence exclusively and print a compact receipt, not the raw transcript."""
-    if args.sessions_dir and not args.include_children:
-        raise ValueError("--sessions-dir requires --include-children")
+    if args.sessions_dir and args.exclude_children:
+        raise ValueError("--sessions-dir cannot be combined with --exclude-children")
     roots = None
-    if args.include_children:
+    if not args.exclude_children:
         home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
         roots = args.sessions_dir or [home / "sessions"]
-    result = extract_session(args.path, children=args.child, discovery_roots=roots)
+    result = extract_session(args.path, discovery_roots=roots)
     output_path = args.output.expanduser()
     text = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
     fd = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -120,7 +167,7 @@ def run_session_extract(args: argparse.Namespace) -> int:
 def run_session_query(args: argparse.Namespace) -> int:
     """Dispatch read-only query views over a validated analysis bundle."""
     bundle = load_analysis(args.path)
-    scope = {"chat_id": args.chat_id, "include_children": args.include_children}
+    scope = {"chat_id": args.chat_id, "include_children": not args.exclude_children}
     if args.operation == "stats":
         result = session_stats(bundle, **scope)
     else:

@@ -223,12 +223,16 @@ Codexホストでローカルログを抽出・検索・集計します。vault�
 
 ```bash
 knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/analysis.json
-knowledge-refinery session extract /path/to/rollout.jsonl --include-children --output /tmp/tree.json
+knowledge-refinery session extract /path/to/rollout.jsonl --exclude-children --output /tmp/root.json
 knowledge-refinery session search /tmp/analysis.json --tool exec_command
 knowledge-refinery session search /tmp/analysis.json --skill refinery-experience
 knowledge-refinery session show /tmp/analysis.json --call-id call-001 --before 2 --after 2
-knowledge-refinery session stats /tmp/tree.json --include-children
+knowledge-refinery session stats /tmp/tree.json
 ```
+
+4コマンドとも既定で子孫を含め、`--exclude-children`で起点のチャットだけに限定します。
+extractの`--sessions-dir`は子孫の探索先を指定し、省略時は`CODEX_HOME/sessions`です。
+アーカイブは明示指定時だけ探索します。
 
 保存時は本文を切り詰めず、表示時にlimit・offset・max-charsで範囲を選びます。
 未知形式・追加キーはunparsedへ保持し、reasoning本文・暗号化内容は除外します。

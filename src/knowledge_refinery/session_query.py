@@ -87,7 +87,7 @@ def _validate_records(records: dict[str, Any], chats: set[str]) -> None:
 
 
 def selected_chats(
-    bundle: dict[str, Any], chat_id: str | None = None, include_children: bool = False
+    bundle: dict[str, Any], chat_id: str | None = None, include_children: bool = True
 ) -> set[str]:
     """Select one chat or its loaded descendants using explicit parent metadata."""
     selected = {chat_id or bundle["root_chat_id"]}
@@ -169,7 +169,7 @@ def search_records(
     bundle: dict[str, Any],
     *,
     chat_id: str | None = None,
-    include_children: bool = False,
+    include_children: bool = True,
     filters: dict[str, Any] | None = None,
     limit: int = 20,
     offset: int = 0,
@@ -271,7 +271,7 @@ def show_records(
 
 
 def session_stats(
-    bundle: dict[str, Any], *, chat_id: str | None = None, include_children: bool = False
+    bundle: dict[str, Any], *, chat_id: str | None = None, include_children: bool = True
 ) -> dict[str, Any]:
     """Count canonical requests, keeping execution evidence and skill references separate."""
     chats = selected_chats(bundle, chat_id, include_children)

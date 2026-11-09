@@ -3,7 +3,8 @@
 ## 取得
 
 ユーザー指定パスを優先する。IDしかない場合は `CODEX_HOME`（未設定なら `~/.codex`）の
-`sessions/` と `archived_sessions/` 内で、そのIDを含むJSONLのファイル名を探す。
+`sessions/` 内で、そのIDを含むJSONLのファイル名を探す。
+`archived_sessions/` はユーザーがアーカイブを対象として明示した場合だけ探す。
 本文全件検索はせず、発見したファイルの `session_meta` でIDを照合する。
 複数候補を勝手に連結しない。対象ホストにログがない場合はログの提供を依頼する。
 認証ファイルや内部DBを探索する必要はない。
@@ -40,6 +41,8 @@ searchのヒット件数やラッパー内のコード中の呼出し数を実�
 ## サブエージェント
 
 依頼範囲に子の内部分析が必要な場合はextractのinclude-children、またはchildで対象ログを追加する。
+自動探索の既定は `sessions/` のみ。アーカイブも対象とする明示依頼では
+`--sessions-dir` に必要な探索先を指定する。
 子孫のmetadataで親IDを確認し、チャット固有IDと共有session IDを区別する。
 検索・集計は既定でrootだけ。chat-idで子を選び、include-childrenで取得済み子孫を含める。
 親子を含む集計か親だけかをレポートに明記する。child_linksのnot_loaded／ambiguousを確認し、

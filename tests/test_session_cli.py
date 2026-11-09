@@ -535,3 +535,22 @@ def test_tool_namespaces_are_not_merged(tmp_path: Path) -> None:
     bundle = extract_session(source)
     assert {item["tool"] for item in session_stats(bundle)["tools"]} == {"browser.js", "node.js"}
     assert search_records(bundle, filters={"tool": "browser.js"})["total"] == 1
+
+
+@pytest.mark.parametrize("include_archive", [False, True])
+def test_cli_archive_discovery_requires_explicit_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, include_archive: bool
+) -> None:
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    sessions = tmp_path / "sessions"
+    archive = tmp_path / "archived_sessions"
+    parent = write_log(sessions / "parent.jsonl", meta("parent"))
+    write_log(sessions / "child.jsonl", meta("child", "parent"))
+    write_log(archive / "archived.jsonl", meta("archived", "parent"))
+    target = tmp_path / "analysis.json"
+    args = ["session", "extract", str(parent), "--include-children", "--output", str(target)]
+    if include_archive:
+        args.extend(["--sessions-dir", str(sessions), "--sessions-dir", str(archive)])
+    assert main(args) == 0
+    chats = {chat["chat_id"] for chat in json.loads(target.read_text())["chats"]}
+    assert chats == ({"parent", "child", "archived"} if include_archive else {"parent", "child"})

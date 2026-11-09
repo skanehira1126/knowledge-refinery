@@ -28,7 +28,10 @@ def configure_session_parser(parser: argparse.ArgumentParser) -> None:
         "--include-children", action="store_true", help="discover descendant metadata"
     )
     extract.add_argument(
-        "--sessions-dir", type=Path, action="append", help="discovery root (repeatable)"
+        "--sessions-dir",
+        type=Path,
+        action="append",
+        help="discovery root (repeatable; defaults to CODEX_HOME/sessions)",
     )
     extract.set_defaults(handler=run_session_extract)
     for name in ("search", "show", "stats"):
@@ -90,7 +93,7 @@ def run_session_extract(args: argparse.Namespace) -> int:
     roots = None
     if args.include_children:
         home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
-        roots = args.sessions_dir or [home / "sessions", home / "archived_sessions"]
+        roots = args.sessions_dir or [home / "sessions"]
     result = extract_session(args.path, children=args.child, discovery_roots=roots)
     output_path = args.output.expanduser()
     text = json.dumps(result, ensure_ascii=False, indent=2) + "\n"

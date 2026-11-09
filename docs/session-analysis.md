@@ -126,7 +126,8 @@ child_linksのstatusはmatched / metadata_only / not_loaded / ambiguousです。
 metadataで親子関係が確認でき、起動元だけ不明ならmetadata_onlyです。
 
 自動探索は`--include-children`を指定したときだけ行います。既定はCODEX_HOME（未設定なら~/.codex）の
-sessionsとarchived_sessionsで、各JSONLの先頭metadataだけ読み、親IDで子孫を絞ってから本文を読みます。
+sessionsだけで、各JSONLの先頭metadataだけ読み、親IDで子孫を絞ってから本文を読みます。
+archived_sessionsも探す場合は、上の例のように `--sessions-dir` で明示します。
 先頭行がmetadataでないファイルや読取不可の候補は発見できないため、探索の完全性は保証しません。
 `--child`による明示入力も使えます。複数の異なるログが同一chat IDを持つ場合は、自動選択せずエラーにします。
 一致する複製は1チャットにまとめ、duplicate_source警告を残します。

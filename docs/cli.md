@@ -219,7 +219,8 @@ experience／memory用であり、issueタグには影響しません。
 
 ## session
 
-Codexホストでローカルログを抽出・検索・集計します。vault設定とMCP接続は不要です。
+Codexホストでローカルログを抽出・検索・集計します。listは現在の登録済みGitプロジェクトに絞ります。
+`--project PATH`で対象を変更できます。明示ログの抽出・解析JSONの操作は登録不要で、MCP接続も不要です。
 
 ```bash
 knowledge-refinery session list --updated-since 2026-11-07 --updated-before 2026-11-08 --limit 3

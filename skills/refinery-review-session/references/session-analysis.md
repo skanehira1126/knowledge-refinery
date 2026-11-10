@@ -29,11 +29,19 @@ extract/search/show/statsは既定で子孫を含める。`extract`はログを�
 
 | 引数 | 役割・既定値 |
 | --- | --- |
+| `--project PATH` | 対象のRefinery登録済みGit作業ディレクトリ。既定は現在のディレクトリ |
 | `--updated-since DATE` | 更新日時の下限。この時刻を含む。省略すると下限なし |
 | `--updated-before DATE` | 更新日時の上限。この時刻を含まない。省略すると上限なし |
 | `--sessions-dir DIR` | ログの探索先。複数指定可能。既定のCODEX_HOME/sessionsを置き換える |
 | `--limit N` | 一度に返すチャット数。既定20、正の整数 |
 | `--offset N` | 直近順の一覧で飛ばす件数。既定0、0以上 |
+
+listは選んだGit作業ツリーのルートにある有効な `.refinery.yaml` を確認する。
+未登録・無効なら対象一覧を作らずエラーにする。MCP接続やvaultの読取は不要。
+ログのcwdからGit共通ディレクトリを解決し、対象と一致するチャットだけを返す。
+同じリポジトリのworktreeとそのサブディレクトリも対象。削除済みworktree、cwd不明、
+Gitリポジトリでない場所、別cloneは対象外。同じremote URLだけではまとめない。
+対象worktreeに設定がなければ、登録済みの作業ツリーを `--project` に指定する。
 
 更新日時はログファイルのmtimeで、会話内の最終イベント日時や終了状態ではない。
 コピー・復元でも変わり得る。本文を読まず、ファイル情報と先頭metadataから候補を作る。
@@ -45,7 +53,8 @@ extract/search/show/statsは既定で子孫を含める。`extract`はログを�
 `path` は最新ファイル。複数パスがある場合は対象を確認してからextractへ渡す。
 子チャットは親の解析に含めるため候補一覧から除く。アーカイブは明示した探索先だけを使う。
 
-出力の `chats` にchat_id・updated_at・path・paths・cwd、`total` に条件一致した候補数が入る。
+出力の `project_id`・`project_root`・`git_common_dir` で対象を確認する。
+`chats` にchat_id・updated_at・path・paths・cwd、`total` に条件一致した候補数が入る。
 `next_offset` があれば続きがある。`skipped_files` は読取不可・metadata不正等で候補にできなかった数。
 終了済みかどうかは別途確認する。レビュー済みIDの永続管理は行わない。
 

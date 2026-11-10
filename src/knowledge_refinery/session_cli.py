@@ -19,6 +19,12 @@ def configure_session_parser(parser: argparse.ArgumentParser) -> None:
     commands = parser.add_subparsers(required=True)
     listing = commands.add_parser("list", help="List root chats by log modification time")
     listing.add_argument(
+        "--project",
+        type=Path,
+        default=Path("."),
+        help="registered project working directory (default: current directory)",
+    )
+    listing.add_argument(
         "--updated-since",
         help="inclusive lower bound: YYYY-MM-DD (UTC) or ISO timestamp with timezone",
     )
@@ -160,6 +166,7 @@ def run_session_list(args: argparse.Namespace) -> int:
     home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
     result = list_sessions(
         args.sessions_dir or [home / "sessions"],
+        project=args.project,
         updated_since=args.updated_since,
         updated_before=args.updated_before,
         limit=args.limit,

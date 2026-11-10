@@ -134,9 +134,10 @@ handoffはprojectごとの専用領域に保存され、通常のexperience／me
 `$knowledge-refinery:refinery-propose-improvements` を明示してレポートからSkill・既存CLI拡張・
 AGENTS.md・既存機能の再利用・見送りを比較できます。
 解析はCodex側で行い、`knowledge-refinery session` CLIを必須とします。
-`knowledge-refinery session list` で更新日時の範囲から候補を選び、
+`knowledge-refinery session list` で現在の登録済みGitプロジェクト（worktreeを含む）と更新日時から候補を選び、
 ローカル抽出には `knowledge-refinery session extract` を使います。
 extract/search/show/statsは既定で子孫を含め、`--exclude-children`で起点のチャットだけに限定します。
-vault設定やMCP接続は不要です。知見の検索・保存は既存の利用条件に従い、レポートを自動保存しません。
+候補一覧には有効なプロジェクト登録設定が必要です。明示ログの抽出・解析JSONの操作は登録不要です。
+MCP接続は不要です。知見の検索・保存は既存の利用条件に従い、レポートを自動保存しません。
 使い方は[セッション解析](docs/skills/refinery-review-session.md)と
 [改善提案](docs/skills/refinery-propose-improvements.md)を参照してください。

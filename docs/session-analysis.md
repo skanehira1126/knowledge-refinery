@@ -3,7 +3,8 @@
 この文書はKnowledge Refineryが定義する解析用JSONの仕様です。Codexログの公開仕様ではありません。
 元ログはJSONLのまま保持し、CLIが機械的に整理したJSONを解析Skillが読みます。
 CLIはコードを実行せず、Skill遵守・作業の成功・改善先を評価しません。
-MCPによるローカルセッション読取は行わず、vaultの設定・接続も不要です。
+MCPによるローカルセッション読取は行いません。listは有効なプロジェクト登録設定を必要とします。
+明示ログの抽出と保存済みJSONの検索・表示・集計はvault設定・接続を必要としません。
 
 ## 更新日時で対象を選ぶ
 
@@ -15,7 +16,14 @@ knowledge-refinery session list \
   --updated-before 2026-11-08T00:00:00+09:00 --limit 20
 ```
 
-listは親チャットの候補をログファイルの更新日時（mtime）の降順で返します。
+listは現在のRefinery登録済みGitリポジトリに属する親チャットを、ログ更新日時（mtime）の降順で返します。
+`--project PATH`で対象を変更できます。サブディレクトリからの実行も可能です。
+選んだ作業ツリーのルートで有効な `.refinery.yaml` を確認し、未登録・無効ならエラーにします。
+vaultやMCPへの接続は行いません。対象worktreeに設定がなければ登録済み作業ツリーを指定します。
+
+ログのcwdと対象の `git rev-parse --git-common-dir` が一致するものを選びます。
+同じリポジトリのworktreeも含めますが、削除済みworktree、cwd不明、Git外、別cloneは除きます。
+出力のproject_id・project_root・git_common_dirで対象を確認できます。Git SDKの追加依存はありません。
 `--updated-since`は下限以上、`--updated-before`は上限未満。両方省略すれば全期間です。
 日付のみはUTCの0時、日時はタイムゾーン付きISO 8601で指定します。出力日時はUTCです。
 コピー・復元でmtimeが変わることがあり、会話の最終イベント時刻や終了状態の判定には使いません。

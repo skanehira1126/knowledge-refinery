@@ -127,3 +127,12 @@ handoffはprojectごとの専用領域に保存され、通常のexperience／me
 - [トラブルシューティング](docs/troubleshooting.md)
 
 開発時の検証は`bash scripts/validate.sh`でまとめて実行できます。
+
+## セッション解析と改善提案
+
+終了済みチャットの振り返りには[refinery-review-session](docs/skills/refinery-review-session.md)、
+レポートから改善案を比較するには[refinery-propose-improvements](docs/skills/refinery-propose-improvements.md)を
+明示して呼び出します。成果物はローカルのMarkdownで、vaultへ自動保存しません。
+
+候補一覧は現在の登録済みGitプロジェクトとworktreeに絞ります。
+CLIを直接使う場合は[sessionコマンド](docs/cli.md#session)を参照してください。

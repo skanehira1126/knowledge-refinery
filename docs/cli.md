@@ -216,3 +216,123 @@ knowledge-refinery issue show "$ISSUE_ID" --json
 全体への操作なので、特定issueだけ変更する場合は`issue update`を使います。
 未使用タグの登録や説明管理は提供しません。既存の`tag browse/search/describe`は
 experience／memory用であり、issueタグには影響しません。
+
+## session
+
+ローカルのCodexログから解析JSONを作り、必要な記録を検索・表示します。出力はJSONです。
+listは有効なRefinery登録設定を必要とします。明示ログの抽出・解析JSONの操作は登録不要です。
+MCP接続は不要です。レポート作成を依頼する場合は
+[refinery-review-session](skills/refinery-review-session.md)を使ってください。
+
+| コマンド | 入力 | 用途 |
+| --- | --- | --- |
+| `list` | ログのディレクトリ | 更新日時から対象チャットを選ぶ |
+| `extract` | rollout JSONL | 本文と対応関係を解析JSONに保存する |
+| `search` | 解析JSON | 条件に合う記録を探す |
+| `show` | 解析JSON | 特定記録の前後と関連結果を読む |
+| `stats` | 解析JSON | 呼び出し数・ツール別件数・警告を確認する |
+
+### list：対象を選ぶ
+
+```bash
+knowledge-refinery session list \
+  --updated-since 2026-11-07T00:00:00+09:00 \
+  --updated-before 2026-11-08T00:00:00+09:00 --limit 3
+```
+
+現在の登録済みGitプロジェクトから、日本時間11月7日の更新分を直近3件返します。
+更新の基準はログファイルのmtimeです。
+終了済みかどうかは別途確認してください。
+
+| 引数 | 内容 | 既定 |
+| --- | --- | --- |
+| `--project PATH` | 対象の登録済みGit作業ディレクトリ | 現在のディレクトリ |
+| `--updated-since DATE` | 下限以上 | 下限なし |
+| `--updated-before DATE` | 上限未満 | 上限なし |
+| `--sessions-dir DIR` | 探索先を置き換える。複数指定可 | `CODEX_HOME/sessions` |
+| `--limit N` | 返すチャット数。正の整数 | 20 |
+| `--offset N` | 飛ばすチャット数。0以上 | 0 |
+
+対象は現在のリポジトリと、その存在するworktreeです。
+削除済みworktreeや所属を確認できないログは含めません。同じremoteの別cloneも別リポジトリとして扱います。
+
+選んだ作業ツリーのルートには、有効な `.refinery.yaml` が必要です。
+設定のないworktreeから実行する場合は、登録済みの作業ツリーを `--project` に指定してください。
+未登録・無効の場合は、登録・有効化してから実行してください。
+
+`CODEX_HOME` 未設定時は `~/.codex`。アーカイブは `--sessions-dir` で指定した場合だけ探します。
+日付だけの指定はUTCの0時です。日時には `Z` または `+09:00` などのタイムゾーンが必要です。
+
+`chats[].path` をextractへ渡します。同じチャットの複数ログがある場合は `paths` に並ぶため、対象を確認してください。
+一覧は親チャット単位です。`total` と `next_offset` で続きの有無を、`skipped_files` で読取できなかった件数を確認できます。
+limitは返却数の指定で、ファイル情報と先頭metadataの走査数は制限しません。
+
+### extract：解析JSONを保存する
+
+```bash
+knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/analysis.json
+```
+
+| 引数 | 内容 |
+| --- | --- |
+| `path` | 対象チャットのrollout JSONL。必須 |
+| `--output PATH` | 新規JSONの保存先。必須 |
+| `--exclude-children` | 子孫を探さず、対象チャットだけ保存する |
+| `--sessions-dir DIR` | 子孫ログの探索先を置き換える。複数指定可。既定は `CODEX_HOME/sessions` |
+
+既定で子孫も保存します。`--sessions-dir` と `--exclude-children` は併用できません。
+入力は変更せず、既存ファイル・symlinkへの上書きは拒否します。保存先はmode 0600で作成します。
+本文は保存時に切り詰めません。解析JSONは匿名化されないため、公開・Git追跡の対象にしないでください。
+
+### search / show / stats：保存したJSONを読む
+
+```bash
+knowledge-refinery session stats /tmp/analysis.json
+knowledge-refinery session search /tmp/analysis.json --kind call --limit 10
+knowledge-refinery session show /tmp/analysis.json --call-id call-001 --before 2 --after 2
+```
+
+3コマンドとも位置引数に解析JSONのパスを指定します。
+
+| 指定 | 対象範囲 |
+| --- | --- |
+| 指定なし | rootと保存済みの子孫 |
+| `--exclude-children` | rootだけ |
+| `--chat-id ID` | 指定チャットとその子孫 |
+| `--chat-id ID --exclude-children` | 指定チャットだけ |
+
+searchとshowには次の絞り込み・表示引数があります。
+
+| 引数 | 内容 |
+| --- | --- |
+| `--record-id ID` | 解析用記録ID。`<chat_id>:L<元行番号>` |
+| `--call-id ID` / `--item-id ID` / `--turn-id ID` | 元ログの各ID |
+| `--tool NAME` | ツール名の完全一致 |
+| `--skill NAME` | Skill名または `plugin:skill` の完全一致 |
+| `--skill-kind KIND` | Skill参照の種類。`--skill` が必要 |
+| `--kind KIND` | call、result、messageなどの記録種別 |
+| `--text TEXT` | 大文字・小文字を区別する部分一致 |
+| `--limit N` | 返す記録数。既定20、正の整数 |
+| `--offset N` | 飛ばす件数。既定0、0以上 |
+| `--max-chars N` | 各previewの文字数。既定2000、正の整数 |
+| `--include-unparsed` | 未解析原文を検索・表示する |
+| `--include-duplicates` | 重複記録も検索する |
+| `--include-context` | 継承・帰属不明の記録も検索する |
+
+ID指定は4種類のうち1つだけ使え、showでは必須です。他の条件はANDです。
+show専用の `--before N`・`--after N` は、それぞれ前後0〜100記録を指定します。既定は0です。
+
+`next_offset` で続きを取得し、previewの `truncated` が真なら `--max-chars` を増やします。
+showの `related_truncated` が真なら、該当call IDやitem IDでsearchして関連結果を補います。
+前後・関連記録は検索条件で絞られず、前後記録にはlimitも適用されません。
+件数・状態・出力項目の意味は[解析JSONリファレンス](session-analysis.md)を参照してください。
+
+### 終了コード
+
+| コード | 意味・対応 |
+| --- | --- |
+| 0 | 処理成功。extractのwarningsとlistのskipped_filesも確認する |
+| 2 | 引数・I/O・入力形式などのエラー。stderrの原因を解消して再実行する |
+
+extractはmetadata欠落・競合する同一チャットのログ・読取中の更新をエラーにします。
+不正JSONや未知の記録をwarnings付きで保存する場合もあるため、exit 0だけで完全取得とは判断しません。

@@ -1,18 +1,19 @@
 # セッション解析CLIとJSONの読み方
 
 `knowledge-refinery session` が保存した解析JSONを解釈するときに使う。
-利用可能な引数は `knowledge-refinery session <extract|search|show|stats> --help` で確認する。
+利用可能な引数は `knowledge-refinery session <list|extract|search|show|stats> --help` で確認する。
 
 ## コマンドと対象範囲
 
 | コマンド | 入力 | 役割 |
 | --- | --- | --- |
+| `list` | ローカルログのディレクトリ | 更新日時の範囲から親チャットの候補を直近順に選ぶ |
 | `extract` | 起点チャットのrollout JSONL | 子孫ログを探索し、本文と対応関係を解析JSONに保存する |
 | `search` | 解析JSON | 条件に合う記録を探す |
 | `show` | 解析JSON | IDで選んだ記録と、その前後・関連記録を読む |
 | `stats` | 解析JSON | 呼び出し・ツール・チャット別の件数や警告を確認する |
 
-4コマンドとも既定で子孫を含める。`extract`はログを探索・保存し、他3コマンドは
+extract/search/show/statsは既定で子孫を含める。`extract`はログを探索・保存し、他3コマンドは
 保存済みJSONから対象を選ぶ。対象範囲と表示量は別で、search/showは必要な分だけ返す。
 
 | 指定 | search/show/statsの対象 |
@@ -23,6 +24,37 @@
 | `--chat-id ID --exclude-children` | 指定チャットだけ |
 
 ## 引数の早見表
+
+### list
+
+| 引数 | 役割・既定値 |
+| --- | --- |
+| `--updated-since DATE` | 更新日時の下限。この時刻を含む。省略すると下限なし |
+| `--updated-before DATE` | 更新日時の上限。この時刻を含まない。省略すると上限なし |
+| `--sessions-dir DIR` | ログの探索先。複数指定可能。既定のCODEX_HOME/sessionsを置き換える |
+| `--limit N` | 一度に返すチャット数。既定20、正の整数 |
+| `--offset N` | 直近順の一覧で飛ばす件数。既定0、0以上 |
+
+更新日時はログファイルのmtimeで、会話内の最終イベント日時や終了状態ではない。
+コピー・復元でも変わり得る。本文を読まず、ファイル情報と先頭metadataから候補を作る。
+ファイル一覧の走査は行うため、limitは返却数を制限する指定であり走査数の制限ではない。
+
+日付のみの `YYYY-MM-DD` はUTCの0時。日本時間の範囲は `+09:00` 付きで指定する。
+日時指定にはタイムゾーンが必須。範囲は下限以上・上限未満で、隣接期間の境界は重ならない。
+同じチャットIDの複数ログは最新mtimeの1候補にまとめ、全パスを `paths` に残す。
+`path` は最新ファイル。複数パスがある場合は対象を確認してからextractへ渡す。
+子チャットは親の解析に含めるため候補一覧から除く。アーカイブは明示した探索先だけを使う。
+
+出力の `chats` にchat_id・updated_at・path・paths・cwd、`total` に条件一致した候補数が入る。
+`next_offset` があれば続きがある。`skipped_files` は読取不可・metadata不正等で候補にできなかった数。
+終了済みかどうかは別途確認する。レビュー済みIDの永続管理は行わない。
+
+```bash
+# 日本時間11月7日の更新分から直近3件を選ぶ
+knowledge-refinery session list \
+  --updated-since 2026-11-07T00:00:00+09:00 \
+  --updated-before 2026-11-08T00:00:00+09:00 --limit 3
+```
 
 ### extract
 

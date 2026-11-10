@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 
+from knowledge_refinery.session_catalog import list_sessions
 from knowledge_refinery.session_ops import extract_session
 from knowledge_refinery.session_query import KINDS
 from knowledge_refinery.session_query import load_analysis
@@ -16,6 +17,27 @@ from knowledge_refinery.session_query import show_records
 def configure_session_parser(parser: argparse.ArgumentParser) -> None:
     """Register local session commands independently of vault and MCP configuration."""
     commands = parser.add_subparsers(required=True)
+    listing = commands.add_parser("list", help="List root chats by log modification time")
+    listing.add_argument(
+        "--updated-since",
+        help="inclusive lower bound: YYYY-MM-DD (UTC) or ISO timestamp with timezone",
+    )
+    listing.add_argument(
+        "--updated-before",
+        help="exclusive upper bound: YYYY-MM-DD (UTC) or ISO timestamp with timezone",
+    )
+    listing.add_argument(
+        "--sessions-dir",
+        type=Path,
+        action="append",
+        help="log directory (repeatable; replaces default CODEX_HOME/sessions)",
+    )
+    listing.add_argument(
+        "--limit", type=int, default=20, help="maximum chats to return (default: 20)"
+    )
+    listing.add_argument("--offset", type=int, default=0, help="chats to skip (default: 0)")
+    listing.set_defaults(handler=run_session_list)
+
     extract = commands.add_parser("extract", help="Save full rollout evidence as analysis JSON")
     extract.add_argument("path", type=Path, help="root chat's local rollout JSONL")
     extract.add_argument(
@@ -131,6 +153,20 @@ def configure_session_parser(parser: argparse.ArgumentParser) -> None:
         "--exclude-children", action="store_true", help="query only the selected chat"
     )
     stats.set_defaults(handler=run_session_query, operation="stats")
+
+
+def run_session_list(args: argparse.Namespace) -> int:
+    """Print a bounded metadata-only inventory of root chat logs."""
+    home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
+    result = list_sessions(
+        args.sessions_dir or [home / "sessions"],
+        updated_since=args.updated_since,
+        updated_before=args.updated_before,
+        limit=args.limit,
+        offset=args.offset,
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
 
 
 def run_session_extract(args: argparse.Namespace) -> int:

@@ -5,6 +5,32 @@
 CLIはコードを実行せず、Skill遵守・作業の成功・改善先を評価しません。
 MCPによるローカルセッション読取は行わず、vaultの設定・接続も不要です。
 
+## 更新日時で対象を選ぶ
+
+```bash
+knowledge-refinery session list --limit 3
+# 日本時間11月7日の更新分
+knowledge-refinery session list \
+  --updated-since 2026-11-07T00:00:00+09:00 \
+  --updated-before 2026-11-08T00:00:00+09:00 --limit 20
+```
+
+listは親チャットの候補をログファイルの更新日時（mtime）の降順で返します。
+`--updated-since`は下限以上、`--updated-before`は上限未満。両方省略すれば全期間です。
+日付のみはUTCの0時、日時はタイムゾーン付きISO 8601で指定します。出力日時はUTCです。
+コピー・復元でmtimeが変わることがあり、会話の最終イベント時刻や終了状態の判定には使いません。
+
+既定の探索先はCODEX_HOME（未設定なら~/.codex）のsessionsだけです。
+`--sessions-dir`で置き換えられ、複数指定できます。アーカイブは明示指定時だけ探索します。
+全候補のファイル情報と先頭metadataを読み、本文は読みません。
+`--limit`既定20と`--offset`既定0は返却量の指定で、ファイル走査数は制限しません。
+
+`chats`にchat_id・updated_at・path・paths・cwdを返し、`total`・`next_offset`で続きを確認できます。
+同じchat_idの複数ログは最新mtimeで1候補にまとめてから期間で絞ります。`path`は最新ファイル、
+`paths`は全候補です。子チャットは親の解析に含めるため一覧から除きます。
+`scanned_files`は走査したファイル数、`skipped_files`は読取不可・metadata不正等の件数です。
+終了状態の確認と複数パスの選択は抽出前に行います。レビュー済みIDは保存しません。
+
 ## 入力と保存
 
 対象は`session_meta`を持つ単一チャットのrollout JSONLです。`codex exec --json`のイベントストリームや

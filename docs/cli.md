@@ -222,6 +222,7 @@ experience／memory用であり、issueタグには影響しません。
 Codexホストでローカルログを抽出・検索・集計します。vault設定とMCP接続は不要です。
 
 ```bash
+knowledge-refinery session list --updated-since 2026-11-07 --updated-before 2026-11-08 --limit 3
 knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/analysis.json
 knowledge-refinery session extract /path/to/rollout.jsonl --exclude-children --output /tmp/root.json
 knowledge-refinery session search /tmp/analysis.json --tool exec_command
@@ -230,7 +231,8 @@ knowledge-refinery session show /tmp/analysis.json --call-id call-001 --before 2
 knowledge-refinery session stats /tmp/tree.json
 ```
 
-4コマンドとも既定で子孫を含め、`--exclude-children`で起点のチャットだけに限定します。
+listはログ更新日時の範囲から親チャットを直近順に返します。日付のみの指定はUTCです。
+extract/search/show/statsは既定で子孫を含め、`--exclude-children`で起点のチャットだけに限定します。
 extractの`--sessions-dir`は子孫の探索先を指定し、省略時は`CODEX_HOME/sessions`です。
 アーカイブは明示指定時だけ探索します。
 

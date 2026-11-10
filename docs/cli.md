@@ -253,9 +253,12 @@ knowledge-refinery session list \
 | `--limit N` | 返すチャット数。正の整数 | 20 |
 | `--offset N` | 飛ばすチャット数。0以上 | 0 |
 
-対象のGitルートに有効な `.refinery.yaml` が必要です。未登録・無効ならエラーにします。
-同じGit共通ディレクトリのworktreeを含め、削除済みworktree・cwd不明・Git外・別cloneは除きます。
-対象worktreeに設定がなければ、登録済みの作業ツリーを `--project` に指定してください。
+対象は現在のリポジトリと、その存在するworktreeです。
+削除済みworktreeや所属を確認できないログは含めません。同じremoteの別cloneも別リポジトリとして扱います。
+
+選んだ作業ツリーのルートには、有効な `.refinery.yaml` が必要です。
+設定のないworktreeから実行する場合は、登録済みの作業ツリーを `--project` に指定してください。
+未登録・無効の場合は、登録・有効化してから実行してください。
 
 `CODEX_HOME` 未設定時は `~/.codex`。アーカイブは `--sessions-dir` で指定した場合だけ探します。
 日付だけの指定はUTCの0時です。日時には `Z` または `+09:00` などのタイムゾーンが必要です。

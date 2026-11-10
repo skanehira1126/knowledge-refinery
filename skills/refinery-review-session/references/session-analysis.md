@@ -1,6 +1,6 @@
-# セッション解析CLIとJSONの読み方
+# セッション解析CLI早見表
 
-`knowledge-refinery session` が保存した解析JSONを解釈するときに使う。
+引数を選ぶときと、CLI出力を解釈するときに使う。
 利用可能な引数は `knowledge-refinery session <list|extract|search|show|stats> --help` で確認する。
 
 ## コマンドと対象範囲
@@ -35,19 +35,11 @@ extract/search/show/statsは既定で子孫を含める。`extract`はログを�
 | `--limit N` | 一度に返すチャット数。既定20、正の整数 |
 | `--offset N` | 直近順の一覧で飛ばす件数。既定0、0以上 |
 
-更新日時はログファイルのmtimeで、会話内の最終イベント日時や終了状態ではない。
-コピー・復元でも変わり得る。本文を読まず、ファイル情報と先頭metadataから候補を作る。
-ファイル一覧の走査は行うため、limitは返却数を制限する指定であり走査数の制限ではない。
-
-日付のみの `YYYY-MM-DD` はUTCの0時。日本時間の範囲は `+09:00` 付きで指定する。
-日時指定にはタイムゾーンが必須。範囲は下限以上・上限未満で、隣接期間の境界は重ならない。
-同じチャットIDの複数ログは最新mtimeの1候補にまとめ、全パスを `paths` に残す。
-`path` は最新ファイル。複数パスがある場合は対象を確認してからextractへ渡す。
-子チャットは親の解析に含めるため候補一覧から除く。アーカイブは明示した探索先だけを使う。
-
-出力の `chats` にchat_id・updated_at・path・paths・cwd、`total` に条件一致した候補数が入る。
-`next_offset` があれば続きがある。`skipped_files` は読取不可・metadata不正等で候補にできなかった数。
-終了済みかどうかは別途確認する。レビュー済みIDの永続管理は行わない。
+日時指定にはタイムゾーンが必須。日付のみはUTCの0時、日本時間は `+09:00` を付ける。
+更新の基準はファイルmtimeで、コピー・復元でも変わる。終了状態は別途確認する。
+一覧は親チャット単位。`chats[].path` をextractへ渡し、複数の `paths` があれば対象を確認する。
+`total`・`next_offset` で続きを、`skipped_files` で取得できなかった件数を確認する。
+limitは返却数を制限するが、ファイル情報と先頭metadataの走査数は制限しない。
 
 ```bash
 # 日本時間11月7日の更新分から直近3件を選ぶ
@@ -104,64 +96,36 @@ show専用の `--before N` と `--after N` はそれぞれ同一チャット内�
 既定0、範囲0〜100。離れた対応結果などは別の `related` に返る。
 `--limit` はshowの関連記録にも適用されるが、前後記録の総数を制限するものではない。
 
-## 基本的な読み進め方
+## 出力を読む際の判断
 
-```bash
-knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/analysis.json
-knowledge-refinery session stats /tmp/analysis.json
-knowledge-refinery session search /tmp/analysis.json --kind call --limit 10
-knowledge-refinery session show /tmp/analysis.json --call-id call-001 --before 2 --after 2
-# 指定チャットだけ集計する
-knowledge-refinery session stats /tmp/analysis.json --chat-id child-id --exclude-children
-```
-
-## 保存結果と根拠
-
-入力は `session_meta` を持つrollout JSONL。解析JSONの形式は
-`format: knowledge-refinery.session-analysis`、`schema_version: 2`。
-extractの標準出力は保存結果の要約で、本文は指定した新規ファイルに保存される。
-exit 0でもwarningsがあれば完全に解析できたとは限らない。
-
-| フィールド | 分析での用途 |
+| 確認する出力 | 読み方・次の操作 |
 | --- | --- |
-| `root_chat_id`, `chats` | 対象チャット、親子関係、入力パス・SHA-256などの出典を確認する |
-| `records` | 元行順の記録。`record_id` は `<chat_id>:L<元行番号>` |
-| `calls` | 呼び出し要求と `result_records`・`execution_records` の対応を読む |
-| `relations` | 重複、結果、実行イベント、プロセス参照を辿る |
-| `skill_mentions` | Skill名・本文提供・読込候補を探す |
-| `child_links`, `warnings` | 未取得・曖昧な対応・帰属不明を確認する |
+| extractの保存結果 | 本文は保存JSONにある。exit 0でもwarningsを確認する |
+| `next_offset` | 続きがあれば、その値をoffsetに指定する |
+| `truncated` | max-charsを増やして該当記録を読む。保存本文は切り詰められない |
+| showの `neighbors` / `related` | 同一チャット内の前後 / 離れた結果や補足イベント。起点の検索条件では絞られない |
+| `related_truncated` | call IDやitem IDでsearchし、関連結果を補う |
+| `calls` / `execution_events` | 呼び出し要求 / 補足イベント。合算しない。検索ヒットも実行回数ではない |
+| `with_result` / `link_status: matched` | 結果との対応あり。成功は結果の内容から判断する |
+| `missing_result` / `ambiguous` | 結果未取得 / 対応不確定。失敗とは断定しない。集計は重なる場合がある |
+| `process_reference` | 同じプロセスへの参照。完了の証明ではない |
+| `child_links: not_loaded / ambiguous` | 子の未取得 / 対応不確定。子の実行0回とは扱わない |
+| `child_links: metadata_only` | 親子関係は確認済み、起動元は不明 |
+| `ownership: context_only` | 継承・帰属不明の履歴。通常の検索・実行集計から除外。必要時はinclude-contextで読む |
+| `ownership_unresolved` | 子自身の開始境界が不明。子の実行件数を断定しない |
+| `turn_id_basis: preceding_context` | 直前の文脈から補ったID。明示IDと区別する |
+| `unparsed` | 必要箇所だけinclude-unparsedで読む。raw_exactがfalseなら除外処理後の原文 |
 
-recordsの `data` に既知の本文・引数・結果、`unparsed` に未解析部分がある。
-`turn_id_basis: preceding_context` は直前の文脈から補ったIDで、明示IDとは区別する。
-`duplicate_of` は確実な重複の代表記録を指す。元記録自体は残る。
-`unparsed.raw_exact: false` は除外対象の除去等により原文と一致しないことを示す。
-識別できるreasoning本文・暗号化内容は除外されるが、匿名化を保証するものではない。
+Skill参照の種類は次のとおり。いずれも出典と結果を読み、取得成功・遵守を別に評価する。
 
-## 続きを読む操作
+| kind | 検出対象 |
+| --- | --- |
+| `named_reference` | 名前の言及 |
+| `body_provided` | 本文提供の形式 |
+| `catalog_entry` | 一覧への掲載 |
+| `read_candidate` | 読取候補のコマンド等 |
+| `path_reference` | その他のパス言及 |
 
-検索結果の `total` と `next_offset` を確認し、次のoffsetを指定して続きを取得する。
-`truncated` が真なら `--max-chars` を増やして該当記録を読む。保存済み本文は切り詰めない。
-
-showの `neighbors` は同一チャット内の前後、`related` は離れた結果や補足イベント。
-`related_truncated` が真なら `related_total` を確認し、call IDやitem IDでsearchして補う。
-前後・関連記録は文脈を読むための追加出力で、起点に指定した検索条件では絞り込まれない。
-未解析原文は内容を確認したうえで `--include-unparsed` で検索・表示する。
-
-## 件数と状態の解釈
-
-`calls` は重複を除いた呼び出し要求の数。`execution_events` は補足イベントで、
-両者を足して実行回数にしない。検索ヒットも記録数であり実行回数ではない。
-ラッパー内のコードに書かれた呼び出しは独立した実行として数えない。
-
-callの `link_status` は `matched` / `missing_result` / `ambiguous`。
-結果の存在や `with_result` は成功を意味しない。`ambiguous` と `missing_result` の集計は
-重なる場合がある。`process_reference` も同じプロセスへの参照であり完了の証明ではない。
-
-Skill参照は `named_reference`（名前）、`body_provided`（本文提供）、
-`catalog_entry`（一覧）、`read_candidate`（読取候補）、`path_reference`（パス言及）。
-参照件数から利用成功や遵守を判定しない。
-
-child_linksの `matched` は起動元との対応あり、`metadata_only` はmetadataだけで親子を確認、
-`not_loaded` は子ログ未取得、`ambiguous` は対応不確定。
-子へ継承された記録は `ownership: context_only` として通常の検索・集計から除かれる。
-`ownership_unresolved` があれば、0件を「子が何も実行しなかった」と解釈しない。
+根拠にはrecord_id（chat IDと元行番号）や元のcall/item/turn IDを使う。
+同じ位置でもログが変わり得るため、出典のパス・SHA-256も確認する。
+未読・未取得・対応不明を「実行されなかった」に置き換えない。

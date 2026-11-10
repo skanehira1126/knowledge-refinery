@@ -1,221 +1,147 @@
-# セッション解析JSONとCLI
+# 解析JSONリファレンス
 
-この文書はKnowledge Refineryが定義する解析用JSONの仕様です。Codexログの公開仕様ではありません。
-元ログはJSONLのまま保持し、CLIが機械的に整理したJSONを解析Skillが読みます。
-CLIはコードを実行せず、Skill遵守・作業の成功・改善先を評価しません。
-MCPによるローカルセッション読取は行いません。listは有効なプロジェクト登録設定を必要とします。
-明示ログの抽出と保存済みJSONの検索・表示・集計はvault設定・接続を必要としません。
+`knowledge-refinery session` の出力を読むためのリファレンスです。
+コマンドと引数は[CLIリファレンス](cli.md#session)、レビューの依頼方法は
+[refinery-review-session](skills/refinery-review-session.md)を参照してください。
 
-## 更新日時で対象を選ぶ
+## listの出力
 
-```bash
-knowledge-refinery session list --limit 3
-# 日本時間11月7日の更新分
-knowledge-refinery session list \
-  --updated-since 2026-11-07T00:00:00+09:00 \
-  --updated-before 2026-11-08T00:00:00+09:00 --limit 20
-```
+| 項目 | 意味 |
+| --- | --- |
+| `project_id`, `project_root`, `git_common_dir` | 対象のRefinery project ID、Gitルート、共有Git管理ディレクトリ |
+| `chats` | 対象リポジトリの親チャット。更新日時の降順 |
+| `chats[].chat_id` / `cwd` | チャットID / ログmetadataの作業ディレクトリ |
+| `chats[].updated_at` | 最新ログのmtime。UTC。会話の最終イベント時刻や終了状態ではない |
+| `chats[].path` / `paths` | 最新ログのパス / 同一チャットIDの全パス |
+| `updated_since` / `updated_before` | 下限以上・上限未満の日時。未指定はnull |
+| `total` / `next_offset` | 条件に一致したチャット数 / 続きを取得するoffset。続きがなければnull |
+| `scanned_files` / `skipped_files` | 走査したファイル数 / 読取不可・metadata不正等で除外した数 |
 
-listは現在のRefinery登録済みGitリポジトリに属する親チャットを、ログ更新日時（mtime）の降順で返します。
-`--project PATH`で対象を変更できます。サブディレクトリからの実行も可能です。
-選んだ作業ツリーのルートで有効な `.refinery.yaml` を確認し、未登録・無効ならエラーにします。
-vaultやMCPへの接続は行いません。対象worktreeに設定がなければ登録済み作業ツリーを指定します。
+同一チャットの複数ログは最新mtimeで1候補にまとめてから期間で絞ります。
+mtimeはコピー・復元でも変わります。レビュー済みかどうかは記録しません。
 
-ログのcwdと対象の `git rev-parse --git-common-dir` が一致するものを選びます。
-同じリポジトリのworktreeも含めますが、削除済みworktree、cwd不明、Git外、別cloneは除きます。
-出力のproject_id・project_root・git_common_dirで対象を確認できます。Git SDKの追加依存はありません。
-`--updated-since`は下限以上、`--updated-before`は上限未満。両方省略すれば全期間です。
-日付のみはUTCの0時、日時はタイムゾーン付きISO 8601で指定します。出力日時はUTCです。
-コピー・復元でmtimeが変わることがあり、会話の最終イベント時刻や終了状態の判定には使いません。
-
-既定の探索先はCODEX_HOME（未設定なら~/.codex）のsessionsだけです。
-`--sessions-dir`で置き換えられ、複数指定できます。アーカイブは明示指定時だけ探索します。
-全候補のファイル情報と先頭metadataを読み、本文は読みません。
-`--limit`既定20と`--offset`既定0は返却量の指定で、ファイル走査数は制限しません。
-
-`chats`にchat_id・updated_at・path・paths・cwdを返し、`total`・`next_offset`で続きを確認できます。
-同じchat_idの複数ログは最新mtimeで1候補にまとめてから期間で絞ります。`path`は最新ファイル、
-`paths`は全候補です。子チャットは親の解析に含めるため一覧から除きます。
-`scanned_files`は走査したファイル数、`skipped_files`は読取不可・metadata不正等の件数です。
-終了状態の確認と複数パスの選択は抽出前に行います。レビュー済みIDは保存しません。
-
-## 入力と保存
-
-対象は`session_meta`を持つ単一チャットのrollout JSONLです。`codex exec --json`のイベントストリームや
-アプリの要約JSONは別形式です。対応形式の判別をせずに混ぜません。
-
-```bash
-knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/analysis.json
-knowledge-refinery session extract /path/to/rollout.jsonl --exclude-children --output /tmp/root.json
-# 探索場所を指定する場合。複数指定可能
-knowledge-refinery session extract /path/to/rollout.jsonl \
-  --sessions-dir /path/to/sessions --sessions-dir /path/to/archived_sessions --output /tmp/tree.json
-```
-
-`--output`は必須です。本文を切り詰めず、既存ファイル・symlinkへの上書きを拒否し、
-新規ファイルをmode 0600で作成します。標準出力は保存先・件数の短いJSONです。
-入力は変更しません。保存されたJSONは匿名化済みではなく、公開・Git追跡の対象にしません。
-
-識別できるreasoningレコード、analysis channel、暗号化内容は保存対象外です。
-未知の構造も再帰的に既知のreasoningフィールドを除外します。不正JSON内にreasoning等の識別文字列がある
-場合は原文全体を保存せず、位置と警告だけ残します。未知の命名や本文に埋め込まれた機密値を自動で
-完全に識別する機能ではありません。未解析資料をモデルへ提示する前に内容を確認します。
-
-成功はexit 0。不正JSON・未知構造は位置付きで保存し、warningsを返すため、成功が完全解析を意味しません。
-metadataの欠落・親から継承したと確認できないチャットIDの混在、入力ファイルの読取中の変更、競合する同一チャットの複数ログ、
-無関係な子ログ、I/O失敗、不正引数はexit 2です。複数ファイルは各ファイルの安定性を確認しますが、
-全ファイルの同時刻スナップショットを保証しません。
-
-## スキーマ
+## extractが保存するJSON
 
 `format: knowledge-refinery.session-analysis`、`schema_version: 2`。
-開発初期のschema 1から変更しています。旧JSONは再抽出が必要です。
-保存時の`--max-chars`は廃止し、表示時だけ指定します。
+入力は `session_meta` を持つrollout JSONLです。`codex exec --json` やアプリの要約JSONは対象外です。
+対応しないschemaの解析JSONは、元ログから再抽出してください。
 
-| フィールド | 内容 |
-|---|---|
-| `root_chat_id` | 解析対象の親チャット固有ID |
-| `chats` | チャット固有ID、共有session ID、親ID、agent path、Codex版、入力パス・SHA-256・bytes・行数 |
-| `records` | チャットごとの元行順の記録。チャット間で時刻順に混ぜない |
-| `calls` | 重複を除いた呼び出しと、結果・実行イベントへの参照 |
-| `relations` | 重複、結果、実行イベント、明示的なプロセス参照の関係 |
-| `skill_mentions` | Skill名・本文提供・パス参照の構文上の候補 |
-| `child_links` | 起動呼び出し、子metadata、未取得・曖昧さの対応 |
-| `warnings` | 対応不明、欠落、未知構造など。チャットと記録IDを含む |
+| 項目 | 内容 |
+| --- | --- |
+| `root_chat_id` | 起点チャットの固有ID |
+| `chats` | 固有ID・共有session ID・親ID・agent path・Codex版・出典 |
+| `chats[].source` | 入力パス・SHA-256・bytes・行数 |
+| `records` | チャットごとの元行順の記録 |
+| `calls` | 重複を除いた呼び出し要求と、結果・実行イベントへの参照 |
+| `relations` | 重複・結果・実行イベント・プロセス参照の関係 |
+| `skill_mentions` | Skill名・本文提供・読込候補などの参照 |
+| `child_links` | 起動呼び出しと子チャットの対応 |
+| `warnings` | 対応不明・欠落・未知構造など。該当チャット・記録への参照を含む |
 
-### records
+標準出力は保存先と件数の要約です。本文は保存したJSONにあります。
 
-`record_id`は`<chat_id>:L<元行番号>`です。同じログの同じ位置では安定します。
-ログの並べ替えや途中への行挿入に対しては安定しません。出典はsourceのSHA-256と併せて確認します。
+### records：記録と出典
 
-| フィールド | 内容 |
-|---|---|
-| `chat_id`, `line`, `timestamp`, `ordinal` | 出典と元の順序情報。時刻の補完や推測はしない |
-| `source_metadata` | 外側のmetadataを保持 |
-| `ownership`, `ownership_basis` | local / context_onlyと、その帰属の根拠 |
+| 項目 | 内容 |
+| --- | --- |
+| `record_id` | `<chat_id>:L<元行番号>`。出典のSHA-256と併せて識別する |
+| `chat_id`, `line`, `timestamp`, `ordinal` | 出典・元の日時・順序 |
+| `source_type`, `source_subtype`, `source_metadata` | 元の種類と外側のmetadata |
 | `kind` | metadata / context / message / call / result / execution / lifecycle / usage / unparsed / excluded |
-| `source_type`, `source_subtype` | 元の外側・内側のtype |
-| `turn_id`, `turn_id_basis` | 明示IDはexplicit、直前のターン文脈から補った場合はpreceding_context。未確定ならnull |
-| `source_ids` | 元のitem IDとcall ID。未取得ならnull |
-| `tool` | namespaceがあればnamespace.name、なければ呼び出し名。MCP実行イベントではserver/tool。他のイベントからツール名を推測しない |
-| `data` | 既知のpayload。発言のrole・phase、引数・入力・結果、構造化された終了コード・状態などを保持 |
-| `unparsed` | 未解析部分の元JSON文字列、理由、追加キーの位置、raw_exact |
-| `duplicate_of` | 同じ記録の確実な重複なら代表record ID。それ以外はnull |
+| `turn_id`, `turn_id_basis` | ターンIDと根拠。explicitは明示、preceding_contextは直前の文脈から補完 |
+| `source_ids` | 元のitem ID・call ID。未取得ならnull |
+| `tool` | 呼び出し名またはnamespace.name。MCP実行イベントはserver/tool |
+| `data` | 発言・引数・結果などの既知payload。元の表現を保持 |
+| `unparsed` | 未解析部分の原文・理由・追加キーの位置・raw_exact |
+| `duplicate_of` | 確実な重複の代表record ID。重複でなければnull |
+| `ownership`, `ownership_basis` | local / context_onlyと、その帰属の根拠 |
 
-引数・結果の文字列は元の表現を保持し、コードとして実行しません。
-非テキスト要素、入れ子の結果や環境情報などはJSONとして保持します。
-未知のレコード種類・不正な既知レコードは`kind: unparsed`、`data: null`です。
-既知envelopeの追加キーは既知部分を解析したうえで元JSONを`unparsed`へ保存します。
-既知の引数・結果・content等の内部は不透明なデータとして保持し、独自の意味解析はしません。
+未知種類や不正な既知レコードは `kind: unparsed`、`data: null`。
+既知envelopeの追加キーがある場合は、既知部分を解析しつつ原文もunparsedへ保持します。
+`unparsed.raw_text` は原則として元の1行ですが、除外処理で変わった場合は `raw_exact: false` です。
 
-`unparsed.raw_text`は原則として改行区切りを除く元の1行です。reasoning等を除去した場合は
-除去後のJSON文字列となり`raw_exact: false`です。不正JSONは元文字列と警告を保持しますが、
-除外対象を含むと判断した場合は`raw_text: null`です。通常の表示・本文検索では未解析原文を展開しません。
+識別できるreasoning・analysis channel・暗号化内容は保存対象外です。
+不正JSONにそれらの識別文字列がある場合は原文を残さず、位置と警告を残します。
+その他の秘密値まで匿名化する機能ではありません。未解析原文は通常の表示・本文検索では展開しません。
 
-### 呼び出しと重複
+### calls / relations：対応付けと重複
 
-各callには解析用`id`（request record ID + `:call`）、元の`call_id`、`chat_id`、`tool`、
-`request_record`、`result_records`、`execution_records`、`link_status`を持たせます。
+callは解析用 `id`（request record ID + `:call`）、元のcall_id、chat_id、tool、
+request_record、result_records、execution_records、link_statusを持ちます。
 
-- 同一チャットのcall IDが一致し、呼出し種類とoutput種類が対応し、結果が呼出し後にある場合に接続します。
-- 同じcall IDの呼出しが複数ある場合は曖昧とし、結果を推測で接続しません。
-- 補足イベントは明示call ID、またはitem IDが呼出しのitem ID／call IDと一意に一致する場合だけ接続します。
-  複数のIDが別々の呼出しを指す場合は曖昧とします。
-- 時刻や本文が似ているだけでは統合しません。未対応の実行イベントと結果も保持します。
-- 重複は同一チャット・同一ターン・同一item ID・同一種類・同一内容で確認します。
-  発言の2表現はrole・phase・テキストが同じ場合に対応します。元記録は削除しません。
-- call IDだけが同じ、またはコマンドだけが同じ場合は重複扱いにしません。再試行は別の呼出しです。
-- ラッパー内のコードに書かれただけのツール呼出しを解析して実行回数に追加しません。
-- exec_command/write_stdinの構造化された入出力に同じsession_idがある場合はprocess_referenceを付けます。
-  非構造化テキストからIDを推測せず、この関係だけで完了や成功を判定しません。
+| 判定 | 条件 |
+| --- | --- |
+| 呼び出しと結果 | 同一チャットでcall IDと種類が対応し、結果が要求の後にある |
+| 補足イベント | call ID、またはitem IDが呼び出しのIDへ一意に対応する |
+| 重複 | 同一チャット・ターン・item ID・種類・内容。発言の2表現はrole・phase・テキストで照合 |
+| process_reference | exec_command / write_stdinの構造化入出力に同じsession_idがある |
 
-link_statusはmatched / missing_result / ambiguousです。結果の存在は処理成功を意味しません。
-重複でない複数結果は保持します。イベント側にだけ現れる処理は呼出し数と別に集計します。
+複数候補へ対応するIDは曖昧として残します。時刻や本文の類似だけでは結び付けません。
+重複の元記録も保存し、再試行や重複でない複数結果は別記録として保持します。
 
-### Skill参照
+| link_status | 意味 |
+| --- | --- |
+| `matched` | 結果との対応あり。処理成功を意味しない |
+| `missing_result` | 対応する結果を取得できていない |
+| `ambiguous` | 対応先が一意に決まらない |
 
-| kind | 検出する構文 |
-|---|---|
-| `named_reference` | `$skill` / `$plugin:skill` の文字列 |
-| `body_provided` | `<skill>...<name>...</name>...</skill>` の本文提供形式 |
-| `catalog_entry` | `- name: ... (file: ...)` の一覧形式と、一覧内のSkillパス |
-| `read_candidate` | 呼出しの入力・実行イベントの入力にある `.../<skill>/SKILL.md` |
-| `path_reference` | それ以外の発言内のSkillパス |
+### child_links / ownership：親子と継承履歴
 
-記録ID・skill名・qualified_name・pluginを保持します。1記録内の同名・同種の反復は1参照です。
-引用・コード例なども候補になり得ます。名前の言及は実際の呼び出し・読込成功を証明しません。
-CLIは遵守や適用を評価せず、Skillが出典と結果を読んで区別します。
+チャット固有IDは `session_meta.id`。共有session_idが同じでも別チャットとして扱います。
+子metadataのparent_thread_idとagent_pathで親子を確認し、親の起動結果のtask_name / agent_idが
+子のagent_path / chat IDと一致すれば起動元callも結び付けます。
 
-### サブエージェント
+| child_linksのstatus | 意味 |
+| --- | --- |
+| `matched` | 親子関係と起動元の対応あり |
+| `metadata_only` | metadataで親子を確認。起動元は不明 |
+| `not_loaded` | 子ログ未取得 |
+| `ambiguous` | 対応不確定 |
 
-チャット固有IDは`session_meta.id`です。`session_meta.session_id`が親子で同じ場合も別チャットとして保持します。
-子の`source.subagent.thread_spawn.parent_thread_id`と`agent_path`を使って親子を接続します。
-親のspawn_agent結果のtask_name／agent_idが子のagent_path／chat IDに一致すれば、起動元callも接続します。
+子に継承された親・祖先の履歴は `context_only` として保存し、子の実行件数から除外します。
+境界にはsubagent_history_start_ordinalを使い、なければ子自身のthread_idを持つ最初の記録を使います。
+境界不明なら先頭metadata以外をcontext_onlyにし、`ownership_unresolved` を返します。
+未取得・帰属不明を「実行0回」と解釈しないでください。
 
-child_linksのstatusはmatched / metadata_only / not_loaded / ambiguousです。
-子ログがなくても親の起動記録を残し、子の呼出し数を0回と断定しません。
-metadataで親子関係が確認でき、起動元だけ不明ならmetadata_onlyです。
+子孫の探索では各JSONLの先頭metadataを使います。先頭metadataのないログや読取不可のログは発見できません。
+同一chat IDの内容が異なるログはエラー、一致する複製は統合して `duplicate_source` 警告を残します。
 
-子孫は既定で自動探索します。`--exclude-children`で起点のチャットだけ抽出します。既定はCODEX_HOME（未設定なら~/.codex）の
-sessionsだけで、各JSONLの先頭metadataだけ読み、親IDで子孫を絞ってから本文を読みます。
-archived_sessionsも探す場合は、上の例のように `--sessions-dir` で明示します。
-先頭行がmetadataでないファイルや読取不可の候補は発見できないため、探索の完全性は保証しません。
-`--sessions-dir`は既定の探索先を置き換えます。`--exclude-children`とは併用できません。複数の異なるログが同一chat IDを持つ場合は、自動選択せずエラーにします。
-一致する複製は1チャットにまとめ、duplicate_source警告を残します。
+### skill_mentions：Skill参照
 
-### 子に引き継がれた親の履歴
+| kind | 検出対象 |
+| --- | --- |
+| `named_reference` | `$skill` / `$plugin:skill` |
+| `body_provided` | `<skill>...<name>...</name>...</skill>` |
+| `catalog_entry` | Skill一覧の項目・パス |
+| `read_candidate` | 呼び出し・実行イベントの入力にあるSkillパス |
+| `path_reference` | その他の発言内のSkillパス |
 
-子のログには先頭の子metadataに続いて親・祖先のmetadataと過去の履歴が含まれる場合があります。
-metadataの親IDの連鎖で祖先と確認できるものだけ受け入れます。単なる混在は拒否します。
-`subagent_history_start_ordinal`と各記録のordinalがある場合は、それを子自身の開始位置に使います。
-利用できない場合は、子自身のthread_idを持つ最初の記録以降を明示境界として使います。
+record ID、skill名、qualified_name、pluginを保持します。同じ記録内の同名・同種は1参照です。
+引用やコード例も一致するため、参照だけで本文取得・利用成功・遵守とは判断できません。
 
-それ以前の記録は`ownership: context_only`で保持し、呼出し・実行イベント・Skill参照の集計から除外します。
-前置された指示などの帰属まで断定する分類ではありません。境界が確認できなければ、先頭metadata以外を
-context_onlyとしてownership_unresolved警告を返します。0件を「子が実行していない」と解釈しません。
-検索も既定でlocalだけ、`--include-context`で継承・帰属不明の記録を含めます。
+## search / showの出力
 
-## 検索・前後表示
+| 項目 | 意味 |
+| --- | --- |
+| `chat_ids` | 対象チャット |
+| `records`, `total`, `next_offset` | 一致した記録のページ、総数、次のoffset |
+| `preview`, `preview_chars`, `truncated` | 表示本文、切詰め前の文字数、切詰めの有無 |
+| `neighbors`（show） | 起点記録と同じチャット内の前後 |
+| `related`（show） | 離れた位置にある対応結果・補足イベントなど |
+| `related_total`, `related_truncated`（show） | 関連記録の総数と表示省略の有無 |
+| `child_links`（show） | 起点記録に対応する子チャット情報 |
 
-```bash
-knowledge-refinery session search /tmp/analysis.json --tool exec_command
-knowledge-refinery session search /tmp/analysis.json --skill refinery-experience --skill-kind read_candidate
-knowledge-refinery session search /tmp/analysis.json --text timeout --limit 10 --offset 0
-knowledge-refinery session show /tmp/analysis.json --call-id call-001 --before 2 --after 2
-knowledge-refinery session show /tmp/analysis.json --record-id 'chat-id:L12' --max-chars 8000
-knowledge-refinery session search /tmp/tree.json --chat-id child-id --kind call
-knowledge-refinery session search /tmp/analysis.json --kind unparsed --include-unparsed
-```
+## statsの件数
 
-既定の対象はrootと取得済みの子孫です。`--chat-id`で別チャットを起点に選び、
-`--exclude-children`で選んだチャットだけを対象にします。
-未取得の子ログを検索時に読み足しません。record/call/item/turn IDは専用optionで区別し、複数ヒットを隠しません。
-ツール名（namespaceを含む）は完全一致、Skillは短い名前またはplugin:skillの完全一致です。本文は大文字・小文字を区別する部分一致。
-指定したfilterはAND条件です。重複記録は既定で検索対象外、`--include-duplicates`で含めます。
+| 項目 | 数えるもの |
+| --- | --- |
+| `calls` | 重複を除いた呼び出し要求。ツール別・チャット別にも返す |
+| `with_result` / `missing_result` | 結果のある要求 / 結果のない要求 |
+| `ambiguous` | 対応が曖昧な要求。missing_resultと重なる場合がある |
+| `execution_events` / `unlinked_execution_events` | 補足イベント / 要求に結び付かない補足イベント |
+| `skill_references` | Skill別・種類別の参照記録数 |
+| `records`, `duplicate_records`, `context_only_records` | 全記録、重複、継承・帰属不明の記録数 |
+| `unparsed_records`, `warning_count`, `warnings_by_code` | 未解析部分のある記録数と警告件数 |
 
-searchは記録単位で返します。呼び出しと補足イベントは別記録であり、ヒット件数はツール実行回数ではありません。
-showにはrecord/call/item/turn IDのどれか1つが必須です。neighborsは同一チャット内だけの原順序の前後、
-relatedは離れた位置の結果・補足イベントなどです。起動記録に対応するchild_linksも返します。
-
-limit既定20、offset既定0、max-chars既定2000で、previewだけを短縮します。total・next_offsetでページを辿れます。
-前後範囲はそれぞれ0〜100記録。relatedもlimit件までで、related_totalとrelated_truncatedを返します。
-関連記録の続きを読む場合は該当call IDやitem IDでsearchします。
-`--include-unparsed`は未解析原文を明示的に検索・表示する指定であり、機密除去を保証する指定ではありません。
-
-## 集計
-
-```bash
-knowledge-refinery session stats /tmp/analysis.json
-knowledge-refinery session stats /tmp/tree.json --exclude-children
-knowledge-refinery session stats /tmp/tree.json --chat-id child-id
-```
-
-callsは重複を除いた呼出し要求の数です。ツール別にcalls・with_result・missing_result・ambiguous、
-チャット別にcallsを返します。ambiguousはmissing_resultと重なる場合があります。
-結果の内容から成功率を計算しません。
-
-execution_eventsとunlinked_execution_eventsは補足イベントの別集計で、callsへ加算しません。
-親の起動1回と子の内部呼出し5回は、全体では6回、親だけなら1回です。
-親に届いた子の報告を子の呼出しとして再計上しません。
-Skillは種類別の参照記録数であり、利用回数・遵守回数と呼びません。
-child_links・warning_count・unparsed_recordsも確認し、取得範囲と限界をレポートに残します。
+callsとexecution_eventsは別の単位です。検索ヒットやラッパー内のコードを実行回数へ加算しません。
+with_resultは成功数、skill_referencesは利用成功数ではありません。

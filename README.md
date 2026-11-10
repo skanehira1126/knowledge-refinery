@@ -134,4 +134,5 @@ handoffはprojectごとの専用領域に保存され、通常のexperience／me
 レポートから改善案を比較するには[refinery-propose-improvements](docs/skills/refinery-propose-improvements.md)を
 明示して呼び出します。成果物はローカルのMarkdownで、vaultへ自動保存しません。
 
+候補一覧は現在の登録済みGitプロジェクトとworktreeに絞ります。
 CLIを直接使う場合は[sessionコマンド](docs/cli.md#session)を参照してください。

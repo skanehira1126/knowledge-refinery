@@ -8,7 +8,8 @@
 
 | 項目 | 意味 |
 | --- | --- |
-| `chats` | 更新日時の降順で並ぶ親チャットの候補 |
+| `project_id`, `project_root`, `git_common_dir` | 対象のRefinery project ID、Gitルート、共有Git管理ディレクトリ |
+| `chats` | 対象リポジトリの親チャット。更新日時の降順 |
 | `chats[].chat_id` / `cwd` | チャットID / ログmetadataの作業ディレクトリ |
 | `chats[].updated_at` | 最新ログのmtime。UTC。会話の最終イベント時刻や終了状態ではない |
 | `chats[].path` / `paths` | 最新ログのパス / 同一チャットIDの全パス |

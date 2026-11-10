@@ -220,7 +220,8 @@ experience／memory用であり、issueタグには影響しません。
 ## session
 
 ローカルのCodexログから解析JSONを作り、必要な記録を検索・表示します。出力はJSONです。
-vaultへの登録とMCP接続は不要です。レポート作成を依頼する場合は
+listは有効なRefinery登録設定を必要とします。明示ログの抽出・解析JSONの操作は登録不要です。
+MCP接続は不要です。レポート作成を依頼する場合は
 [refinery-review-session](skills/refinery-review-session.md)を使ってください。
 
 | コマンド | 入力 | 用途 |
@@ -239,16 +240,25 @@ knowledge-refinery session list \
   --updated-before 2026-11-08T00:00:00+09:00 --limit 3
 ```
 
-日本時間11月7日の更新分から直近3件を返します。更新の基準はログファイルのmtimeです。
+現在の登録済みGitプロジェクトから、日本時間11月7日の更新分を直近3件返します。
+更新の基準はログファイルのmtimeです。
 終了済みかどうかは別途確認してください。
 
 | 引数 | 内容 | 既定 |
 | --- | --- | --- |
+| `--project PATH` | 対象の登録済みGit作業ディレクトリ | 現在のディレクトリ |
 | `--updated-since DATE` | 下限以上 | 下限なし |
 | `--updated-before DATE` | 上限未満 | 上限なし |
 | `--sessions-dir DIR` | 探索先を置き換える。複数指定可 | `CODEX_HOME/sessions` |
 | `--limit N` | 返すチャット数。正の整数 | 20 |
 | `--offset N` | 飛ばすチャット数。0以上 | 0 |
+
+対象は現在のリポジトリと、その存在するworktreeです。
+削除済みworktreeや所属を確認できないログは含めません。同じremoteの別cloneも別リポジトリとして扱います。
+
+選んだ作業ツリーのルートには、有効な `.refinery.yaml` が必要です。
+設定のないworktreeから実行する場合は、登録済みの作業ツリーを `--project` に指定してください。
+未登録・無効の場合は、登録・有効化してから実行してください。
 
 `CODEX_HOME` 未設定時は `~/.codex`。アーカイブは `--sessions-dir` で指定した場合だけ探します。
 日付だけの指定はUTCの0時です。日時には `Z` または `+09:00` などのタイムゾーンが必要です。

@@ -29,11 +29,17 @@ extract/search/show/statsは既定で子孫を含める。`extract`はログを�
 
 | 引数 | 役割・既定値 |
 | --- | --- |
+| `--project PATH` | 対象の登録済みGit作業ディレクトリ。既定は現在のディレクトリ |
 | `--updated-since DATE` | 更新日時の下限。この時刻を含む。省略すると下限なし |
 | `--updated-before DATE` | 更新日時の上限。この時刻を含まない。省略すると上限なし |
 | `--sessions-dir DIR` | ログの探索先。複数指定可能。既定のCODEX_HOME/sessionsを置き換える |
 | `--limit N` | 一度に返すチャット数。既定20、正の整数 |
 | `--offset N` | 直近順の一覧で飛ばす件数。既定0、0以上 |
+
+対象のGitルートに有効な `.refinery.yaml` が必要。未登録・無効ならエラーになる。
+同じGit共通ディレクトリのworktreeを含め、削除済みworktree・cwd不明・Git外・別cloneは除く。
+対象worktreeに設定がなければ登録済みの作業ツリーを `--project` に指定する。
+出力のproject_id・project_root・git_common_dirで対象を確認する。
 
 日時指定にはタイムゾーンが必須。日付のみはUTCの0時、日本時間は `+09:00` を付ける。
 更新の基準はファイルmtimeで、コピー・復元でも変わる。終了状態は別途確認する。

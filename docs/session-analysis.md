@@ -121,6 +121,9 @@ record ID、skill名、qualified_name、pluginを保持します。同じ記録�
 
 ## search / showの出力
 
+`--where` と `--text-field` のパスは、保存済みJSONの `records` の各要素を起点に指定します。
+検索はページ分割と `preview` の切り詰めの前に行います。
+
 | 項目 | 意味 |
 | --- | --- |
 | `chat_ids` | 対象チャット |

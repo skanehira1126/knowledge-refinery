@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 from knowledge_refinery.session_links import record_text
 from knowledge_refinery.session_ops import FORMAT
 from knowledge_refinery.session_ops import SCHEMA_VERSION
+from knowledge_refinery.session_ops import json_value
 
 
 KINDS = {
@@ -24,6 +27,7 @@ KINDS = {
     "unparsed",
     "excluded",
 }
+_MISSING = object()
 
 
 def load_analysis(path: Path) -> dict[str, Any]:
@@ -143,7 +147,85 @@ def _preview(
     return result
 
 
-def _matches(record: dict[str, Any], filters: dict[str, Any], skill_ids: set[str]) -> bool:
+def _field_path(path: str, include_unparsed: bool) -> list[str]:
+    keys = path.split(".")
+    if "" in keys:
+        raise ValueError(f"Expected dot-separated record keys, got {path!r}")
+    if keys[0] == "unparsed" and not include_unparsed:
+        raise ValueError("Searching unparsed fields requires --include-unparsed")
+    return keys
+
+
+def _field_value(record: dict[str, Any], keys: list[str]) -> Any:
+    value: Any = record
+    for key in keys:
+        if not isinstance(value, dict) or key not in value:
+            return _MISSING
+        value = value[key]
+    return value
+
+
+def _where_condition(expression: str, include_unparsed: bool) -> tuple[list[str], Any]:
+    path, separator, raw_value = expression.partition("=")
+    if not separator:
+        raise ValueError("--where expects PATH=VALUE")
+    keys = _field_path(path, include_unparsed)
+    value = json_value(raw_value)
+    if isinstance(value, dict | list):
+        raise ValueError("--where expects a string, number, boolean, or null")
+    return keys, value
+
+
+def _search_text(
+    record: dict[str, Any], path: list[str] | None, include_unparsed: bool
+) -> str | None:
+    if path is None:
+        text = record_text(record)
+        if include_unparsed and record.get("unparsed"):
+            text += "\n" + (record["unparsed"].get("raw_text") or "")
+        return text
+    value = _field_value(record, path)
+    if value is _MISSING:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list) and all(isinstance(part, str) for part in value):
+        return " ".join(value)
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _content_filter(filters: dict[str, Any]) -> Callable[[dict[str, Any]], bool]:
+    include_unparsed = bool(filters.get("include_unparsed"))
+    conditions = [_where_condition(expr, include_unparsed) for expr in filters.get("where") or ()]
+    text = filters.get("text")
+    field = filters.get("text_field")
+    if text is None and (field is not None or filters.get("regex")):
+        raise ValueError("--text is required with --text-field or --regex")
+    path = _field_path(field, include_unparsed) if field is not None else None
+    try:
+        pattern = re.compile(text) if text is not None and filters.get("regex") else None
+    except (re.error, OverflowError) as error:
+        raise ValueError(f"Invalid --text regular expression: {error}") from error
+
+    def matches(record: dict[str, Any]) -> bool:
+        for keys, expected in conditions:
+            value = _field_value(record, keys)
+            # Python equates booleans and numbers, which are distinct in JSON.
+            if value != expected or isinstance(value, bool) != isinstance(expected, bool):
+                return False
+        if text is None:
+            return True
+        candidate = _search_text(record, path, include_unparsed)
+        if candidate is None:
+            return False
+        return pattern.search(candidate) is not None if pattern is not None else text in candidate
+
+    return matches
+
+
+def _matches_metadata(
+    record: dict[str, Any], filters: dict[str, Any], skill_ids: set[str]
+) -> bool:
     mapping = {
         "record_id": record["record_id"],
         "call_id": record["source_ids"].get("call_id"),
@@ -154,15 +236,7 @@ def _matches(record: dict[str, Any], filters: dict[str, Any], skill_ids: set[str
     }
     if any(filters.get(k) is not None and filters[k] != value for k, value in mapping.items()):
         return False
-    if filters.get("skill") and record["record_id"] not in skill_ids:
-        return False
-    if filters.get("text"):
-        text = record_text(record)
-        if filters.get("include_unparsed") and record.get("unparsed"):
-            text += "\n" + (record["unparsed"].get("raw_text") or "")
-        if filters["text"] not in text:
-            return False
-    return True
+    return not filters.get("skill") or record["record_id"] in skill_ids
 
 
 def search_records(
@@ -175,10 +249,11 @@ def search_records(
     offset: int = 0,
     max_chars: int = 2000,
 ) -> dict[str, Any]:
-    """Find evidence by exact identities and bounded previews; never search reasoning."""
+    """Filter saved records before pagination and return bounded evidence previews."""
     if limit <= 0 or offset < 0 or max_chars <= 0:
         raise ValueError("limit/max-chars must be positive and offset nonnegative")
     filters = filters or {}
+    matches_content = _content_filter(filters)
     chats = selected_chats(bundle, chat_id, include_children)
     skill_ids = {
         m["record_id"]
@@ -195,7 +270,8 @@ def search_records(
             r["chat_id"] in chats
             and (filters.get("include_context") or r["ownership"] == "local")
             and (filters.get("include_duplicates") or not r["duplicate_of"])
-            and _matches(r, filters, skill_ids)
+            and _matches_metadata(r, filters, skill_ids)
+            and matches_content(r)
         )
     ]
     page = matches[offset : offset + limit]

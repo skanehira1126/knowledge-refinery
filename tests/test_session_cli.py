@@ -98,6 +98,96 @@ def test_full_storage_bounded_search_and_no_execution(
     assert not marker.exists()
 
 
+def test_cli_field_filters_and_regex(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    commands = [
+        (["python", "-m", "unittest"], 1, "/repo", ""),
+        ("uv run pytest", 1, "/repo", ""),
+        ("cat notes", 1, "/repo", "pytest in pyproject.toml"),
+        ("cat pytest_cache pyprojectXtoml", 1, "/repo", ""),
+        ("pytest", 0, "/repo", ""),
+        ("pytest", 1, "/other", ""),
+    ]
+    source = write_log(
+        tmp_path / "rollout.jsonl",
+        meta("root"),
+        *(
+            record(
+                "event_msg",
+                type="item_completed",
+                item={
+                    "type": "CommandExecution",
+                    "command": cmd,
+                    "exit_code": code,
+                    "cwd": cwd,
+                    "aggregated_output": output,
+                },
+            )
+            for cmd, code, cwd, output in commands
+        ),
+    )
+    target = tmp_path / "analysis.json"
+    assert main(["session", "extract", str(source), "--output", str(target)]) == 0
+    capsys.readouterr()
+    search = ["session", "search", str(target)]
+    filters = [
+        "--kind",
+        "execution",
+        "--where",
+        "data.item.cwd=/repo",
+        "--where",
+        "data.item.exit_code=1",
+        "--text-field",
+        "data.item.command",
+        "--text",
+        r"\b(pytest|python -m unittest)\b",
+        "--regex",
+    ]
+    assert main([*search, *filters, "--limit", "1", "--max-chars", "3"]) == 0
+    page = json.loads(capsys.readouterr().out)
+    assert (page["total"], page["next_offset"]) == (2, 1)
+    assert page["records"][0]["record_id"] == "root:L2"
+    assert page["records"][0]["truncated"]
+
+    show = ["session", "show", str(target), "--record-id", "root:L3", "--after", "1"]
+    assert main([*show, *filters]) == 0
+    view = json.loads(capsys.readouterr().out)
+    assert [r["line"] for r in view["records"]] == [3]
+    assert [r["line"] for r in view["neighbors"]] == [4]
+
+    assert main([*search, "--text", "pyproject.toml"]) == 0
+    assert [r["line"] for r in json.loads(capsys.readouterr().out)["records"]] == [4]
+    assert main([*search, "--text", "pyproject.toml", "--regex"]) == 0
+    assert [r["line"] for r in json.loads(capsys.readouterr().out)["records"]] == [4, 5]
+    assert main([*search, "--text", r"\btox\b", "--regex"]) == 0
+    assert json.loads(capsys.readouterr().out)["total"] == 0
+
+
+def test_where_compares_json_scalars_and_skips_missing_fields(tmp_path: Path) -> None:
+    arguments = [
+        {},
+        {"value": None},
+        {"value": 0},
+        {"value": False},
+        {"value": "0"},
+        {"value": "a=b"},
+    ]
+    source = write_log(
+        tmp_path / "rollout.jsonl",
+        meta("root"),
+        *(
+            record(
+                "event_msg", type="item_completed", item={"type": "McpToolCall", "arguments": args}
+            )
+            for args in arguments
+        ),
+        "broken JSON",
+    )
+    bundle = extract_session(source)
+    for literal, line in [("null", 3), ("0", 4), ("false", 5), ('"0"', 6), ("a=b", 7)]:
+        filters = {"where": [f"data.item.arguments.value={literal}"]}
+        assert [r["line"] for r in search_records(bundle, filters=filters)["records"]] == [line]
+
+
 def test_pairs_duplicates_retries_ambiguous_and_unmatched(tmp_path: Path) -> None:
     original = call(id="item-1")
     source = write_log(
@@ -331,6 +421,14 @@ def test_exclusive_output_and_query_validation(
         ["--offset", "-1"],
         ["--max-chars", "0"],
         ["--chat-id", "absent"],
+        ["--where", "data.item.exit_code"],
+        ["--where", "data..item=1"],
+        ["--where", "unparsed.raw_text=private"],
+        ["--where", "data={}"],
+        ["--text-field", "data.item.command"],
+        ["--text-field", "unparsed.raw_text", "--text", "private"],
+        ["--regex"],
+        ["--kind", "execution", "--text", "(", "--regex"],
     ):
         assert main(["session", "search", str(target), *options]) == 2
         assert capsys.readouterr().err
@@ -428,6 +526,10 @@ def test_unknown_nested_item_fields_preserved_but_hidden(tmp_path: Path) -> None
     assert "FUTURE_DATA" in json.dumps(bundle)
     assert "FUTURE_DATA" not in json.dumps(search_records(bundle))
     assert "FUTURE_DATA" in json.dumps(search_records(bundle, filters={"include_unparsed": True}))
+    filters = {"include_unparsed": True, "text": r"FUTURE_\w+", "regex": True}
+    raw = search_records(bundle, filters={**filters, "text_field": "unparsed.raw_text"})
+    command = search_records(bundle, filters={**filters, "text_field": "data.item.command"})
+    assert (raw["total"], command["total"]) == (1, 0)
 
 
 def test_cli_child_discovery_and_same_chat_neighbors(

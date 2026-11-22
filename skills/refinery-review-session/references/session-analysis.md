@@ -88,13 +88,27 @@ knowledge-refinery session list \
 | `--skill NAME` | Skill名またはplugin:skillの完全一致 |
 | `--skill-kind KIND` | Skill参照の種類を絞る。`--skill`が必要 |
 | `--kind KIND` | call / result / message / executionなどの記録種別 |
-| `--text TEXT` | 大文字・小文字を区別する部分一致 |
+| `--where PATH=VALUE` | 各記録を起点にドット区切りの項目を完全一致で絞る。複数指定はAND。項目がなければ不一致 |
+| `--text TEXT` | 既定は大文字・小文字を区別する固定文字列の部分一致 |
+| `--text-field PATH` | `--text` を指定項目だけに照合。文字列配列は半角スペースで連結し、文字列・文字列配列以外はJSON表記を使う |
+| `--regex` | `--text` をPythonの正規表現として部分一致検索する |
 | `--limit N` | 返す記録数。既定20、正の整数 |
 | `--offset N` | 先頭から飛ばす件数。既定0、0以上 |
 | `--max-chars N` | 各previewの文字数。既定2000、正の整数 |
 | `--include-unparsed` | 未解析原文を検索・表示する |
 | `--include-duplicates` | 重複と判断した記録も検索する |
 | `--include-context` | 継承された親の履歴・帰属不明の記録も検索する |
+
+終了コード1の記録から、コマンドにテストツール名があるものを探す例。出力だけにある名前は一致しない。
+
+```bash
+knowledge-refinery session search /tmp/analysis.json --kind execution \
+  --where data.item.exit_code=1 --text-field data.item.command \
+  --text '\b(pytest|unittest)\b' --regex
+```
+
+`--where` には文字列、数値、真偽値、`null` を使える。数値に見える文字列は `--where 'data.item.process_id="1"'` のように指定する。
+未解析原文を項目指定で探す場合も `--include-unparsed` が必要。`total` は表示を切り詰める前の一致記録数。
 
 4種類のID指定は同時に使えない。showではいずれか1つが必須。
 他の絞り込み条件はANDで、一致した記録が表示の起点になる。

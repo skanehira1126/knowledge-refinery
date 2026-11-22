@@ -14,6 +14,20 @@ from knowledge_refinery.session_query import session_stats
 from knowledge_refinery.session_query import show_records
 
 
+def _add_record_filters(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--where",
+        action="append",
+        metavar="PATH=VALUE",
+        help="match a record field by exact scalar value (dot-separated keys, repeatable AND)",
+    )
+    parser.add_argument("--text", help="case-sensitive substring in the evidence text by default")
+    parser.add_argument(
+        "--text-field", metavar="PATH", help="search only this dot-separated field with --text"
+    )
+    parser.add_argument("--regex", action="store_true", help="interpret --text as a Python regex")
+
+
 def configure_session_parser(parser: argparse.ArgumentParser) -> None:
     """Register local session commands independently of vault and MCP configuration."""
     commands = parser.add_subparsers(required=True)
@@ -84,7 +98,7 @@ def configure_session_parser(parser: argparse.ArgumentParser) -> None:
         ],
     )
     search.add_argument("--kind", choices=sorted(KINDS))
-    search.add_argument("--text", help="literal, case-sensitive search in known evidence text")
+    _add_record_filters(search)
     search.add_argument(
         "--include-unparsed", action="store_true", help="explicitly expose/search unparsed text"
     )
@@ -130,7 +144,7 @@ def configure_session_parser(parser: argparse.ArgumentParser) -> None:
         ],
     )
     show.add_argument("--kind", choices=sorted(KINDS))
-    show.add_argument("--text", help="literal, case-sensitive search in known evidence text")
+    _add_record_filters(show)
     show.add_argument(
         "--include-unparsed", action="store_true", help="explicitly expose/search unparsed text"
     )
@@ -227,7 +241,10 @@ def run_session_query(args: argparse.Namespace) -> int:
                 "skill",
                 "skill_kind",
                 "kind",
+                "where",
                 "text",
+                "text_field",
+                "regex",
                 "include_unparsed",
                 "include_duplicates",
                 "include_context",

@@ -311,7 +311,10 @@ searchとshowには次の絞り込み・表示引数があります。
 | `--skill NAME` | Skill名または `plugin:skill` の完全一致 |
 | `--skill-kind KIND` | Skill参照の種類。`--skill` が必要 |
 | `--kind KIND` | call、result、messageなどの記録種別 |
-| `--text TEXT` | 大文字・小文字を区別する部分一致 |
+| `--where PATH=VALUE` | 記録内の項目の値で完全一致。複数指定はAND |
+| `--text TEXT` | 既定は大文字・小文字を区別する固定文字列の部分一致 |
+| `--text-field PATH` | `--text` の対象を記録内の1項目に限定する |
+| `--regex` | `--text` をPythonの正規表現として部分一致検索する |
 | `--limit N` | 返す記録数。既定20、正の整数 |
 | `--offset N` | 飛ばす件数。既定0、0以上 |
 | `--max-chars N` | 各previewの文字数。既定2000、正の整数 |
@@ -321,6 +324,23 @@ searchとshowには次の絞り込み・表示引数があります。
 
 ID指定は4種類のうち1つだけ使え、showでは必須です。他の条件はANDです。
 show専用の `--before N`・`--after N` は、それぞれ前後0〜100記録を指定します。既定は0です。
+
+たとえば、終了コードが1で、コマンドに `pytest` または `unittest` を含む実行記録は次のように探せます。
+
+```bash
+knowledge-refinery session search /tmp/analysis.json --kind execution \
+  --where data.item.exit_code=1 --text-field data.item.command \
+  --text '\b(pytest|unittest)\b' --regex
+```
+
+`PATH` は `records` の各記録を起点に、オブジェクトのキーを `.` でつなぎます。
+項目が欠けている記録は条件に一致しません。`--where` の値には文字列・数値・`true`・`false`・`null` を使えます。
+たとえば `--where data.item.exit_code=1` は数値、`--where 'data.item.process_id="1"'` は文字列を指定します。
+
+`--text-field` は文字列をそのまま、文字列の配列を半角スペースで連結し、その他の値をJSON表記で検索します。
+上の例ではコマンドの引数配列も検索でき、出力にだけ名前がある記録は除外されます。
+本文は `--max-chars` で表示を切り詰める前に照合します。`unparsed` 配下を指定するには `--include-unparsed` が必要です。
+不正な正規表現は終了コード2、有効な式で一致がなければ終了コード0で `total` が0になります。
 
 `next_offset` で続きを取得し、previewの `truncated` が真なら `--max-chars` を増やします。
 showの `related_truncated` が真なら、該当call IDやitem IDでsearchして関連結果を補います。

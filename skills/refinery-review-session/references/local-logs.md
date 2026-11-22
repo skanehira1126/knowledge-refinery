@@ -47,6 +47,7 @@ knowledge-refinery session show /tmp/session-analysis.json --call-id call-001 --
 ```
 
 抽出時の要約だけで分析せず、検索結果・対応結果・警告を読む。
+終了コードや呼び出し先で絞るときは `--where`、コマンド本文だけに照合するときは `--text-field` を使う。
 [出力を読む際の判断](session-analysis.md#出力を読む際の判断)に従い、続きを取得し、未読・欠落・対象範囲を記録する。
 元ログを読むのは、解析JSONの未知形式・対応不明・欠落を補う必要がある箇所に限る。
 reasoning本文・暗号化内容はレポートへ転載しない。

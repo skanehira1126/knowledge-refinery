@@ -88,3 +88,4 @@ nav:
       - refinery-propose-improvements: skills/refinery-propose-improvements.md
   - コントリビューション:
       - 開発・リリース: development.md
+      - 自己改善としての設計提案: agent-memory-research.md

@@ -284,6 +284,8 @@ def _collect_tag_usage(
                 validate_document_header(header, kind=kind)
             except (OSError, ValueError, RefineryCliError):
                 continue
+            if kind == "memory" and header.get("status") == "archived":
+                continue
             document_key = str(path.relative_to(vault))
             tags = header.get("tags", [])
             assert isinstance(tags, list)

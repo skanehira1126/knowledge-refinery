@@ -1,17 +1,19 @@
 # refinery-curate-context
 
-`$refinery-curate-context` は、対象projectのexperience・memoryから、次の作業を始める前に
-知っておきたい事実を抽出します。たとえば「注文テーブルは明細単位で、同じ注文IDが複数行に現れる」
-のように、集計や解釈を変える前提を数行に絞ります。
+`$refinery-curate-context` は、ある場面で知らないと判断が変わるprojectの前提を、
+そのhookで読める数行のMarkdownにまとめます。たとえば注文の集計なら「明細単位なので
+注文IDは複数行に現れる」、他projectとの依存関係なら「注文schemaは `sales-core` が定義し、
+このprojectは日別集計で参照する」と、対象と意味が分かるように書きます。
 
 ```text
-$refinery-curate-contextを使って、売上集計で最初に知るべき前提を候補だけ出してください。
-$refinery-curate-contextを使って、既存ナレッジから確認できた欠損値の意味をcontext.mdに反映してください。
+$refinery-curate-contextを使って、売上集計の新規チャットに必要な前提を候補だけ出してください。
+$refinery-curate-contextを使って、注文schemaの管理元を確認し、編集前に届く本文を更新してください。
 ```
 
-候補だけを依頼した場合は、文案と根拠のレコードIDを返します。更新を依頼した場合は
-vaultの `projects/<project_id>/context.md` に反映します。裏付けが足りない場合は保留し、
-新たに採用する事実がなければファイルはそのままです。
+候補の依頼では、配信先、文案、根拠のIDや参照先を返します。更新時はprojectのmemory・
+experienceや実際のschema・実装を確認し、該当する本文だけに反映します。共通のタグは
+関連先を探す手がかりとして使い、依存方向や契約の管理元は資料で確認します。
 
-このスキルは明示呼び出し専用です。チャットの開始時・履歴圧縮後には、hook が保存済みの本文を
-配信します。配信内容の確認方法は [CLI の context](../cli.md#context) を参照してください。
+登録済みで有効なrepoでは、開発中に前提が判明・変更された時点でエージェントがMCPで本文を更新できます。
+前提が解消したら古い行を外し、配信する行が尽きたらその配信先を解除します。hookはその時点の
+本文をローカルCLIで読み取ります。[MCPでの更新](../mcp.md#hook-context)・[配信先とCLIでの確認](../cli.md#context)

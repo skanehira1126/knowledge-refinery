@@ -67,6 +67,28 @@ def test_stdio_server_lists_expected_tools(
                 )
                 assert invalid.isError
 
+                address = {"project_path": str(project), "target": "SessionStart/compact"}
+                saved_context = await session.call_tool(
+                    "refinery_update_context", {**address, "body": "圧縮後の前提"}
+                )
+                assert not saved_context.isError and saved_context.structuredContent is not None
+                revision = saved_context.structuredContent["revision"]
+                missing_body = await session.call_tool(
+                    "refinery_update_context", {**address, "expected_revision": revision}
+                )
+                assert missing_body.isError
+                readback = await session.call_tool("refinery_get_context", address)
+                assert (
+                    not readback.isError
+                    and readback.structuredContent == saved_context.structuredContent
+                )
+                cleared = await session.call_tool(
+                    "refinery_update_context",
+                    {**address, "body": None, "expected_revision": revision},
+                )
+                assert not cleared.isError and cleared.structuredContent is not None
+                assert cleared.structuredContent["revision"] is None
+
                 created = await session.call_tool(
                     "refinery_create_handoff",
                     {
@@ -117,10 +139,14 @@ def test_stdio_server_lists_expected_tools(
 
         names = {tool.name for tool in result.tools}
         assert names == {
+            "refinery_list_contexts",
+            "refinery_get_context",
+            "refinery_update_context",
             "refinery_create_handoff",
             "refinery_list_handoffs",
             "refinery_get_handoff",
             "refinery_archive_handoff",
+            "refinery_archive_memory",
             "refinery_delete_handoff",
             "refinery_browse_knowledge_tags",
             "refinery_get_experience",
@@ -140,6 +166,13 @@ def test_stdio_server_lists_expected_tools(
         }
         descriptions = {tool.name: cleandoc(tool.description or "") for tool in result.tools}
         assert descriptions == {
+            "refinery_list_contexts": "projectのhook配信先と現在のrevisionを一覧取得します。",
+            "refinery_get_context": (
+                "指定したhook配信先の本文とrevisionを取得します。未設定なら両方nullです。"
+            ),
+            "refinery_update_context": (
+                "hook本文を保存します。更新・解除は現在のrevisionを指定し、解除時はbodyをnullにします。"
+            ),
             "refinery_vault_status": (
                 "開いたvaultの絶対パスをactive vaultと照合し、保守用contextを返します。"
             ),
@@ -185,6 +218,9 @@ def test_stdio_server_lists_expected_tools(
             "refinery_record_memory": (
                 "memoryを作成・更新します。更新の省略fieldは保持し、空listはclearします。"
             ),
+            "refinery_archive_memory": (
+                "確認済みrevisionのmemoryを通常検索から外し、理由と任意の後継参照を旧側に保存します。"
+            ),
             "refinery_search_experiences": (
                 "experienceを新しい順に検索します。project_idsとall_projectsは併用できません。"
             ),
@@ -192,7 +228,8 @@ def test_stdio_server_lists_expected_tools(
                 "Knowledge tagのpathと説明をAND条件の語句で検索し、利用件数も取得します。"
             ),
             "refinery_search_memory": (
-                "project/shared memoryを新しい順に検索します。結果のscopeをexact getへ渡します。"
+                "現役のproject/shared memoryを更新順に検索します。"
+                "include_archivedで過去分も含めます。"
             ),
             "refinery_update_project_metadata": (
                 "project metadataを部分更新します。省略fieldは保持し、"

@@ -17,6 +17,8 @@ Use this body shape:
 ## 次の可能性
 ```
 
+When a prior memory influenced a choice, identify its scope, project ID when applicable, memory ID, and the principle you read. Include the observed `updated_at` if a revision changes how the decision should be understood. Under 「試したこと」, say why you applied the principle or set it aside and what you did. Under 「分かったこと」, give the observed outcome and evidence, including any counterexample or uncertainty. A candidate first found in hindsight belongs to the review of the result. A search hit alone establishes only that it was returned. Include this detail in an experience that already warrants recording.
+
 Keep observations, interpretations, limitations, and hypotheses distinguishable. Choose status by this table; success and status are separate concepts.
 
 | Status | Use when |

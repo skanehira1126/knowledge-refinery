@@ -24,23 +24,40 @@ active vaultとのpath不一致はexit 2です。project登録やactive vaultの
 
 ## context
 
-分析の前提として毎回必要なドメイン知識は、中央vaultの `projects/<project_id>/context.md` に
-UTF-8のMarkdownで数行だけ記載します。たとえば「注文日別集計の件数が空欄の日は未収集」
-のように、データセットと値の意味を一緒に書きます。このファイルは任意で、必要なprojectだけに作成します。
-既存のナレッジから本文を作るには、[`$refinery-curate-context`](skills/refinery-curate-context.md) を明示して依頼します。
+Codexへ渡す短いMarkdownを、projectと配信先ごとに確認できます。配信先はCodexのイベント名と、
+必要に応じて開始理由かツール名をスラッシュでつないで指定します。
+
+| 配信先 | 届くタイミング | 載せる内容の例 |
+|---|---|---|
+| `SessionStart/<source>` | 新規開始 `startup`、再開 `resume`、クリア `clear`、圧縮後 `compact`、分岐 `fork` | 新規開始時に知らせたい依存先や、圧縮後に再確認したいデータ定義 |
+| `UserPromptSubmit` | ユーザーが入力するたび | どの依頼の解釈にも関わる用語の意味 |
+| `PreToolUse/Bash`、`PreToolUse/apply_patch` | 該当ツールの実行前 | 編集対象の生成元や、コマンドの入力に必要な前提 |
+| `PostToolUse/Bash`、`PostToolUse/apply_patch` | 該当ツールの実行後 | コマンド結果の単位や、編集後の検証に使うデータ |
+| `SubagentStart` | サブエージェントの開始時 | 委任先が調べる範囲と、参照先projectが持つ仕様 |
+
+各配信先は独立しています。`SessionStart/startup` のみ設定すると、新規開始時だけ届きます。
+本文は中央vaultの `projects/<project_id>/context/<配信先>.md` に保存します。
 
 ```bash
-knowledge-refinery context show
-knowledge-refinery context show --project "$PROJECT_ROOT"
+knowledge-refinery context list
+knowledge-refinery context show SessionStart/startup
+knowledge-refinery context show SessionStart/startup --json
 ```
 
-CLIは現在のディレクトリ（または指定パス）からrepo内の設定を探し、紐付けられたactive vaultの
-本文だけを標準出力に返します。未設定repo、無効な連携、ファイルなし、空白だけの本文では
-何も出力せず正常終了します。vaultの不一致や読み取りエラーは標準エラーで確認できます。
+`list` は全配信先とrevisionを表示し、未設定の欄は `-` になります。`list --json` と
+`show TARGET --json` は未設定のrevisionを `null` で返します。`show TARGET` は本文だけを表示します。
+エージェントはMCPで本文を作成・更新・解除します。[hook本文のMCP操作](mcp.md#hook-context)
 
-プラグイン同梱の `SessionStart` hook をCodexの `/hooks` またはデスクトップの
-`Settings → Hooks` で信頼すると、新規チャットの開始時（`startup`）と履歴圧縮後（`compact`）に
-この本文が追加コンテキストとして渡ります。ファイルの編集は次の発火時から反映されます。
+参照コマンドは現在地または `--project PATH` から同じrepo内の設定を探し、active vaultとの
+紐付けを検証します。中央vaultを直接開いた保守では、`--vault "$VAULT_ROOT" --project-id "$PROJECT_ID"`
+で登録済みprojectを指定できます。
+
+Codexの `/hooks` で使うhookを信頼すると、同梱の `context hook` が標準入力のイベントと
+`cwd` から該当する本文を選び、`hookSpecificOutput.additionalContext` として返します。
+未登録・無効なrepoや、該当する本文が未設定・空白の場合は出力せず正常終了します。
+保存した変更は次の該当イベントから届きます。根拠を確認して本文を整える手順は
+[refinery-curate-context](skills/refinery-curate-context.md)、イベントの入出力は
+[Codex Hooks](https://learn.chatgpt.com/docs/hooks)を参照してください。
 
 ## project lifecycle
 
@@ -127,7 +144,8 @@ rootから開始し、必要な枝を順に辿ります。`tag search`はtag pat
 ```text
 knowledge-refinery memory upsert --project PATH --title TEXT --summary TEXT --source-experience ID [options]
 knowledge-refinery memory get MEMORY_ID --project PATH [--scope project|shared] [--project-id ID]
-knowledge-refinery memory search [TERMS...] --project PATH [filters]
+knowledge-refinery memory search [TERMS...] --project PATH [--include-archived] [filters]
+knowledge-refinery memory archive MEMORY_ID --project PATH --reason TEXT --expected-updated-at TIMESTAMP [--superseded-by REF] [--shared]
 ```
 
 project memoryのsourceは現在projectのexperience ID、`--shared` で作るshared memoryのsourceは `project-id/experience-id` 形式を少なくと2件、2 projectから指定します。
@@ -136,6 +154,8 @@ memoryのfilenameはIDから一意に生成されます。既存memoryを更新�
 MCPの`refinery_get_memory`から取得したrevisionを`--expected-updated-at`へ渡します。
 省略したsource/tag/confidenceは保持し、`--clear-tags`と`--clear-confidence`だけが明示clearです。
 revisionなしの上書きとstale revisionは拒否されます。
+
+`archive`は理由と任意の後継参照を旧memoryに保存し、更新したheaderをJSONで返します。後継の指定形式は[保存形式](schema.md#memory-archive)を参照してください。通常の`search`はactiveだけを返し、`--include-archived`では各行に状態も表示します。`get`はアーカイブ後も元のIDで本文とheaderを返します。
 
 ## 安定出力
 

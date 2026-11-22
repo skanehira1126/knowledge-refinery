@@ -22,6 +22,10 @@ Expand beyond the project only when the local result is insufficient: choose IDs
 `refinery_list_projects` and pass `project_ids`; use `all_projects: true` only when no bounded
 project set is defensible. Never combine `project_ids` with `all_projects: true`.
 
+Ordinary memory search returns active principles. When investigating past decisions, use
+`include_archived: true` or read the old ID with `refinery_get_memory`; its header gives the
+archive reason and any successor.
+
 In direct vault maintenance, retain the verified context and start with the requested project set
 or shared scope. Select `vault_context.project_id` before writing a project's experience; no local
 product repo or new registration is required.

@@ -24,7 +24,8 @@ repo-scoped access failure. The user must explicitly request vault administratio
    Project metadata, experience writes, and project-memory writes require an explicit
    `vault_context.project_id`. Shared-memory writes use `shared: true`; omit the context's project
    ID when working only with shared knowledge. Tag browse/search needs a selected context project
-   or `all_projects: true`; tag descriptions apply to the whole vault.
+   or `all_projects: true`; tag descriptions apply to the whole vault. For project hook text,
+   pass the selected project's `vault_context` to the context tools with `project_path: null`.
 5. Continue the owning skill's evidence review, approval, revision, readback, and diff checks with
    this same context. A maintenance request is not approval of a concrete shared principle,
    material memory rewrite, or deletion. `refinery_validate` remains vault-wide even when the
@@ -33,4 +34,4 @@ repo-scoped access failure. The user must explicitly request vault administratio
 The context is a target-identity check, not proof of user approval. Filesystem permissions and the
 shared operating rules still apply. If the connected MCP lacks this interface, report the version
 limitation; do not create a placeholder project or weaken a repository's configuration. The CLI
-status command only inspects the entrypoint; knowledge maintenance through this route uses MCP.
+status command only inspects the entrypoint. Use MCP for experience, memory, metadata, tags, and hook text.

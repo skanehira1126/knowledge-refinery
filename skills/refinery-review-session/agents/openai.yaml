@@ -1,4 +1,6 @@
 interface:
+  display_name: "Refinery Review Session"
+  short_description: "終了した開発セッションでの作業と判断を読み解き、根拠付きのレポートにまとめます。"
   default_prompt: "$refinery-review-session を使って、指定した資料を根拠付きで検討してください。"
 policy:
   allow_implicit_invocation: false

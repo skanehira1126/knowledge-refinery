@@ -22,12 +22,14 @@ from knowledge_refinery.agents_ops import has_managed_block
 from knowledge_refinery.agents_ops import remove_agents_md
 from knowledge_refinery.config_ops import get_active_vault
 from knowledge_refinery.config_ops import set_active_vault
+from knowledge_refinery.context_cli import configure_context_parser
 from knowledge_refinery.errors import RefineryCliError
 from knowledge_refinery.experience_ops import CONFIDENCE_CHOICES
 from knowledge_refinery.experience_ops import EVIDENCE_TYPE_CHOICES
 from knowledge_refinery.experience_ops import EXPERIENCE_STATUS_CHOICES
 from knowledge_refinery.experience_ops import MEMORY_SCOPE_CHOICES
 from knowledge_refinery.experience_ops import SearchFilters
+from knowledge_refinery.experience_ops import archive_memory_at
 from knowledge_refinery.experience_ops import parse_datetime_filter
 from knowledge_refinery.experience_ops import read_experience_at
 from knowledge_refinery.experience_ops import read_memory_at
@@ -44,16 +46,13 @@ from knowledge_refinery.session_cli import configure_session_parser
 from knowledge_refinery.tag_ops import browse_knowledge_tags
 from knowledge_refinery.tag_ops import search_knowledge_tags
 from knowledge_refinery.tag_ops import update_tag_description
-from knowledge_refinery.vault_ops import PROJECT_CONFIG
 from knowledge_refinery.vault_ops import context_from_vault
 from knowledge_refinery.vault_ops import disable_project
 from knowledge_refinery.vault_ops import enable_project
 from knowledge_refinery.vault_ops import init_vault
 from knowledge_refinery.vault_ops import inspect_maintenance_vault
 from knowledge_refinery.vault_ops import inspect_project
-from knowledge_refinery.vault_ops import read_project_config
 from knowledge_refinery.vault_ops import read_project_metadata
-from knowledge_refinery.vault_ops import resolve_project_context
 from knowledge_refinery.vault_ops import resolve_project_id
 from knowledge_refinery.vault_ops import setup_project
 from knowledge_refinery.vault_ops import update_project_metadata
@@ -73,13 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
         subparsers.add_parser("session", help="Extract local session evidence")
     )
 
-    context_parser = subparsers.add_parser("context", help="Read project domain context")
-    context_commands = context_parser.add_subparsers(required=True)
-    context_show = context_commands.add_parser("show", help="Print the project's context.md")
-    location = context_show.add_mutually_exclusive_group()
-    location.add_argument("--project", "--target", default=".", help="project working directory")
-    location.add_argument("--hook-input", action="store_true", help="read Codex hook cwd on stdin")
-    context_show.set_defaults(handler=run_context_show)
+    configure_context_parser(subparsers.add_parser("context", help="Read project hook context"))
 
     vault_parser = subparsers.add_parser("vault", help="Manage the central refinery repository")
     vault_subparsers = vault_parser.add_subparsers(dest="vault_command", required=True)
@@ -356,6 +349,22 @@ def build_parser() -> argparse.ArgumentParser:
     memory_get.add_argument("--project-id", default=None, help="project scope owner")
     memory_get.set_defaults(handler=run_memory_get)
 
+    memory_archive = memory_subparsers.add_parser(
+        "archive", help="Retire a memory from default search and keep its history"
+    )
+    memory_archive.add_argument("memory_id", help="stable memory ID")
+    memory_archive.add_argument(
+        "--project", "--target", dest="project", default=".", help="configured project path"
+    )
+    memory_archive.add_argument("--shared", action="store_true", help="archive a shared memory")
+    memory_archive.add_argument("--reason", required=True, help="why the principle was retired")
+    memory_archive.add_argument(
+        "--superseded-by",
+        help="active successor: ID in the same scope, shared/ID, or project/PROJECT/ID",
+    )
+    memory_archive.add_argument("--expected-updated-at", required=True, help="revision from get")
+    memory_archive.set_defaults(handler=run_memory_archive)
+
     memory_search = memory_subparsers.add_parser("search", help="Search project and shared memory")
     add_search_arguments(memory_search)
     memory_search.add_argument(
@@ -363,6 +372,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     memory_search.add_argument(
         "--scope", action="append", choices=MEMORY_SCOPE_CHOICES, default=[]
+    )
+    memory_search.add_argument(
+        "--include-archived", action="store_true", help="also search retired memory"
     )
     add_typed_search_arguments(memory_search)
     memory_search.set_defaults(handler=run_memory_search)
@@ -514,38 +526,6 @@ def read_body(args: argparse.Namespace) -> str | None:
     if args.body_file is not None:
         return Path(args.body_file).read_text(encoding="utf-8")
     return args.body
-
-
-def run_context_show(args: argparse.Namespace) -> int:
-    """Print the nearest configured project's optional session context."""
-    cwd = Path(args.project)
-    if args.hook_input:
-        event = json.load(sys.stdin)
-        location = event.get("cwd") if isinstance(event, dict) else None
-        if not isinstance(location, str) or not Path(location).is_absolute():
-            raise ValueError("Expected an absolute cwd in Codex hook input")
-        cwd = Path(location)
-    cwd = cwd.expanduser().resolve()
-    for root in (cwd, *cwd.parents):
-        if (root / PROJECT_CONFIG).is_file():
-            break
-        if (root / ".git").exists():
-            return 0
-    else:
-        return 0
-    if not read_project_config(root).enabled:
-        return 0
-    context = resolve_project_context(root, get_active_vault())
-    path = context.project_store / "context.md"
-    if path.resolve() != path:
-        raise ValueError(f"Project context must be stored directly in its vault project: {path}")
-    try:
-        body = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return 0
-    if body.strip():
-        sys.stdout.write(body)
-    return 0
 
 
 def run_vault_init(args: argparse.Namespace) -> int:
@@ -988,6 +968,22 @@ def run_memory_get(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_memory_archive(args: argparse.Namespace) -> int:
+    """Archive the selected memory and print its updated header."""
+    vault = get_active_vault()
+    header = archive_memory_at(
+        vault,
+        resolve_project_id(Path(args.project), vault),
+        args.memory_id,
+        shared=args.shared,
+        reason=args.reason,
+        expected_updated_at=args.expected_updated_at,
+        superseded_by=args.superseded_by,
+    )
+    print(json.dumps(header, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
 def run_handoff(args: argparse.Namespace) -> int:
     """Execute an explicitly selected handoff operation and print JSON."""
     vault = get_active_vault()
@@ -1110,6 +1106,7 @@ def run_document_search(args: argparse.Namespace, *, kind: str, statuses: list[s
         evidence_types=tuple(getattr(args, "evidence_type", [])),
         scopes=tuple(getattr(args, "scope", [])),
         confidences=tuple(args.confidence),
+        include_archived=getattr(args, "include_archived", False),
         recorded_from=(
             parse_datetime_filter(args.recorded_from, end_of_day=False)
             if args.recorded_from
@@ -1133,9 +1130,10 @@ def run_document_search(args: argparse.Namespace, *, kind: str, statuses: list[s
         filters=filters,
     )
     for entry in entries:
+        status = f' status="{entry.status}"' if filters.include_archived else ""
         print(
             f'project="{entry.project_id}" id="{entry.document_id}" '
-            f'title="{entry.title}" path="{entry.path}"'
+            f'title="{entry.title}" path="{entry.path}"{status}'
         )
     return 0
 

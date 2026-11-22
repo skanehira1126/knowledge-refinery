@@ -8,16 +8,20 @@ import pytest
 import yaml
 
 from knowledge_refinery.config_ops import set_active_vault
+from knowledge_refinery.front_matter import render_front_matter
 from knowledge_refinery.mcp_server import mcp
 from knowledge_refinery.mcp_server import refinery_archive_handoff
+from knowledge_refinery.mcp_server import refinery_archive_memory
 from knowledge_refinery.mcp_server import refinery_browse_knowledge_tags
 from knowledge_refinery.mcp_server import refinery_create_handoff
 from knowledge_refinery.mcp_server import refinery_delete_handoff
+from knowledge_refinery.mcp_server import refinery_get_context
 from knowledge_refinery.mcp_server import refinery_get_experience
 from knowledge_refinery.mcp_server import refinery_get_handoff
 from knowledge_refinery.mcp_server import refinery_get_memory
 from knowledge_refinery.mcp_server import refinery_get_project_metadata
 from knowledge_refinery.mcp_server import refinery_info
+from knowledge_refinery.mcp_server import refinery_list_contexts
 from knowledge_refinery.mcp_server import refinery_list_handoffs
 from knowledge_refinery.mcp_server import refinery_list_projects
 from knowledge_refinery.mcp_server import refinery_record_experience
@@ -25,6 +29,7 @@ from knowledge_refinery.mcp_server import refinery_record_memory
 from knowledge_refinery.mcp_server import refinery_search_experiences
 from knowledge_refinery.mcp_server import refinery_search_knowledge_tags
 from knowledge_refinery.mcp_server import refinery_search_memory
+from knowledge_refinery.mcp_server import refinery_update_context
 from knowledge_refinery.mcp_server import refinery_update_project_metadata
 from knowledge_refinery.mcp_server import refinery_update_tag_description
 from knowledge_refinery.mcp_server import refinery_validate
@@ -36,6 +41,7 @@ from knowledge_refinery.vault_ops import disable_project
 from knowledge_refinery.vault_ops import init_vault
 from knowledge_refinery.vault_ops import read_vault_id
 from knowledge_refinery.vault_ops import setup_project
+from tests._support import write_markdown_document
 
 
 def configured_mcp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -47,6 +53,71 @@ def configured_mcp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     setup_project(project, vault, project_id="pybr")
     set_active_vault(vault)
     return vault
+
+
+def test_mcp_context_lifecycle_and_revisions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    repo = str(tmp_path / "pybr")
+    target = "SessionStart/startup"
+    path = vault / "projects/pybr/context/SessionStart/startup.md"
+    unset = refinery_get_context(repo, target)
+    assert unset == {"target": target, "body": None, "revision": None}
+    assert {"target": target, "revision": None} in refinery_list_contexts(repo)
+    assert not path.parent.exists()
+
+    saved = refinery_update_context(repo, target, "注文スキーマの管理元は sales-core。")
+    assert saved["revision"] and saved == refinery_get_context(repo, target)
+    other = refinery_update_context(repo, "SubagentStart", "schemaの変更先は sales-core。")
+    with pytest.raises(ValueError, match="conflict"):
+        refinery_update_context(repo, target, "blind replacement")
+    with pytest.raises(ValueError, match="requires"):
+        refinery_update_context(repo, target, None)
+    with pytest.raises(ValueError, match="blank"):
+        refinery_update_context(repo, target, " ", saved["revision"])
+    revised = refinery_update_context(
+        repo, target, "共通スキーマは order-schema が管理する。", saved["revision"]
+    )
+    assert revised["revision"] != saved["revision"]
+    assert path.read_text(encoding="utf-8") == revised["body"]
+    path.write_text("編集済み", encoding="utf-8")
+    with pytest.raises(ValueError, match="conflict"):
+        refinery_update_context(repo, target, None, revised["revision"])
+    current = refinery_get_context(repo, target)
+    assert current["body"] == "編集済み"
+    assert refinery_update_context(repo, target, None, current["revision"]) == unset
+    assert not path.exists() and refinery_get_context(repo, target) == unset
+    assert refinery_get_context(repo, "SubagentStart") == other
+
+
+def test_mcp_context_selects_one_verified_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "pybr"
+    other = tmp_path / "other"
+    other.mkdir()
+    setup_project(other, vault, project_id="other")
+    target = "PreToolUse/apply_patch"
+    status = refinery_vault_status(str(vault))
+    context = VaultContext(**cast(dict[str, Any], status["vault_context"]))
+    with pytest.raises(ValueError, match="requires vault_context.project_id"):
+        refinery_update_context(None, target, "unscoped", vault_context=context)
+    scoped = replace(context, project_id="pybr")
+    with pytest.raises(ValueError, match="cannot be used together"):
+        refinery_get_context(str(project), target, vault_context=scoped)
+    with pytest.raises(ValueError, match="Unknown context target"):
+        refinery_update_context(str(project), "../project", "invalid")
+    disable_project(project)
+    with pytest.raises(ValueError, match="disabled"):
+        refinery_update_context(str(project), target, "disabled")
+    with pytest.raises(ValueError, match="vault_id"):
+        refinery_update_context(None, target, "stale", vault_context=replace(scoped, vault_id="0"))
+    assert not (vault / "projects/pybr/context").exists()
+    saved = refinery_update_context(None, target, "明示したvault保守", vault_context=scoped)
+    assert refinery_get_context(None, target, vault_context=scoped) == saved
+    assert refinery_get_context(str(other), target)["body"] is None
 
 
 @pytest.mark.parametrize(
@@ -119,7 +190,7 @@ def test_local_mcp_records_searches_and_validates(
     assert tagged_metadata["technologies"] == ["Python"]
     assert refinery_list_projects() == [tagged_metadata]
     assert refinery_info() == {
-        "version": "0.7.5",
+        "version": "0.8.0",
         "schema_version": 2,
         "project_metadata_schema_version": 1,
         "tag_taxonomy_schema_version": 1,
@@ -301,6 +372,139 @@ def test_memory_update_requires_current_revision(
     )
     assert updated["updated_at"] != created["updated_at"]
     assert refinery_get_memory(str(project), "rule")["header"]["summary"] == "safe update"
+
+
+def test_archived_memory_keeps_its_history_out_of_default_search(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    project = str(tmp_path / "pybr")
+    refinery_record_experience(
+        project, "Trial", "Interpret blanks", "completed", "v1", experience_id="trial"
+    )
+    revision = "2026-07-01T00:00:00+00:00"
+    legacy_header: dict[str, object] = {
+        "schema_version": 2,
+        "memory_id": "old",
+        "scope": "project",
+        "project_id": "pybr",
+        "title": "Blanks",
+        "summary": "Count as zero",
+        "source_experiences": ["trial"],
+        "tags": ["task/import"],
+        "confidence": "high",
+        "updated_at": revision,
+    }
+    body = "Applies to v1.  \nSee the import contract.  "
+    nested = vault / "projects/pybr/memory/imports/old.md"
+    nested.parent.mkdir()
+    nested.write_text(f"{render_front_matter(legacy_header)}\n{body}\n", encoding="utf-8")
+    assert refinery_get_memory(project, "old")["header"]["status"] == "active"
+    assert refinery_search_memory(project, terms=["blanks"])[0]["status"] == "active"
+
+    refinery_record_memory(
+        project, "Blanks by format", "Check the version", ["trial"], memory_id="by-format"
+    )
+    with pytest.raises(ValueError, match="stale"):
+        refinery_archive_memory(project, "old", "Covered by format", "stale", "by-format")
+    for successor, error in (("missing", "Unknown"), ("project/pybr/old", "itself")):
+        with pytest.raises(ValueError, match=error):
+            refinery_archive_memory(project, "old", "Covered by format", revision, successor)
+    with pytest.raises(ValueError, match="archive_reason"):
+        refinery_archive_memory(project, "old", " ", revision)
+
+    archived = refinery_archive_memory(project, "old", "Covered by format", revision, "by-format")
+    assert archived["updated_at"] != revision
+    history = refinery_get_memory(project, "old")
+    assert history["body"] == body
+    assert history["header"] == {
+        **legacy_header,
+        "status": "archived",
+        "archive_reason": "Covered by format",
+        "superseded_by": "by-format",
+        "updated_at": archived["updated_at"],
+    }
+    assert [entry["id"] for entry in refinery_search_memory(project, terms=["blanks"])] == [
+        "by-format"
+    ]
+    assert refinery_search_memory(project, memory_ids=["old"], all_projects=True) == []
+    hits = refinery_search_memory(project, terms=["blanks"], include_archived=True)
+    assert {(entry["id"], entry["status"]) for entry in hits} == {
+        ("old", "archived"),
+        ("by-format", "active"),
+    }
+    assert refinery_search_knowledge_tags(project, terms=["task/import"])["tags"] == []
+
+    refinery_record_memory(
+        project,
+        "Blanks",
+        "Count as zero",
+        memory_id="old",
+        expected_updated_at=str(archived["updated_at"]),
+    )
+    assert refinery_get_memory(project, "old")["header"]["superseded_by"] == "by-format"
+    assert refinery_search_memory(project, memory_ids=["old"]) == []
+    assert refinery_validate()["valid"] is True
+
+
+def test_vault_validates_successors_across_memory_scopes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = configured_mcp(tmp_path, monkeypatch)
+    project = tmp_path / "shared"
+    project.mkdir()
+    setup_project(project, vault, project_id="shared")
+    for repo in (project, tmp_path / "pybr"):
+        refinery_record_experience(
+            str(repo), "Trial", "Check scope", "completed", "Observed", experience_id="trial"
+        )
+    local = refinery_record_memory(str(project), "Local", "Before", ["trial"], memory_id="rule")
+    common = refinery_record_memory(
+        str(project),
+        "Shared",
+        "After",
+        ["shared/trial", "pybr/trial"],
+        shared=True,
+        memory_id="rule",
+    )
+    context = VaultContext(str(vault), str(read_vault_id(vault)))
+    with pytest.raises(ValueError, match="requires vault_context.project_id"):
+        refinery_archive_memory(
+            None, "rule", "Merged", str(local["updated_at"]), vault_context=context
+        )
+    refinery_archive_memory(
+        str(project), "rule", "Merged", str(local["updated_at"]), "shared/rule"
+    )
+    with pytest.raises(ValueError, match="active memory"):
+        refinery_archive_memory(
+            None,
+            "rule",
+            "Back to local",
+            str(common["updated_at"]),
+            "project/shared/rule",
+            shared=True,
+            vault_context=context,
+        )
+    retired = refinery_archive_memory(
+        None,
+        "rule",
+        "Format withdrawn",
+        str(common["updated_at"]),
+        shared=True,
+        vault_context=context,
+    )
+    assert retired["superseded_by"] is None
+    assert refinery_search_memory(str(project)) == []
+    assert refinery_validate()["valid"] is True
+
+    path = vault / str(common["path"])
+    for reference, error in (("project/shared/rule", "cycle"), ("missing", "Unknown")):
+        write_markdown_document(path, {**retired, "superseded_by": reference}, "After")
+        report = refinery_validate()
+        assert report["valid"] is False
+        assert any(
+            item["path"] == common["path"] and error in item["error"] for item in report["errors"]
+        )
 
 
 def test_experience_update_requires_current_revision(

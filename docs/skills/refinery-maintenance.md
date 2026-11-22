@@ -15,7 +15,7 @@ repoの無効化はこの中央管理と独立していますが、無効repoの
 APIの対象指定は[MCP tools](../mcp.md#vault-maintenance)を参照してください。
 
 監査・提案のみなら書き込まず、修復依頼では結論を変えない根拠のある修正まで進めます。
-Experience本文の更新は`refinery-experience`、memoryの作成・更新は`refinery-memory`へ委ねます。
+Experience本文の更新は`refinery-experience`、memoryの作成・更新・アーカイブは`refinery-memory`へ委ねます。棚卸しでは候補の適用条件と後継を確認し、過去の判断を追う場合はアーカイブ分を含めて検索します。
 Shared memory、knowledge削除、memoryの大幅な書き換えには具体案への承認が必要です。
 
 指定したmetadataやtag説明の事実修正は、現在revisionで更新して読み戻し・差分確認まで行います。

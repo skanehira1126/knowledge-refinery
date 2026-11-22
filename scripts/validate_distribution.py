@@ -101,7 +101,6 @@ def _validate_skills() -> None:
             raise ValueError(f"Skill default prompt must invoke ${name}")
         if name in {
             "refinery-handoff",
-            "refinery-curate-context",
             "refinery-review-session",
             "refinery-propose-improvements",
         }:

@@ -2,11 +2,53 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "^(startup|compact)$",
+        "matcher": "^(startup|resume|clear|compact|fork)$",
         "hooks": [
           {
             "type": "command",
-            "command": "uv run --project \"$PLUGIN_ROOT\" knowledge-refinery context show --hook-input || exit 1"
+            "command": "uv run --project \"$PLUGIN_ROOT\" knowledge-refinery context hook || exit 1"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$PLUGIN_ROOT\" knowledge-refinery context hook || exit 1"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$PLUGIN_ROOT\" knowledge-refinery context hook || exit 1"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$PLUGIN_ROOT\" knowledge-refinery context hook || exit 1"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$PLUGIN_ROOT\" knowledge-refinery context hook || exit 1"
           }
         ]
       }

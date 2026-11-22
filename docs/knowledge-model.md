@@ -44,6 +44,7 @@ experienceに残し、memoryには再利用する原則、適用条件、限界�
 | 発見 | `title`, `summary`, `tags` |
 | 確からしさ | `confidence`, `updated_at` |
 | 根拠 | `source_experiences` |
+| 検索対象・後継 | `status`, `archive_reason`, `superseded_by` |
 
 Project memoryはschema上、現在projectのexperienceを最低1件参照します。Shared memoryは
 `project-id/experience-id`形式の根拠を使い、異なる2 project以上から支持される必要があります。
@@ -64,7 +65,7 @@ Experienceのstatusは、試行の成否ではなく「評価可能な結果へ�
 | `abandoned` | blocker、cost、risk、前提崩壊により、評価可能な結果の前に停止した |
 | `superseded` | 保存済みの後続experienceがこの記録の結論を置き換えた |
 
-confidenceはstatusと独立して、根拠の強さを表します。
+Memoryのstatusは通常検索に含める`active`、過去の判断として保持する`archived`の2種類です。旧文書での省略は`active`と扱います。confidenceはstatusと独立して、根拠の強さを表します。
 
 | confidence | Experience | Memory |
 |---|---|---|
@@ -121,7 +122,7 @@ experience・project memory・shared memory別件数が含まれます。文書�
 
 概念名から探す場合は`refinery_search_knowledge_tags`を使います。tag pathと説明を検索対象にし、
 複数termはAND条件です。説明は中央vaultの`knowledge-tags.yaml`へ明示的に保存し、利用件数は
-knowledge文書から動的に計算します。
+experienceとactiveなmemoryから動的に計算します。
 
 ## タイトル・サマリー・タグの検索
 
@@ -148,6 +149,7 @@ flowchart TB
 | experience / memory ID | `experience_ids` / `memory_ids` / `--id` | 完全一致 |
 | confidence | `confidences` / `--confidence` | 完全一致 |
 | status | experienceの`statuses` / `--status` | 完全一致 |
+| アーカイブしたmemory | `include_archived: true` / `--include-archived` | 通常の検索対象に過去分を加える |
 | scope | memoryの`scopes` / `--scope` | 完全一致 |
 | source experience | memoryの`source_experiences` / `--source-experience` | 完全一致 |
 

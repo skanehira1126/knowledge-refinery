@@ -8,8 +8,7 @@
 - `refinery-maintenance`: 定期棚卸し、vault品質監査、指定対象のナレッジ修復
 - `refinery-handoff`: 明示呼び出しによる作業の引き継ぎの作成・再開・整理
 - `refinery-issue`: vault単位の課題・TODOの作成、一覧、進捗更新、project紐付け、タグ管理
-- [`refinery-curate-context`](refinery-curate-context.md): 明示呼び出しで既存のナレッジからprojectの初期コンテキストを抽出
-
+- `refinery-curate-context` は特定のhookで繰り返し必要になるprojectの前提を、根拠の変化に合わせて更新する。[使い方](refinery-curate-context.md)
 - [`refinery-review-session`](refinery-review-session.md): 明示呼び出しで終了済みセッションを解析
 - [`refinery-propose-improvements`](refinery-propose-improvements.md): 明示呼び出しでレポートから改善先を比較
 

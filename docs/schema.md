@@ -5,7 +5,7 @@
 ```yaml
 schema_version: 2
 managed_by: knowledge-refinery
-cli_version: 0.7.5
+cli_version: 0.8.0
 vault_id: 0123456789abcdef0123456789abcdef
 ```
 
@@ -101,6 +101,7 @@ schema_version: 2
 memory_id: feature-selection
 scope: project
 project_id: my-project
+status: active
 title: 特徴量選択の原則
 summary: 相関グループも確認する
 source_experiences: [boruta-trial]
@@ -116,6 +117,7 @@ schema_version: 2
 memory_id: validate-feature-groups
 scope: shared
 project_id: null
+status: active
 title: 特徴量グループを検証する
 summary: 個別特徴量だけでなく相関グループを比較する
 source_experiences:
@@ -132,6 +134,18 @@ Project memoryはschema上1件以上のsourceを受け付けますが、通常�
 2件以上を要求します。1件だけのmemoryは利用者の明示依頼がある場合に限り、scopeと未検証の限界を
 本文へ書き、`confidence: high`を使用しません。Shared memoryはschema条件を満たしても自動作成せず、
 候補内容と根拠を提示して利用者の明示承認を得ます。
+
+### memoryのアーカイブ {#memory-archive}
+
+`status`は`active`または`archived`で、省略した既存文書は`active`として読みます。アーカイブすると旧文書の本文・根拠を保ったまま`updated_at`を更新し、次の情報を保存します。
+
+```yaml
+status: archived
+archive_reason: 版ごとの判定を後継の原則に統合した
+superseded_by: blanks-by-format
+```
+
+`archive_reason`は空でない理由です。`superseded_by`は後継がある場合に指定し、同じscope・project内のID、`shared/ID`、または`project/PROJECT/ID`で参照します。後継のない取り下げではnullです。active文書の理由・後継は省略またはnullです。新しく張るリンクは実在するactiveな後継を指します。その後に後継もアーカイブされた場合は当時のリンクを保ちます。vaultのvalidationは参照先の欠落・自己参照・循環を検出します。
 
 ## confidence
 

@@ -854,6 +854,7 @@ Open this vault directly and use the Plugin's refinery-maintenance skill for kno
 - `projects/<project_id>/project.yaml`: project identity and discovery metadata
 - `projects/<project_id>/experiences`: integrated attempt and outcome records
 - `projects/<project_id>/memory`: reusable project-specific principles
+- `projects/<project_id>/context/<target>.md`: optional Markdown for a specific Codex hook
 - `shared/memory`: principles supported across projects
 - `knowledge-tags.yaml`: optional descriptions for the shared Knowledge tag taxonomy
 """
@@ -879,8 +880,8 @@ def _vault_agents() -> str:
 - Keep Knowledge tag descriptions stable and factual in `knowledge-tags.yaml`.
 - Do not store credentials, tokens, personal or customer data, or unredacted sensitive logs.
 - Preserve current revisions, supporting sources, and unrelated edits when updating knowledge.
-- Knowledge deletion or a material change to a memory's principle or applicability requires
-  explicit approval of the concrete diff and evidence. Reuse approval for unchanged work;
+- Knowledge deletion, memory archival, or material changes to a principle or its applicability
+  require explicit approval of the concrete diff and evidence. Reuse approval for unchanged work;
   prepare permitted inspection and drafts before asking, and continue independent work.
 - If an instruction blocks an action, link its file, quote the requirement briefly, and explain
   its application without treating an interpretation as a written rule.
@@ -894,6 +895,7 @@ def _project_store_agents(project_id: str) -> str:
 - `experiences/` stores integrated attempts and conclusions.
 - Experience `evidence` entries store reference metadata only; do not copy source files or secrets.
 - `memory/` stores reusable principles supported by experiences.
+- `context/` stores hook-specific Markdown that agents maintain with `refinery_update_context`.
 - `handoffs/` stores task snapshots for explicitly requested handoffs, outside knowledge search.
 - Normally require two repeated or complementary experiences for project memory. One source
   requires an explicit user request, narrow scope, stated unverified limits, and confidence

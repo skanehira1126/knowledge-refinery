@@ -12,14 +12,17 @@ flowchart TB
     end
 
     subgraph Plugin["Global Plugin"]
-        SK["7 Skills<br/>refinery-handoff と refinery-curate-context は明示呼び出し専用"]
+        SK["Plugin Skills"]
         MCP["local stdio MCP"]
+        HK["Codex hooks"]
+        CLI["context CLI"]
     end
 
     CFG["User config<br/>active vault"]
 
     subgraph Vault["Central filesystem vault"]
         PM["projects/&lt;project_id&gt;<br/>metadata / experiences / memory / handoffs"]
+        CT["projects/&lt;project_id&gt;/context"]
         SM["shared/memory"]
         KT["knowledge-tags.yaml"]
     end
@@ -28,6 +31,9 @@ flowchart TB
     RC --> MCP
     RL --> MCP
     SK --> MCP
+    HK --> CLI
+    CLI -->|参照| CT
+    MCP -->|本文の取得・更新| CT
     MCP --> CFG
     CFG --> Vault
     MCP --> PM
@@ -49,6 +55,9 @@ flowchart TB
 - active vaultはユーザー設定に1つ持ちます。設定ファイルは `REFINERY_CONFIG` で明示でき、未指定時は `${XDG_CONFIG_HOME:-$HOME/.config}/knowledge-refinery/config.yaml` を使います。`REFINERY_VAULT` でactive vaultを一時overrideできます。
 - repo-scoped MCP toolsは`project_path`を受け、server側で`enabled`、project metadata、repoと
   active vaultの`vault_id`一致を検証します。
+- プロジェクトのhook本文はMCPがrevisionを照合して更新します。現行のstdioサーバーと
+  hook CLIは同じ端末のvaultを参照し、CLIはイベントと開始理由・ツール名に合う本文をCodexへ返します。
+  [MCPでの更新](mcp.md#hook-context)・[CLIによる配信](cli.md#context)
 - 中央vaultを直接開いた明示的な保守では、`refinery_vault_status`で確認した`vault_context`
   を使います。各呼び出しでactive vaultの実パスとIDを照合し、project対象の書き込みでは
   context内の`project_id`も検証します。vault自身のproject登録は不要で、repoのopt-outを

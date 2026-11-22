@@ -11,6 +11,9 @@ metadata、repoとactive vaultの`vault_id`一致を検証します。
 | `refinery_vault_status` | 開いたvaultを照合し保守contextを取得 | `vault_path` |
 | `refinery_get_project_metadata` | 現在repoのproject metadata取得 | repo / vault context |
 | `refinery_update_project_metadata` | project metadataのrevision付き更新 | repo / vault context |
+| `refinery_list_contexts` | hookの配信先とrevisionの一覧 | repo / vault context |
+| `refinery_get_context` | 配信先1件の本文とrevisionを取得 | repo / vault context |
+| `refinery_update_context` | 配信本文を作成・更新・解除 | repo / vault context |
 | `refinery_browse_knowledge_tags` | 指定した親tagの直下を説明・利用件数付きで取得 | repo / vault context |
 | `refinery_search_knowledge_tags` | tag pathと説明を語句検索 | repo / vault context |
 | `refinery_update_tag_description` | tag説明のrevision付き登録・更新 | repo / vault context |
@@ -20,6 +23,7 @@ metadata、repoとactive vaultの`vault_id`一致を検証します。
 | `refinery_search_memory` | project/shared memory検索 | repo / vault context |
 | `refinery_get_memory` | scopeとIDを指定したmemory本文取得 | repo / vault context |
 | `refinery_record_memory` | project/shared memoryの作成・revision付き更新 | repo / vault context |
+| `refinery_archive_memory` | 確認済みのmemoryを理由・任意の後継参照とともにアーカイブ | repo / vault context |
 | `refinery_create_handoff` | 引き継ぎsnapshotの作成と旧版のアーカイブ | `project_path` |
 | `refinery_list_handoffs` | 全projectまたは指定projectの引き継ぎmetadata一覧 | vault参照（任意の`project_id`） |
 | `refinery_get_handoff` | project IDと引き継ぎIDによる取得 | vault参照（`project_id`） |
@@ -37,7 +41,7 @@ vaultの棚卸し・横断参照・修復では、vaultをprojectとして登録
 ```json
 {
   "ready": true,
-  "version": "0.7.2",
+  "version": "0.8.0",
   "vault_context": {
     "vault_path": "/absolute/path/to/vault",
     "vault_id": "0123456789abcdef0123456789abcdef",
@@ -58,8 +62,9 @@ vaultの棚卸し・横断参照・修復では、vaultをprojectとして登録
 | experience / memory検索 | `project_ids`、`all_projects: true`、またはcontext内の`project_id`。sharedのみなら`scopes: [shared]` |
 | experience取得 | `source: project-id/experience-id`。contextにproject IDがあれば非修飾IDも可 |
 | memory取得 | `scope`と`memory_id`。projectなら`project_id`またはcontext内のID、sharedならtoolの`project_id`は省略 |
-| project metadata取得・更新、experience保存、project memory保存 | context内の`project_id`が必須。登録済みmetadataを検証 |
+| project metadata取得・更新、hook本文の一覧・取得・更新、experience保存、project memory保存 | context内の`project_id`が必須。登録済みmetadataを検証 |
 | shared memory保存 | `shared: true`。context内のproject IDは不要 |
+| memoryのアーカイブ | 旧memoryの保存と同じscopeを指定。projectならcontext内の`project_id`、sharedなら`shared: true` |
 | tag参照・検索 | context内の`project_id`または`all_projects: true` |
 | tag説明の更新 | vault全体のtaxonomyを更新 |
 
@@ -79,13 +84,30 @@ refinery_get_memory(project_path=null, vault_context=CONTEXT, memory_id="princip
 共有原則の作成・昇格、重要改訂、削除の承認要件と、provenance・revision検査は維持します。
 Knowledge削除toolは追加せず、handoffの作成・整理もrepo-scopedのままです。
 
+## hook本文を更新する {#hook-context}
+
+登録済みで有効なprojectでは、作業で確認できた前提をエージェントが該当するhookの本文に反映できます。
+`refinery_list_contexts` は配信先と各revisionを返し、`refinery_get_context` は指定した配信先の
+`target`、`body`、`revision` を返します。未設定なら本文とrevisionはどちらも `null` です。
+
+```text
+entry = refinery_get_context(project_path=PROJECT_ROOT, target="SessionStart/startup")
+refinery_update_context(project_path=PROJECT_ROOT, target=entry.target,
+    body="注文スキーマは sales-core が定義する。", expected_revision=entry.revision)
+```
+
+更新の戻り値は保存した本文とrevisionを含みます。新規作成では `expected_revision` を省略できます。
+既存の本文を置き換えるときは取得時のrevisionを渡し、ほかの編集が先に入ったら再読します。
+配信を解除するときは `body: null` と現在のrevisionを明示します。次の該当イベントから
+ローカルCLIが保存結果を配信します。[配信先の一覧](cli.md#context)
+
 ## 検索スコープ
 
 デフォルトは現在projectです。まず現在project memoryとshared memory、次に現在project experienceを
 検索します。ローカルの結果で足りない場合は、`refinery_list_projects`から選んだ
 `project_ids`でbounded searchします。対象を合理的に限定できない場合だけ`all_projects: true`で
 vault全体へ広げます。`project_ids`と`all_projects: true`は併用できず、併用時はエラーです。
-memory検索ではどのproject scopeでもshared memoryを対象にします。
+memory検索ではどのproject scopeでもshared memoryを対象にします。既定は`active`だけです。`include_archived: true`で`archived`も含めます。検索結果の`status`で区別できます。
 
 検索結果は共通して`project_id`、`id`、`title`、`kind`、`summary`、`status`、`scope`、
 `confidence`、`tags`、`recorded_at`、`updated_at`、`path`を返し、対象外fieldはnullです。
@@ -106,7 +128,7 @@ tagは`refinery_search_knowledge_tags`の語句検索、または`refinery_brows
 再検索する必要はありません。階層を探索するときは`parent_tag`を省略してrootから始めるか、
 既知の親tagを指定し、`has_children`を見ながら必要な枝を辿ります。各tagには説明、直指定の
 `direct_count`、子孫を含む`document_count`、文書種別ごとの件数が含まれます。既定では現在
-projectとshared memoryを集計し、`all_projects: true`で全projectへ広げます。
+projectとshared memoryを集計し、`all_projects: true`で全projectへ広げます。memoryの件数には現役の原則を数えます。
 
 `refinery_search_knowledge_tags`の`terms`はtag pathと説明に対する大文字小文字を区別しない
 AND検索です。taxonomyに定義済みの未使用tagと、文書で使用済みだが説明が未定義のtagを
@@ -117,6 +139,8 @@ AND検索です。taxonomyに定義済みの未使用tagと、文書で使用済
 場合だけ省略できます。説明の更新はtagのrenameや文書側tagの変更を行いません。
 
 shared memoryの根拠を読むときは `refinery_get_experience(project_path, "project-id/experience-id")` を使います。experienceまたはmemoryを更新するときは、直前の取得結果にある `updated_at` をそれぞれ `refinery_record_experience.expected_updated_at`、`refinery_record_memory.expected_updated_at` へ渡します。不一致は競合として拒否されます。record toolの戻り値にも次回更新用の `updated_at` が含まれます。
+
+`refinery_archive_memory(project_path, memory_id, reason, expected_updated_at)`は更新したheaderを返します。後継がある場合は`superseded_by`、旧memoryがsharedなら`shared: true`を指定します。後継を先に保存・確認してから旧側をアーカイブします。`refinery_get_memory`で旧IDを読むと、当時の本文と`archive_reason`、任意の`superseded_by`を確認できます。内容のrevision付き更新でもアーカイブ状態を保ちます。[後継参照の形式](schema.md#memory-archive)
 
 record toolの更新では、optional fieldの省略は現在値を保持します。空listを明示したfieldだけを
 clearし、confidenceは`clear_confidence: true`でclearします。createとupdateのどちらでも、
@@ -153,6 +177,7 @@ tagはlowercase kebab-caseで目的・領域を表し、技術名は `technologi
 - active vaultにproject領域がない。
 - project metadataが不正。
 - memoryのsource experienceが実在しない。
+- アーカイブ理由が空、後継の欠落・自己参照・循環がある。
 - shared memoryの根拠が2 project未満。
 
 ## 引き継ぎ専用tools {#handoff-tools}

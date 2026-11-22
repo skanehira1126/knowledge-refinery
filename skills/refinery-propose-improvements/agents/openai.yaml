@@ -1,4 +1,6 @@
 interface:
+  display_name: "Refinery Propose Improvements"
+  short_description: "セッション分析レポートから改善策を比較し、優先順位と実装への引き継ぎ案をまとめます。"
   default_prompt: "$refinery-propose-improvements を使って、指定した資料を根拠付きで検討してください。"
 policy:
   allow_implicit_invocation: false

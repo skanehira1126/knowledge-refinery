@@ -14,8 +14,14 @@ import yaml
 
 from knowledge_refinery import get_version
 from knowledge_refinery.config_ops import get_active_vault
+from knowledge_refinery.context_ops import ContextEntry
+from knowledge_refinery.context_ops import ContextSummary
+from knowledge_refinery.context_ops import list_contexts
+from knowledge_refinery.context_ops import read_context
+from knowledge_refinery.context_ops import update_context
 from knowledge_refinery.errors import RefineryCliError
 from knowledge_refinery.experience_ops import SearchFilters
+from knowledge_refinery.experience_ops import archive_memory_at
 from knowledge_refinery.experience_ops import parse_datetime_filter
 from knowledge_refinery.experience_ops import read_experience_at
 from knowledge_refinery.experience_ops import read_memory_at
@@ -25,6 +31,7 @@ from knowledge_refinery.experience_ops import upsert_memory_at
 from knowledge_refinery.experience_ops import validate_document_header
 from knowledge_refinery.experience_ops import validate_experience_references
 from knowledge_refinery.experience_ops import validate_memory_source_references
+from knowledge_refinery.experience_ops import validate_memory_successor
 from knowledge_refinery.front_matter import split_front_matter
 from knowledge_refinery.handoff_ops import HANDOFF_SCHEMA_VERSION
 from knowledge_refinery.handoff_ops import archive_handoff_at
@@ -44,6 +51,7 @@ from knowledge_refinery.tag_ops import validate_tag_taxonomy
 from knowledge_refinery.vault_ops import PROJECT_METADATA
 from knowledge_refinery.vault_ops import PROJECT_METADATA_SCHEMA_VERSION
 from knowledge_refinery.vault_ops import VaultContext
+from knowledge_refinery.vault_ops import context_from_vault
 from knowledge_refinery.vault_ops import inspect_maintenance_vault
 from knowledge_refinery.vault_ops import list_project_metadata
 from knowledge_refinery.vault_ops import read_project_metadata
@@ -61,7 +69,8 @@ mcp = FastMCP(
         ".refinery.yamlと中央project metadataを検証し、連携が無効または不正な"
         "repositoryを拒否します。"
         "vaultを直接開いた明示的な保守ではrefinery_vault_statusでvault_contextを取得し、"
-        "knowledge/metadata/tag toolsへproject_path: nullと共に渡します。両contextは併用不可です。"
+        "knowledge/metadata/tagとhook本文のtoolsへproject_path: nullと共に渡します。"
+        "両contextは併用不可です。"
         "vault_contextはrepoのopt-out失敗時の自動代替に使わないでください。"
         "project対象の更新ではvault_context.project_idを明示します。shared昇格、重要改訂、"
         "削除の承認要件は保守でも変わりません。"
@@ -182,6 +191,46 @@ def refinery_update_project_metadata(
         tags=tags,
         technologies=technologies,
     ).as_dict()
+
+
+def _hook_context_store(project_path: str | None, vault_context: VaultContext | None) -> Path:
+    vault = get_active_vault()
+    project_id = _knowledge_project_id(vault, project_path, vault_context, require_project=True)
+    assert project_id is not None
+    return context_from_vault(vault, project_id).project_store
+
+
+@mcp.tool()
+def refinery_list_contexts(
+    project_path: str | None, vault_context: VaultContext | None = None
+) -> list[ContextSummary]:
+    """projectのhook配信先と現在のrevisionを一覧取得します。"""
+    return list_contexts(_hook_context_store(project_path, vault_context))
+
+
+@mcp.tool()
+def refinery_get_context(
+    project_path: str | None, target: str, vault_context: VaultContext | None = None
+) -> ContextEntry:
+    """指定したhook配信先の本文とrevisionを取得します。未設定なら両方nullです。"""
+    return read_context(_hook_context_store(project_path, vault_context), target)
+
+
+@mcp.tool()
+def refinery_update_context(
+    project_path: str | None,
+    target: str,
+    body: str | None,
+    expected_revision: str | None = None,
+    vault_context: VaultContext | None = None,
+) -> ContextEntry:
+    """hook本文を保存します。更新・解除は現在のrevisionを指定し、解除時はbodyをnullにします。"""
+    return update_context(
+        _hook_context_store(project_path, vault_context),
+        target,
+        body,
+        expected_revision=expected_revision,
+    )
 
 
 @mcp.tool()
@@ -383,8 +432,9 @@ def refinery_search_memory(
     confidences: list[Confidence] | None = None,
     all_projects: bool = False,
     vault_context: VaultContext | None = None,
+    include_archived: bool = False,
 ) -> list[dict[str, object]]:
-    """project/shared memoryを新しい順に検索します。結果のscopeをexact getへ渡します。"""
+    """現役のproject/shared memoryを更新順に検索します。include_archivedで過去分も含めます。"""
     vault = get_active_vault()
     project_id = _knowledge_project_id(vault, project_path, vault_context)
     entries = search_documents_at(
@@ -401,6 +451,7 @@ def refinery_search_memory(
             source_experiences=tuple(_list(source_experiences)),
             scopes=tuple(_list(scopes)),
             confidences=tuple(_list(confidences)),
+            include_archived=include_archived,
         ),
     )
     return [_entry(entry, vault) for entry in entries]
@@ -468,6 +519,32 @@ def refinery_record_memory(
         "updated_at": str(header["updated_at"]),
         "path": str(path.relative_to(vault)),
     }
+
+
+@mcp.tool()
+def refinery_archive_memory(
+    project_path: str | None,
+    memory_id: str,
+    reason: str,
+    expected_updated_at: str,
+    superseded_by: str | None = None,
+    shared: bool = False,
+    vault_context: VaultContext | None = None,
+) -> dict[str, object]:
+    """確認済みrevisionのmemoryを通常検索から外し、理由と任意の後継参照を旧側に保存します。"""
+    vault = get_active_vault()
+    project_id = _knowledge_project_id(
+        vault, project_path, vault_context, require_project=not shared
+    )
+    return archive_memory_at(
+        vault,
+        project_id,
+        memory_id,
+        shared=shared,
+        reason=reason,
+        expected_updated_at=expected_updated_at,
+        superseded_by=superseded_by,
+    )
 
 
 @mcp.tool()
@@ -573,7 +650,7 @@ def refinery_validate(vault_context: VaultContext | None = None) -> dict[str, ob
     vault = _administrative_vault(vault_context)
     errors: list[dict[str, str]] = []
     checked = 0
-    seen_ids: dict[tuple[str, str, str], Path] = {}
+    seen_ids: dict[tuple[str, str | None, str], Path] = {}
     taxonomy_path = vault / TAG_TAXONOMY
     if taxonomy_path.is_file():
         try:
@@ -612,6 +689,7 @@ def refinery_validate(vault_context: VaultContext | None = None) -> dict[str, ob
                 validate_experience_references(vault, header)
             else:
                 validate_memory_source_references(vault, header)
+                validate_memory_successor(vault, header)
             checked += 1
         except (OSError, ValueError, RefineryCliError) as error:
             errors.append({"path": str(path.relative_to(vault)), "error": str(error)})
@@ -624,9 +702,10 @@ def _validate_document_location(
     header: dict[str, object],
     *,
     kind: str,
-    seen_ids: dict[tuple[str, str, str], Path],
+    seen_ids: dict[tuple[str, str | None, str], Path],
 ) -> None:
     relative = path.relative_to(vault)
+    namespace: str | None
     if kind == "experiences":
         expected_project = relative.parts[1]
         if header.get("project_id") != expected_project:
@@ -638,7 +717,7 @@ def _validate_document_location(
         if relative.parts[:2] == ("shared", "memory"):
             if scope != "shared":
                 raise ValueError("memory under shared/memory must use scope: shared")
-            namespace = "shared"
+            namespace = None
         else:
             expected_project = relative.parts[1]
             if scope != "project" or header.get("project_id") != expected_project:

@@ -60,10 +60,11 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 
 ## 主な機能
 
-- 成功、失敗、不採用案をexperienceとして記録する
+- 成功、失敗、不採用案をexperienceとして記録し、既存の原則が判断に影響したときは採用・見送りの理由と観測結果も残す
 - experienceから再利用可能なproject memoryとshared memoryを抽出する
 - 現在のrepoから、必要に応じて他repoのknowledgeまで検索する
-- 新規チャットの開始時と履歴圧縮後に、vaultの短い[プロジェクトコンテキスト](docs/cli.md#context)をCodexへ渡す
+- `refinery_archive_memory`で原則を通常検索から外し、旧IDに本文・理由・任意の後継参照を残す。履歴を含めるには`refinery_search_memory`の`include_archived`を指定する。[運用ルール](docs/knowledge-operations.md#memory-lifecycle)
+- セッション開始・圧縮後、入力時、ツール実行の前後、サブエージェント開始時に、その場面用に保存したプロジェクトの前提を渡す。[context CLI](docs/cli.md#context)
 - 任意でCodexを使い、中央vaultの検証済みsnapshotから根拠付きの深い検索を行う
 - repoごとに利用を無効化・再有効化する
 - 中央vaultを独立したGit repositoryとして履歴管理する
@@ -71,9 +72,11 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 - 特定の作業の状態をhandoffに保存し、新しいチャットで再評価して再開する
 - `refinery-issue` SkillやCLIで独立したissueを管理し、複数projectの紐付け、進捗・タグ・更新履歴を追跡する
 
-初期コンテキストを整えるときは「`$refinery-curate-context` を使って、このprojectの既存ナレッジから
-分析の前提を数行に絞り、`context.md` に反映してください」と依頼します。候補だけの提案にも対応します。
-使い方は [refinery-curate-context](docs/skills/refinery-curate-context.md) を参照してください。
+登録済みで有効なprojectでは、hookで渡す前提の管理を既定でエージェントに任せます。
+たとえば作業中に注文スキーマの管理元が変わったと確認できたら、エージェントが
+`refinery_get_context` で現在の本文を読み、`refinery_update_context` で該当する配信先だけを更新します。
+配信先の一覧は `refinery_list_contexts`、保存済み本文の配信はローカルのhook CLIが担当します。
+[refinery-curate-context](docs/skills/refinery-curate-context.md)・[contextのMCP操作](docs/mcp.md#hook-context)
 
 ## 課題を管理する
 

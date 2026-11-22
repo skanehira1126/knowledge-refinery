@@ -50,7 +50,7 @@ Read back the result and verify that `project_id` is unchanged.
 ## Toggle use
 
 - Enable with `knowledge-refinery project enable --target "$PROJECT_ROOT"` after the authorization
-  above. Add `--agents` only when the user wants automatic operation.
+  above. Add `--agents` when the user requests managed guidance for knowledge search and recording.
 - Disable with `knowledge-refinery project disable --target "$PROJECT_ROOT"`.
 - Verify either transition with `knowledge-refinery project status --target "$PROJECT_ROOT"`.
 

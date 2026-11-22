@@ -12,9 +12,8 @@ from pathlib import PureWindowsPath
 import re
 import secrets
 
-import yaml
-
 from knowledge_refinery.errors import RefineryCliError
+from knowledge_refinery.front_matter import render_front_matter
 from knowledge_refinery.front_matter import split_front_matter
 from knowledge_refinery.storage_ops import atomic_write_text
 from knowledge_refinery.storage_ops import interprocess_lock
@@ -45,7 +44,7 @@ class SearchEntry:
     title: str
     kind: str
     summary: str | None
-    status: str | None
+    status: str
     scope: str | None
     confidence: str | None
     tags: tuple[str, ...]
@@ -65,6 +64,7 @@ class SearchFilters:
     confidences: tuple[str, ...] = ()
     recorded_from: datetime | None = None
     recorded_to: datetime | None = None
+    include_archived: bool = False
 
 
 def _slug(value: str) -> str:
@@ -78,8 +78,7 @@ def _new_id(title: str) -> str:
 
 
 def _render(header: dict[str, object], body: str) -> str:
-    yaml_text = yaml.safe_dump(header, sort_keys=False, allow_unicode=True).rstrip()
-    return f"---\n{yaml_text}\n---\n\n{body.rstrip()}\n"
+    return f"{render_front_matter(header)}\n{body.rstrip()}\n"
 
 
 def _default_experience_body() -> str:
@@ -427,8 +426,7 @@ def _upsert_memory(
     clear_confidence: bool,
 ) -> Path:
     document_id = memory_id or _slug(title)
-    if not SLUG_RE.fullmatch(document_id):
-        raise ValueError("memory_id must be a lowercase slug")
+    _validate_slugs([document_id], field="memory_id")
     expected_filename = f"{document_id}.md"
     if filename is not None and filename != expected_filename:
         raise ValueError("memory filename must match memory_id")
@@ -436,14 +434,13 @@ def _upsert_memory(
         raise ValueError("confidence and clear_confidence cannot be used together")
     _validate_confidence(confidence)
     root = _memory_root(vault, project_id, shared=shared)
-    path = _safe_child(root, expected_filename)
+    path = _find_document_path(root, document_id, allow_new=True)
+    scope = "shared" if shared else "project"
+    owner = None if shared else project_id
     with interprocess_lock(path):
         current: dict[str, object] | None = None
         if path.exists():
-            current, current_body = split_front_matter(
-                path.read_text(encoding="utf-8"), source_path=path
-            )
-            validate_document_header(current, kind="memory")
+            current, current_body = _read_memory_file(path, document_id, scope, owner)
             current_updated_at = str(current.get("updated_at", ""))
             if expected_updated_at is None:
                 raise ValueError(
@@ -465,8 +462,9 @@ def _upsert_memory(
         header: dict[str, object] = {
             "schema_version": 2,
             "memory_id": document_id,
-            "scope": "shared" if shared else "project",
-            "project_id": None if shared else project_id,
+            "scope": scope,
+            "project_id": owner,
+            "status": "active",
             "title": title,
             "summary": summary,
             "source_experiences": effective_sources,
@@ -474,9 +472,51 @@ def _upsert_memory(
             "tags": effective_tags,
             "confidence": effective_confidence,
         }
+        if current and current["status"] == "archived":
+            header.update(
+                status="archived",
+                archive_reason=current["archive_reason"],
+                superseded_by=current.get("superseded_by"),
+            )
         validate_memory_source_references(vault, header)
         atomic_write_text(path, _render(header, body or summary))
     return path
+
+
+def archive_memory_at(
+    vault: Path,
+    project_id: str | None,
+    memory_id: str,
+    *,
+    shared: bool,
+    reason: str,
+    expected_updated_at: str,
+    superseded_by: str | None = None,
+) -> dict[str, object]:
+    """Retire an existing revision, preserving its body and linking an optional successor."""
+    vault = validate_vault_root(vault)
+    _validate_slugs([memory_id], field="memory_id")
+    root = _memory_root(vault, project_id, shared=shared)
+    path = _find_document_path(root, memory_id)
+    # Serialize successor checks across scopes so concurrent retirements cannot form a cycle.
+    with interprocess_lock(vault / "memory-archive"), interprocess_lock(path):
+        header, body = _read_memory_file(
+            path, memory_id, "shared" if shared else "project", None if shared else project_id
+        )
+        if header["updated_at"] != expected_updated_at:
+            raise ValueError("memory archive conflict: expected_updated_at is stale")
+        if header["status"] == "archived":
+            raise ValueError("memory is already archived")
+        header.update(
+            status="archived",
+            archive_reason=reason.strip(),
+            superseded_by=superseded_by,
+            updated_at=datetime.now(UTC).isoformat(),
+        )
+        validate_document_header(header, kind="memory")
+        validate_memory_successor(vault, header, require_active=True)
+        atomic_write_text(path, f"{render_front_matter(header)}\n{body}\n")
+    return header
 
 
 def search_documents(
@@ -606,7 +646,7 @@ def _search_documents(
                     summary=(
                         str(header["summary"]) if kind == "memory" else str(header["purpose"])
                     ),
-                    status=(str(header["status"]) if kind == "experiences" else None),
+                    status=str(header.get("status", "active")),
                     scope=(str(header["scope"]) if kind == "memory" else None),
                     confidence=(
                         str(header["confidence"]) if header.get("confidence") is not None else None
@@ -638,6 +678,8 @@ def _validate_search_inputs(
     _validate_knowledge_tags(tags)
     if kind == "memory" and statuses:
         raise ValueError("statuses can only filter experiences")
+    if kind == "experiences" and filters.include_archived:
+        raise ValueError("include_archived can only filter memory")
     invalid_statuses = sorted(set(statuses).difference(EXPERIENCE_STATUS_CHOICES))
     if invalid_statuses:
         raise ValueError(f"Unsupported experience statuses: {', '.join(invalid_statuses)}")
@@ -690,12 +732,20 @@ def read_memory_at(
         raise ValueError("scope must be project or shared")
     root = _memory_root(vault, expected_project_id, shared=scope == "shared")
     path = _find_document_path(root, memory_id)
+    header, body = _read_memory_file(path, memory_id, scope, expected_project_id)
+    return path, header, body
+
+
+def _read_memory_file(
+    path: Path, memory_id: str, scope: str, project_id: str | None
+) -> tuple[dict[str, object], str]:
     header, body = _read_exact_document(path, kind="memory")
     if header.get("memory_id") != memory_id or header.get("scope") != scope:
         raise ValueError("memory ID and scope must match its path")
-    if header.get("project_id") != expected_project_id:
+    if header.get("project_id") != project_id:
         raise ValueError("memory project_id must match its path")
-    return path, header, body
+    header.setdefault("status", "active")
+    return header, body
 
 
 def _read_exact_document(path: Path, *, kind: str) -> tuple[dict[str, object], str]:
@@ -704,16 +754,18 @@ def _read_exact_document(path: Path, *, kind: str) -> tuple[dict[str, object], s
     return header, body
 
 
-def _find_document_path(root: Path, document_id: str) -> Path:
+def _find_document_path(root: Path, document_id: str, *, allow_new: bool = False) -> Path:
     direct = _safe_child(root, f"{document_id}.md")
     if direct.is_file():
         return direct
     candidates = sorted(root.rglob(f"{document_id}.md")) if root.is_dir() else []
     if not candidates:
+        if allow_new:
+            return direct
         raise ValueError(f"Unknown refinery document: {document_id}")
     if len(candidates) != 1:
         raise ValueError(f"Ambiguous refinery document ID: {document_id}")
-    return candidates[0]
+    return _safe_child(root, str(candidates[0].relative_to(root)))
 
 
 def _search_roots(
@@ -737,6 +789,8 @@ def _matches_filters(
     filters: SearchFilters,
     kind: str,
 ) -> bool:
+    if kind == "memory" and header.get("status") == "archived" and not filters.include_archived:
+        return False
     current_tags = header.get("tags", [])
     if not isinstance(current_tags, list) or any(
         not any(_tag_matches(current, requested) for current in current_tags) for requested in tags
@@ -905,11 +959,64 @@ def _validate_memory_header(header: dict[str, object]) -> None:
         _validate_shared_source_format(source_experiences)
         if header.get("project_id") is not None:
             raise ValueError("shared memory project_id must be null")
-        return
-    project_id = header.get("project_id")
-    if not isinstance(project_id, str) or not project_id:
-        raise ValueError("project memory requires non-empty project_id")
-    _validate_project_source_format(source_experiences, project_id)
+    else:
+        project_id = header.get("project_id")
+        if not isinstance(project_id, str) or not project_id:
+            raise ValueError("project memory requires non-empty project_id")
+        _validate_project_source_format(source_experiences, project_id)
+
+    status = header.get("status", "active")
+    reason = header.get("archive_reason")
+    successor = header.get("superseded_by")
+    if status == "active":
+        if reason is not None or successor is not None:
+            raise ValueError("active memory cannot have archive_reason or superseded_by")
+    elif status == "archived":
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError("archived memory requires a non-empty archive_reason")
+        if successor is not None and _memory_successor_key(header) == (
+            header.get("project_id"),
+            header["memory_id"],
+        ):
+            raise ValueError("superseded_by must not reference the memory itself")
+    else:
+        raise ValueError(f"Unsupported memory status: {status}")
+
+
+def _memory_successor_key(header: dict[str, object]) -> tuple[str | None, str]:
+    reference = header["superseded_by"]
+    if not isinstance(reference, str):
+        raise ValueError("superseded_by must be a memory reference")
+    owner: str | None
+    match reference.split("/"):
+        case [memory_id]:
+            owner = str(header["project_id"]) if header["scope"] == "project" else None
+        case ["shared", memory_id]:
+            owner = None
+        case ["project", owner, memory_id]:
+            _validate_slugs([owner], field="superseded_by project ID")
+        case _:
+            raise ValueError("superseded_by must use ID, shared/ID, or project/PROJECT/ID")
+    _validate_slugs([memory_id], field="superseded_by memory ID")
+    return owner, memory_id
+
+
+def validate_memory_successor(
+    vault: Path, header: dict[str, object], *, require_active: bool = False
+) -> None:
+    """Follow scoped successors; a new link must point to a currently active memory."""
+    seen: set[tuple[str | None, str]] = set()
+    while header.get("superseded_by") is not None:
+        key = _memory_successor_key(header)
+        if key in seen:
+            raise ValueError("superseded_by contains a cycle")
+        seen.add(key)
+        owner, memory_id = key
+        _, header, _ = read_memory_at(
+            vault, owner, memory_id, scope="shared" if owner is None else "project"
+        )
+        if require_active and header["status"] != "active":
+            raise ValueError("superseded_by must reference an active memory when archiving")
 
 
 def _validate_evidence(value: object) -> None:

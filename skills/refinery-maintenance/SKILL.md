@@ -36,14 +36,16 @@ independently; never switch access routes to bypass a repo opt-out.
   project set or shared scope. Choose cross-project IDs with `refinery_list_projects` and pass `project_ids`;
   use `all_projects: true` only for a necessary vault-wide review, never together with `project_ids`.
   Inspect relevant low-confidence records, duplicates, conflicts, stale principles, and source
-  experiences. A moved or missing evidence reference is a limitation, not grounds to delete a conclusion.
+  experiences. For a retirement candidate, identify which conditions still apply and the successor
+  if one covers them all. Use `include_archived: true` when tracing prior decisions or successor
+  links. A moved or missing evidence reference is a limitation, not grounds to delete a conclusion.
 - For taxonomy, read [knowledge-tags.md](../knowledge-tags.md) and inspect the affected branches.
 
 ## Repair and finish
 
 Apply authorized factual metadata or taxonomy fixes with the current revision and read them back.
-Use `refinery-experience` for experience content updates and `refinery-memory` for memory creation
-or revision; those skills own record format, evidence, conflict handling, and promotion requirements.
+Use `refinery-experience` for experience content updates and `refinery-memory` for memory creation,
+revision, or archival; those skills own evidence, conflict handling, and readback.
 A general maintenance request does not approve a specific shared principle, deletion, or material rewrite.
 
 After schema or provenance repair, or writes made during a vault audit, run `refinery_validate`

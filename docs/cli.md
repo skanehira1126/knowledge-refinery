@@ -24,7 +24,7 @@ active vaultとのpath不一致はexit 2です。project登録やactive vaultの
 
 ## context
 
-Codexへ渡す短いMarkdownを、projectと配信先ごとに確認できます。配信先はCodexのイベント名と、
+Codex・Claude Codeへ渡す短いMarkdownを、projectと配信先ごとに確認できます。配信先はイベント名と、
 必要に応じて開始理由かツール名をスラッシュでつないで指定します。
 
 | 配信先 | 届くタイミング | 載せる内容の例 |
@@ -35,7 +35,8 @@ Codexへ渡す短いMarkdownを、projectと配信先ごとに確認できます
 | `PostToolUse/Bash`、`PostToolUse/apply_patch` | 該当ツールの実行後 | コマンド結果の単位や、編集後の検証に使うデータ |
 | `SubagentStart` | サブエージェントの開始時 | 委任先が調べる範囲と、参照先projectが持つ仕様 |
 
-各配信先は独立しています。`SessionStart/startup` のみ設定すると、新規開始時だけ届きます。
+Claude Code の編集には `PreToolUse/Edit`、`PostToolUse/Edit`、ファイル書き込みには
+`PreToolUse/Write`、`PostToolUse/Write` を使用します。各配信先は独立しています。`SessionStart/startup` のみ設定すると、新規開始時だけ届きます。
 本文は中央vaultの `projects/<project_id>/context/<配信先>.md` に保存します。
 
 ```bash

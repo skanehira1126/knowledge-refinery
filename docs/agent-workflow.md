@@ -23,7 +23,7 @@ hook本文の管理は、どちらのモードでも登録済み・有効なproj
 `refinery-curate-context` が根拠を確認し、MCPで該当する配信先を更新します。
 検索・診断・候補の提案だけを依頼した場合は読み取りに留めます。[hook本文の管理](skills/refinery-curate-context.md)
 
-作業の引き継ぎは自動運用の対象外です。`$refinery-handoff`を明示して、作成・再開・整理を依頼します。
+作業の引き継ぎは自動運用の対象外です。`$refinery-handoff`（Claude Code では `/knowledge-refinery:refinery-handoff`）を明示して、作成・再開・整理を依頼します。
 本体が必要な手順だけを参照し、通常のナレッジ検索には引き継ぎ資料を混ぜません。
 具体例は[新しいチャットへの引き継ぎ](handoffs.md)を参照してください。
 

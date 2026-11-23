@@ -22,7 +22,7 @@ IDやパスが未確定なら、利用可能な入口を依頼に合わせて選
 
 ## 2. CLIで抽出する
 
-Codexホストで `knowledge-refinery session` を使う。未導入なら次で導入する。
+対象のCodexログが読める環境で `knowledge-refinery session` を使う。未導入なら次で導入する。
 
 ```bash
 uv tool install git+https://github.com/skanehira1126/knowledge-refinery.git

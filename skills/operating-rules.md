@@ -12,7 +12,7 @@ authorization, and completion; each `SKILL.md` owns its task-specific workflow.
   metadata or tags, repair configuration, or enable a tool. Record experience or project memory
   when requested or authorized by the repository's opted-in managed guidance. In a ready
   project, maintaining useful hook text through `refinery-curate-context` is enabled by default.
-- Session review and improvement proposals run on the Codex host. Local extraction and reports
+- Session review and improvement proposals use local Codex logs and their reports. Local extraction and reports
   need no vault or repo-status preflight; they do not grant knowledge-write permission. Apply the
   repo-scoped gate only when accessing existing knowledge through the relevant skill.
 - Handoff operations use the explicitly invoked `refinery-handoff` skill. Its snapshots are

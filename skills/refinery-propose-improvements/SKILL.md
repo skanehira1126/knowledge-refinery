@@ -5,7 +5,7 @@ description: セッション分析レポートを根拠に、Skill化、CLI化�
 
 # Propose Improvements
 
-[共通実行ルール](../operating-rules.md)を読む。解析と提案はCodex側で行う。
+[共通実行ルール](../operating-rules.md)を読む。ローカルのセッション分析レポートを使う。
 ローカルログ抽出・レポート作成はvault設定やMCP接続を必要としない。
 
 1件または複数のセッション分析レポートから、次の作業を楽にする改善策を選ぶ。

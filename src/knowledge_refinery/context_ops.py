@@ -9,8 +9,8 @@ from knowledge_refinery.storage_ops import atomic_write_text
 from knowledge_refinery.storage_ops import interprocess_lock
 
 
-_TOOLS = ("Bash", "apply_patch")
-# Each event uses the literal value Codex sends in this field, or one event-wide body.
+_TOOLS = ("Bash", "apply_patch", "Edit", "Write")
+# Each event uses the literal value the host sends in this field, or one event-wide body.
 HOOK_SELECTORS: dict[str, tuple[str, tuple[str, ...]] | None] = {
     "SessionStart": ("source", ("startup", "resume", "clear", "compact", "fork")),
     "UserPromptSubmit": None,

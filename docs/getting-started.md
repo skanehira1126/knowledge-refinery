@@ -7,7 +7,7 @@
 
 | 必要なもの | 用途 |
 |---|---|
-| CodexまたはChatGPT desktop app | PluginとSkillsを利用する |
+| Codex、ChatGPT desktop app または Claude Code | PluginとSkillsを利用する |
 | Python 3.11以上 | CLIとローカルMCPを実行する |
 | `uv` | CLIのインストールとMCPの起動に使う |
 | knowledge保存用directory | 複数repoのknowledgeを集約する |
@@ -20,6 +20,20 @@ flowchart LR
 ```
 
 ## 1. Pluginを追加
+
+### Claude Code
+
+```bash
+claude plugin marketplace add skanehira1126/knowledge-refinery
+claude plugin install knowledge-refinery@knowledge-refinery
+```
+
+ローカル checkout から導入する場合は GitHub 名の代わりに checkout の絶対パスを指定します。
+新しいセッションで `/knowledge-refinery:refinery-project` を呼び出すと、
+同梱 CLI で vault と対象 repo を設定できます。既存の有効な repo は同じ vault を引き続き使えます。
+Claude Code の Bash 内で使う CLI は同梱されています。通常の端末からも使う場合は手順 2 で導入してください。
+
+### Codex
 
 === "GitHub"
 

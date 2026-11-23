@@ -1,6 +1,6 @@
 ---
 name: refinery-curate-context
-description: 有効なprojectで、作業中に判明・変更された前提や他projectとの依存関係を、必要なCodex hookで届く短い本文に整える。候補の提案や配信内容の参照・更新にも使う。
+description: 有効なprojectで、作業中に判明・変更された前提や他projectとの依存関係を、必要なhookで届く短い本文に整える。候補の提案や配信内容の参照・更新にも使う。
 ---
 
 # Curate project hook context

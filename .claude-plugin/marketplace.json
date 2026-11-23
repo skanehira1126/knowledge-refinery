@@ -1,0 +1,27 @@
+{
+  "name": "knowledge-refinery",
+  "owner": {
+    "name": "Shinichi Kanehira"
+  },
+  "plugins": [
+    {
+      "name": "knowledge-refinery",
+      "source": "./",
+      "description": "プロジェクトをまたいで開発経験とメモリを検索・記録します。",
+      "skills": [
+        "./skills/refinery-curate-context",
+        "./skills/refinery-experience",
+        "./.claude-plugin/skills/refinery-handoff",
+        "./skills/refinery-issue",
+        "./skills/refinery-maintenance",
+        "./skills/refinery-memory",
+        "./skills/refinery-project",
+        "./.claude-plugin/skills/refinery-propose-improvements",
+        "./.claude-plugin/skills/refinery-review-session"
+      ]
+    }
+  ],
+  "metadata": {
+    "description": "Knowledge Refinery の Claude Code 向け配布元です。"
+  }
+}

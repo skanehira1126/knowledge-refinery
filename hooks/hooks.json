@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run --project \"$PLUGIN_ROOT\" knowledge-refinery context hook || exit 1"
+            "command": "uv run --no-dev --project \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}\" knowledge-refinery context hook || exit 1"
           }
         ]
       }
@@ -16,29 +16,29 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run --project \"$PLUGIN_ROOT\" knowledge-refinery context hook || exit 1"
+            "command": "uv run --no-dev --project \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}\" knowledge-refinery context hook || exit 1"
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "^(Bash|apply_patch)$",
+        "matcher": "^(Bash|apply_patch|Edit|Write)$",
         "hooks": [
           {
             "type": "command",
-            "command": "uv run --project \"$PLUGIN_ROOT\" knowledge-refinery context hook || exit 1"
+            "command": "uv run --no-dev --project \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}\" knowledge-refinery context hook || exit 1"
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "^(Bash|apply_patch)$",
+        "matcher": "^(Bash|apply_patch|Edit|Write)$",
         "hooks": [
           {
             "type": "command",
-            "command": "uv run --project \"$PLUGIN_ROOT\" knowledge-refinery context hook || exit 1"
+            "command": "uv run --no-dev --project \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}\" knowledge-refinery context hook || exit 1"
           }
         ]
       }
@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run --project \"$PLUGIN_ROOT\" knowledge-refinery context hook || exit 1"
+            "command": "uv run --no-dev --project \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}\" knowledge-refinery context hook || exit 1"
           }
         ]
       }

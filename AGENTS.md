@@ -6,6 +6,7 @@
 ## Source of truth
 
 - Plugin manifestは `.codex-plugin/plugin.json`、MCP起動設定は `.mcp.json` を正とする。
+- Claude Code の配布設定は `.claude-plugin/` に置き、Skills の本文と `hooks/hooks.json` は Codex と共有する。
 - 配布するSkillは `skills/` 配下を正とする。
 - 配布Skill共通の実行・承認・完了条件は `skills/operating-rules.md` に置き、各 `SKILL.md` から読み込む。この `AGENTS.md` 自体は開発repoの規約であり、利用repoのmanaged blockには使わない。
 - MCP toolsは `src/knowledge_refinery/mcp_server.py`、experience/memoryのドメイン処理は `experience_ops.py`、中央vault管理は `vault_ops.py` に置く。

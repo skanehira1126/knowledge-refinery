@@ -2,13 +2,27 @@
 
 <img src="docs/assets/knowledge-refinery.png" alt="Knowledge Refinery logo" width="160">
 
-Codexで得た開発経験を、複数のプロジェクトから再利用できる形で残すためのPluginです。
+Codex や Claude Code で得た開発経験を、複数のプロジェクトから再利用できる形で残すためのPluginです。
 試行や失敗をexperienceとして記録し、そこから抽出した原則をmemoryとして、プロダクトrepoとは
 別のローカル中央vaultへ保存します。
 
 ## はじめる
 
-必要なものは、CodexまたはChatGPT desktop app、Python 3.11以上、`uv`です。
+Python 3.11 以上と `uv` を用意します。
+
+### Claude Code
+
+```bash
+claude plugin marketplace add skanehira1126/knowledge-refinery
+claude plugin install knowledge-refinery@knowledge-refinery
+```
+
+ローカルの変更を使う場合は、最初のコマンドの GitHub 名を checkout の絶対パスに置き換えます。
+新しい Claude Code セッションで `/knowledge-refinery:refinery-project` を呼び出して、
+利用先のリポジトリを設定するか、既存の設定を確認してください。Skills、hooks、ローカル MCP、
+Claude Code 内で使う CLI が一緒に読み込まれます。セッション解析が扱う履歴は Codex 形式です。
+
+### Codex / ChatGPT desktop app
 
 まずPluginとCLIをインストールします。
 
@@ -27,6 +41,8 @@ uv tool upgrade knowledge-refinery
 ```
 
 CodexのPlugin画面で`knowledge-refinery`を再インストールし、新しいtask/sessionを開きます。
+
+### vault と利用先リポジトリの設定
 
 次に、knowledgeの保存先となる中央vaultを一度だけ作ります。
 

@@ -21,7 +21,7 @@ knowledge-refinery project setup \
 typo・書式変更などの機械的な作業には適用しません。同じ問いと根拠の結果は再利用します。
 記録形式、status・confidence、更新引数の詳細はPlugin Skillに任せ、利用repoへ複製しません。
 過去の原則を採用・見送りした経験も記録の対象です。新しい根拠で既存原則の適用範囲が変わる場合は`refinery-memory`で改訂・統合・アーカイブを検討します。
-handoffの作成・再開・整理は`$refinery-handoff`の明示呼び出し専用であり、以下の自動運用例には含めません。
+handoffの作成・再開・整理は`$refinery-handoff`（Claude Code では `/knowledge-refinery:refinery-handoff`）の明示呼び出し専用であり、以下の自動運用例には含めません。
 
 ## データ分析
 

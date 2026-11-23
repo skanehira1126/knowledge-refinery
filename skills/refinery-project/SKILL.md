@@ -51,6 +51,7 @@ Read back the result and verify that `project_id` is unchanged.
 
 - Enable with `knowledge-refinery project enable --target "$PROJECT_ROOT"` after the authorization
   above. Add `--agents` when the user requests managed guidance for knowledge search and recording.
+  For Claude Code guidance, pass `--filename CLAUDE.md` when enabling, disabling, or inspecting it.
 - Disable with `knowledge-refinery project disable --target "$PROJECT_ROOT"`.
 - Verify either transition with `knowledge-refinery project status --target "$PROJECT_ROOT"`.
 

@@ -63,17 +63,21 @@ def test_registered_hooks_deliver_only_the_addressed_markdown(
 ) -> None:
     manifest = Path(__file__).resolve().parents[1] / "hooks/hooks.json"
     hooks = json.loads(manifest.read_text(encoding="utf-8"))["hooks"]
-    cases = [
-        ("SessionStart", {"source": source})
-        for source in ("startup", "compact", "resume", "clear", "fork")
-    ] + [
-        ("UserPromptSubmit", {}),
-        ("SubagentStart", {}),
-        ("PreToolUse", {"tool_name": "Bash"}),
-        ("PostToolUse", {"tool_name": "Bash"}),
-        ("PreToolUse", {"tool_name": "apply_patch"}),
-        ("PostToolUse", {"tool_name": "apply_patch"}),
-    ]
+    cases = (
+        [
+            ("SessionStart", {"source": source})
+            for source in ("startup", "compact", "resume", "clear", "fork")
+        ]
+        + [
+            ("UserPromptSubmit", {}),
+            ("SubagentStart", {}),
+        ]
+        + [
+            (event, {"tool_name": tool})
+            for event in ("PreToolUse", "PostToolUse")
+            for tool in ("Bash", "apply_patch", "Edit", "Write")
+        ]
+    )
     cwd = Path.cwd()
     monkeypatch.chdir(tmp_path)
     for event, fields in cases:

@@ -5,7 +5,7 @@ description: 終了済みCodexセッションの実行コード、ツール結�
 
 # Review Session
 
-[共通実行ルール](../operating-rules.md)を読む。解析はCodex側で行い、成果物は根拠付きレポートとする。
+[共通実行ルール](../operating-rules.md)を読む。解析には対象のCodexログが読める環境を使い、成果物は根拠付きレポートとする。
 解析には `knowledge-refinery session` CLIを必須とする。候補探しには利用可能なCodex appツールも使える。
 CLIの `session list` は有効なRefinery登録済みGitプロジェクトが対象で、別プロジェクトは
 `--project` で指定する。アプリでの候補確認と明示ログの抽出・解析JSONの操作は登録不要。

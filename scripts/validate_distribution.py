@@ -127,11 +127,40 @@ def _validate_marketplace() -> None:
         raise ValueError("Personal marketplace is missing knowledge-refinery")
 
 
+def _validate_claude_distribution() -> None:
+    root = ROOT / ".claude-plugin"
+    manifest = _read_json(root / "plugin.json")
+    marketplace = _read_json(root / "marketplace.json")
+    (entry,) = marketplace["plugins"]
+    if entry["name"] != manifest["name"] or entry["source"] != "./":
+        raise ValueError("Claude marketplace must install the plugin from this repository")
+    paths = [ROOT / path for path in entry["skills"]]
+    if {path.name for path in paths} != EXPECTED_SKILLS or len(paths) != len(EXPECTED_SKILLS):
+        raise ValueError("Claude marketplace must expose each distributed skill once")
+    for path in paths:
+        header = _skill_header(path / "SKILL.md")
+        canonical = ROOT / "skills" / path.name
+        agent = yaml.safe_load((canonical / "agents/openai.yaml").read_text(encoding="utf-8"))
+        manual = agent.get("policy", {}).get("allow_implicit_invocation") is False
+        if (
+            header.get("name") != path.name
+            or header.get("disable-model-invocation", False) is not manual
+        ):
+            raise ValueError(f"Claude skill identity or invocation policy differs: {path.name}")
+        if manual:
+            target = "${CLAUDE_PLUGIN_ROOT}/skills/" + path.name + "/SKILL.md"
+            if target not in (path / "SKILL.md").read_text(encoding="utf-8"):
+                raise ValueError(f"Claude skill must load the shared workflow: {path.name}")
+        elif path != canonical:
+            raise ValueError(f"Claude skill must use the shared source: {path.name}")
+
+
 def validate() -> None:
     _validate_plugin()
     _validate_mcp()
     _validate_skills()
     _validate_marketplace()
+    _validate_claude_distribution()
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Inspect project hook context and deliver it to Codex."""
+"""Inspect project hook context and deliver it to the agent."""
 
 import argparse
 import json
@@ -33,7 +33,7 @@ def configure_context_parser(parser: argparse.ArgumentParser) -> None:
     show.add_argument("target", choices=context_targets())
     listing.set_defaults(handler=run_context_list)
     show.set_defaults(handler=run_context_show)
-    hook = commands.add_parser("hook", help="Deliver context for a Codex hook JSON on stdin")
+    hook = commands.add_parser("hook", help="Deliver context for hook JSON on stdin")
     hook.set_defaults(handler=run_context_hook)
 
 
@@ -85,19 +85,19 @@ def run_context_show(args: argparse.Namespace) -> int:
 
 
 def run_context_hook(args: argparse.Namespace) -> int:
-    """Emit only saved Markdown as Codex additional context for the incoming event."""
+    """Emit only saved Markdown as additional context for the incoming event."""
     payload = json.load(sys.stdin)
     if not isinstance(payload, dict):
-        raise ValueError("Expected a JSON object in Codex hook input")
+        raise ValueError("Expected a JSON object in hook input")
     event = payload.get("hook_event_name")
     if not isinstance(event, str):
-        raise ValueError("Expected hook_event_name in Codex hook input")
+        raise ValueError("Expected hook_event_name in hook input")
     target = hook_target(event, payload)
     if target is None:
         return 0
     cwd = payload.get("cwd")
     if not isinstance(cwd, str) or not Path(cwd).is_absolute():
-        raise ValueError("Expected an absolute cwd in Codex hook input")
+        raise ValueError("Expected an absolute cwd in hook input")
     root = _project_root(Path(cwd))
     if root is None or not read_project_config(root).enabled:
         return 0

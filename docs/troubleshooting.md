@@ -66,9 +66,8 @@ distinct project数、参照experienceの存在を優先的に確認します。
 exact getが不正文書を報告する場合は `refinery_validate` を実行してください。結果が少ないだけなら、
 まず検索語やscopeを確認し、通常検索を毎回vault全体の監査へ広げません。
 
-エージェントへ復旧を依頼する場合は`$refinery-maintenance`を使い、対象path、Git差分、
-修正案を先に報告させます。knowledge文書の削除やmemoryの大幅な書き換えは、利用者が確認する
-まで実行しません。
+エージェントへ復旧を依頼する場合は`$refinery-maintenance`で対象を指定します。既存memoryは
+根拠を確認して修正・アーカイブし、結果を読み戻します。knowledge文書を削除するときは対象を示して明示承認を得ます。
 
 ## disabledなのにdoctorが成功する
 
@@ -76,17 +75,14 @@ exact getが不正文書を報告する場合は `refinery_validate` を実行�
 `project.state: disabled`の間、repo-scoped MCP toolsが検索・書き込みを拒否するのは正常です。
 再有効化は利用者が明示的に望んだ場合だけ行います。
 
-明示呼出モードで再開する場合:
+再開するには次を実行します。固定hookは次の新規開始時・圧縮後から運用指示を届けます。
 
 ```bash
 knowledge-refinery project enable --target "$PROJECT_ROOT"
 ```
 
-managed guidanceも復帰して自動運用モードへ戻す場合:
-
-```bash
-knowledge-refinery project enable --target "$PROJECT_ROOT" --agents
-```
+ファイル内のmanaged blockも復帰させる場合は`--agents`を付けます。Codexで固定指示が届かない
+場合は、`/hooks`で`context guidance-hook`が信頼済み・有効かを確認してください。
 
 ## setup再実行でmetadata差分を拒否された
 

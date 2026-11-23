@@ -13,6 +13,7 @@ metadata、repoとactive vaultの`vault_id`一致を検証します。
 | `refinery_update_project_metadata` | project metadataのrevision付き更新 | repo / vault context |
 | `refinery_list_contexts` | hookの配信先とrevisionの一覧 | repo / vault context |
 | `refinery_get_context` | 配信先1件の本文とrevisionを取得 | repo / vault context |
+| `refinery_deliver_context` | ホストのhookイベントに対応する本文を配信 | `cwd`, `target` |
 | `refinery_update_context` | 配信本文を作成・更新・解除 | repo / vault context |
 | `refinery_browse_knowledge_tags` | 指定した親tagの直下を説明・利用件数付きで取得 | repo / vault context |
 | `refinery_search_knowledge_tags` | tag pathと説明を語句検索 | repo / vault context |
@@ -41,7 +42,7 @@ vaultの棚卸し・横断参照・修復では、vaultをprojectとして登録
 ```json
 {
   "ready": true,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "vault_context": {
     "vault_path": "/absolute/path/to/vault",
     "vault_id": "0123456789abcdef0123456789abcdef",
@@ -81,7 +82,7 @@ refinery_get_memory(project_path=null, vault_context=CONTEXT, memory_id="princip
 このcontextは対象識別であり、ユーザー承認やOSのアクセス権を表すtokenではありません。
 中央に保存済みの資料は、元repoが無効化・移動していても管理できます。repoの設定やopt-outは
 変更せず、通常repoからの検索・記録が拒否された際の自動フォールバックには使いません。
-共有原則の作成・昇格、重要改訂、削除の承認要件と、provenance・revision検査は維持します。
+shared memoryの新規作成・昇格とknowledgeの削除には承認が必要です。既存memoryの改訂・アーカイブでは根拠と現在のrevisionを確認します。
 Knowledge削除toolは追加せず、handoffの作成・整理もrepo-scopedのままです。
 
 ## hook本文を更新する {#hook-context}
@@ -91,15 +92,19 @@ Knowledge削除toolは追加せず、handoffの作成・整理もrepo-scopedの�
 `target`、`body`、`revision` を返します。未設定なら本文とrevisionはどちらも `null` です。
 
 ```text
-entry = refinery_get_context(project_path=PROJECT_ROOT, target="SessionStart/startup")
+entry = refinery_get_context(project_path=PROJECT_ROOT, target="PreToolUse/apply_patch")
 refinery_update_context(project_path=PROJECT_ROOT, target=entry.target,
     body="注文スキーマは sales-core が定義する。", expected_revision=entry.revision)
 ```
 
 更新の戻り値は保存した本文とrevisionを含みます。新規作成では `expected_revision` を省略できます。
 既存の本文を置き換えるときは取得時のrevisionを渡し、ほかの編集が先に入ったら再読します。
-配信を解除するときは `body: null` と現在のrevisionを明示します。次の該当イベントから
-ローカルCLIが保存結果を配信します。[配信先の一覧](cli.md#context)
+配信を解除するときは `body: null` と現在のrevisionを明示します。
+
+次の該当イベントで、ホストが接続済みのMCPサーバーの `refinery_deliver_context(cwd, target)` を直接呼びます。
+渡すのは作業ディレクトリの絶対パスと配信先の2項目です。返り値の `hookSpecificOutput` は
+`hookEventName` と `additionalContext` を持ち、本文が空・未設定の場合や未登録・無効なrepoでは `{}` を返します。
+有効なrepoとactive vaultの紐付けが不正な場合はエラーになります。[配信先の一覧](cli.md#context)
 
 ## 検索スコープ
 

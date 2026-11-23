@@ -14,8 +14,9 @@ flowchart TB
     subgraph Plugin["Global Plugin"]
         SK["Plugin Skills"]
         MCP["local stdio MCP"]
-        HK["Codex hooks"]
+        HK["Codex / Claude Code hooks"]
         CLI["context CLI"]
+        G["Plugin同梱の運用指示"]
     end
 
     CFG["User config<br/>active vault"]
@@ -31,9 +32,11 @@ flowchart TB
     RC --> MCP
     RL --> MCP
     SK --> MCP
-    HK --> CLI
-    CLI -->|参照| CT
-    MCP -->|本文の取得・更新| CT
+    HK -->|SessionStart| CLI
+    RC --> CLI
+    CLI -->|guidance-hook| G
+    HK -->|mcp_tool| MCP
+    MCP -->|本文の配信・更新| CT
     MCP --> CFG
     CFG --> Vault
     MCP --> PM
@@ -55,9 +58,13 @@ flowchart TB
 - active vaultはユーザー設定に1つ持ちます。設定ファイルは `REFINERY_CONFIG` で明示でき、未指定時は `${XDG_CONFIG_HOME:-$HOME/.config}/knowledge-refinery/config.yaml` を使います。`REFINERY_VAULT` でactive vaultを一時overrideできます。
 - repo-scoped MCP toolsは`project_path`を受け、server側で`enabled`、project metadata、repoと
   active vaultの`vault_id`一致を検証します。
-- プロジェクトのhook本文はMCPがrevisionを照合して更新します。現行のstdioサーバーと
-  hook CLIは同じ端末のvaultを参照し、CLIはイベントと開始理由・ツール名に合う本文をCodexへ返します。
-  [MCPでの更新](mcp.md#hook-context)・[CLIによる配信](cli.md#context)
+- 固定のSessionStart hookは新規開始時・圧縮後にrepoの有効設定を確認し、CLIパッケージ同梱の運用指示を返します。
+- project別の可変hookでは、ホストが接続済みの `refinery_deliver_context` に `cwd` と配信先を渡し、
+  サーバーがvaultから取得した本文を追加contextにします。本文の更新には現在のrevisionを使います。
+  現行のサーバーはクライアントの `cwd` からrepo設定を読みます。別のマシンで動かす場合には、
+  その作業ディレクトリをサーバーが参照する仕組みか、projectを別途識別する仕組みが必要です。
+  1.0.0の到達条件は、クライアントとサーバーがファイルシステムを共有せずにprojectを識別し、リモートMCP経由でナレッジの参照・更新とhook本文の配信を完結できることです。
+  [MCPでの配信・更新](mcp.md#hook-context)・[配信先一覧](cli.md#context)
 - 中央vaultを直接開いた明示的な保守では、`refinery_vault_status`で確認した`vault_context`
   を使います。各呼び出しでactive vaultの実パスとIDを照合し、project対象の書き込みでは
   context内の`project_id`も検証します。vault自身のproject登録は不要で、repoのopt-outを

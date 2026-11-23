@@ -11,6 +11,7 @@
 | `project_id`, `project_root`, `git_common_dir` | 対象のRefinery project ID、Gitルート、共有Git管理ディレクトリ |
 | `chats` | 対象リポジトリの親チャット。更新日時の降順 |
 | `chats[].chat_id` / `cwd` | チャットID / ログmetadataの作業ディレクトリ |
+| `chats[].title` / `session_id` | ローカル索引のタイトル / ログmetadataの共有セッションID。取得できない項目はnull |
 | `chats[].updated_at` | 最新ログのmtime。UTC。会話の最終イベント時刻や終了状態ではない |
 | `chats[].path` / `paths` | 最新ログのパス / 同一チャットIDの全パス |
 | `updated_since` / `updated_before` | 下限以上・上限未満の日時。未指定はnull |
@@ -20,10 +21,19 @@
 同一チャットの複数ログは最新mtimeで1候補にまとめてから期間で絞ります。
 mtimeはコピー・復元でも変わります。レビュー済みかどうかは記録しません。
 
+タイトルは `CODEX_HOME/session_index.jsonl` の `id` と、rollout先頭の `session_meta.payload.id` を照合して取得します。
+同じIDの有効な行が複数ある場合は、ファイル末尾に近い行の `thread_name` を使います。
+2026年11月23日にローカルの Codex `0.169.0-alpha.11.1` と `0.171.0-alpha.13` のログを照合し、
+索引で名前が取れた親チャットでは、状態DBの `threads.name` と一致しました。
+この索引形式はCodexの実装と実ログで確認したもので、公開APIのフォーマット保証はありません。
+[Codexの索引実装](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/session_index.rs)
+
 ## extractが保存するJSON
 
 `format: knowledge-refinery.session-analysis`、`schema_version: 2`。
 入力は `session_meta` を持つrollout JSONLです。`codex exec --json` やアプリの要約JSONは対象外です。
+`extract --session-id` は先頭の `session_meta.payload.session_id` で親ログを探します。
+親子関係の確認には子の `parent_thread_id` を使い、各チャットの固有IDを `chat_id` として保持します。
 対応しないschemaの解析JSONは、元ログから再抽出してください。
 
 | 項目 | 内容 |

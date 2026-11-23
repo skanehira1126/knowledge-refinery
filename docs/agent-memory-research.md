@@ -35,13 +35,13 @@ flowchart TD
 
 ### 現役の原則を検索に残す
 
-この検討から、配布Skillの記録手順には、判断に使ったmemoryとその結果を同じexperienceへ残す方法を取り込んだ。memoryの管理では、部分的な反例は同じIDの適用条件に反映し、全範囲を後継が引き継ぐ場合や前提が失われた場合はアーカイブを提案する。通常検索には現役の原則が残り、古いIDを読むと当時の本文、取り下げの理由、任意の後継を確認できる。[記録・改訂・アーカイブの運用](knowledge-operations.md#memory-lifecycle)・[検索と後継参照の仕様](schema.md#memory-archive)
+この検討から、配布Skillの記録手順には、判断に使ったmemoryとその結果を同じexperienceへ残す方法を取り込んだ。memoryの管理では、部分的な反例は同じIDの適用条件に反映し、全範囲を後継が引き継いだ場合や前提が失われた場合はアーカイブする。通常検索には現役の原則が残り、古いIDを読むと当時の本文、取り下げの理由、任意の後継を確認できる。[記録・改訂・アーカイブの運用](knowledge-operations.md#memory-lifecycle)・[検索と後継参照の仕様](schema.md#memory-archive)
 
 ## 知ったことを、どこで働かせるか
 
 判断原則として読むのが適した知識も、作業時に実行できる形へ移す方が役立つ知識もある。選ぶ基準は、**次の仕事のどの場面で、誰が何を変えられるか**だ。
 
-- **条件によって判断が変わる知識**は、条件・反例とともに検索できる memory に置く。作業開始時に欠けると広く誤解を招く安定したドメイン知識は、対象 project の `SessionStart/startup` で配信する候補になる。shared memory への昇格には、独立した2 project 以上の根拠と具体案への利用者の承認が要る。原則や適用範囲の改訂も、差分と根拠を示して判断する。[memory の改訂・昇格条件](skills/refinery-memory.md)・[hookコンテキストの用途](skills/refinery-curate-context.md)
+- **条件によって判断が変わる知識**は、条件・反例とともに検索できる memory に置く。ツールの結果を読むたびに必要な単位などは、該当する `PostToolUse` で配信できる。新しい根拠で原則や適用範囲が変わればエージェントが同じIDを改訂する。shared memory への昇格には、独立した2 project 以上の根拠と具体案への利用者の承認が要る。[memory の改訂・昇格条件](skills/refinery-memory.md)・[hookコンテキストの用途](skills/refinery-curate-context.md)
 - **繰り返す手順や機械的に判定できる条件**は、手順を持つ Skill、判定を担うテストや CLI へ反映する候補になる。Every の Compound Engineering は、解決後に何を残すと再発を防げるかを、解決記録・規約・テストなどから選ぶ。Hermes Agent は経験から Skill を作り、利用中に更新する実装例で、保守対象もその Skill の由来で区別する。Refinery では、vault に残した根拠から、その手順を所有する repo へ変更案を渡せる。[Every の設計](https://everyinc.github.io/compound-engineering-plugin/guides/ce-compound/)・[Hermes Agent](https://github.com/NousResearch/hermes-agent)・[Hermes の Skill 保守](https://hermes-agent.nousresearch.com/docs/user-guide/features/curator)
 - **手順に取り込んだ知識**は、その後も見直せる必要がある。OpenClaw 向けの self-improving-agent は、指示に反映した教訓と元記録を対応づけ、再審査だけで再発回数を増やさない。Refinery でも、提案に元の観測を、検証に採用した差分を対応づけておくと、次の失敗から改訂すべき箇所へ戻れる。配布 Skill の改訂は開発 repo の差分として扱い、中央 vault とプロダクトの Git 履歴はそれぞれの管理者が扱う。[self-improving-agent の運用](https://github.com/pskoett/self-improving-agent/blob/master/self-improving-agent/SKILL.md)・[Git の責任分界](git-operations.md)
 

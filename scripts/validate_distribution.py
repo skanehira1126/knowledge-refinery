@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import argparse
+import asyncio
 import json
+import os
 from pathlib import Path
 import sys
+from tempfile import TemporaryDirectory
 
 import yaml
 
@@ -127,13 +131,116 @@ def _validate_marketplace() -> None:
         raise ValueError("Personal marketplace is missing knowledge-refinery")
 
 
+def _validate_claude_distribution() -> None:
+    root = ROOT / ".claude-plugin"
+    manifest = _read_json(root / "plugin.json")
+    marketplace = _read_json(root / "marketplace.json")
+    (entry,) = marketplace["plugins"]
+    if entry["name"] != manifest["name"] or entry["source"] != "./":
+        raise ValueError("Claude marketplace must install the plugin from this repository")
+    paths = [ROOT / path for path in entry["skills"]]
+    if {path.name for path in paths} != EXPECTED_SKILLS or len(paths) != len(EXPECTED_SKILLS):
+        raise ValueError("Claude marketplace must expose each distributed skill once")
+    for path in paths:
+        header = _skill_header(path / "SKILL.md")
+        canonical = ROOT / "skills" / path.name
+        agent = yaml.safe_load((canonical / "agents/openai.yaml").read_text(encoding="utf-8"))
+        manual = agent.get("policy", {}).get("allow_implicit_invocation") is False
+        if (
+            header.get("name") != path.name
+            or header.get("disable-model-invocation", False) is not manual
+        ):
+            raise ValueError(f"Claude skill identity or invocation policy differs: {path.name}")
+        if manual:
+            target = "${CLAUDE_PLUGIN_ROOT}/skills/" + path.name + "/SKILL.md"
+            if target not in (path / "SKILL.md").read_text(encoding="utf-8"):
+                raise ValueError(f"Claude skill must load the shared workflow: {path.name}")
+        elif path != canonical:
+            raise ValueError(f"Claude skill must use the shared source: {path.name}")
+
+
+async def _validate_codex_loading() -> None:
+    """Check what the actual Codex host discovers, without installing the plugin."""
+    with TemporaryDirectory(prefix="refinery-codex-") as directory:
+        server = await asyncio.create_subprocess_exec(
+            "codex",
+            "app-server",
+            "--stdio",
+            cwd=directory,
+            env={**os.environ, "CODEX_HOME": directory},
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+        )
+        assert server.stdin is not None and server.stdout is not None
+        writer, reader = server.stdin, server.stdout
+
+        async def request(request_id: int, method: str, params: dict) -> dict:
+            message = {"id": request_id, "method": method, "params": params}
+            writer.write(json.dumps(message).encode() + b"\n")
+            await writer.drain()
+            while line := await reader.readline():
+                response = json.loads(line)
+                if response.get("id") == request_id:
+                    if "error" in response:
+                        raise ValueError(f"Codex {method}: {response['error']}")
+                    return response["result"]
+            raise ValueError(f"Codex stopped before replying to {method}")
+
+        try:
+            async with asyncio.timeout(30):
+                await request(
+                    1,
+                    "initialize",
+                    {
+                        "clientInfo": {"name": "refinery_validation", "version": "1"},
+                        "capabilities": {"experimentalApi": True},
+                    },
+                )
+                writer.write(b'{"method":"initialized"}\n')
+                result = await request(
+                    2,
+                    "plugin/read",
+                    {
+                        "marketplacePath": str(ROOT / ".agents/plugins/marketplace.json"),
+                        "pluginName": "knowledge-refinery",
+                    },
+                )
+        finally:
+            if server.returncode is None:
+                server.terminate()
+            await server.wait()
+
+    plugin = result["plugin"]
+    events = sorted(hook["eventName"] for hook in plugin["hooks"])
+    if events != [
+        "postToolUse",
+        "preToolUse",
+        "sessionStart",
+        "subagentStart",
+        "userPromptSubmit",
+    ]:
+        raise ValueError(f"Unexpected hooks discovered by Codex: {events}")
+    if plugin["mcpServers"] != ["knowledge-refinery"]:
+        raise ValueError(f"Unexpected MCP servers discovered by Codex: {plugin['mcpServers']}")
+    if {skill["name"] for skill in plugin["skills"]} != {
+        f"knowledge-refinery:{name}" for name in EXPECTED_SKILLS
+    }:
+        raise ValueError("Codex did not discover the expected plugin skills")
+
+
 def validate() -> None:
     _validate_plugin()
     _validate_mcp()
     _validate_skills()
     _validate_marketplace()
+    _validate_claude_distribution()
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--codex", action="store_true", help="also load the plugin in Codex CLI")
+    args = parser.parse_args()
     validate()
+    if args.codex:
+        asyncio.run(_validate_codex_loading())
     print("Distribution validation passed")

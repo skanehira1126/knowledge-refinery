@@ -24,24 +24,24 @@ active vaultとのpath不一致はexit 2です。project登録やactive vaultの
 
 ## context
 
-Codexへ渡す短いMarkdownを、projectと配信先ごとに確認できます。配信先はCodexのイベント名と、
-必要に応じて開始理由かツール名をスラッシュでつないで指定します。
+Codex・Claude Codeへ渡す短いMarkdownを、projectと配信先ごとに確認できます。配信先はイベント名と、
+ツール実行前後の場合はツール名をスラッシュでつないで指定します。
 
 | 配信先 | 届くタイミング | 載せる内容の例 |
 |---|---|---|
-| `SessionStart/<source>` | 新規開始 `startup`、再開 `resume`、クリア `clear`、圧縮後 `compact`、分岐 `fork` | 新規開始時に知らせたい依存先や、圧縮後に再確認したいデータ定義 |
 | `UserPromptSubmit` | ユーザーが入力するたび | どの依頼の解釈にも関わる用語の意味 |
 | `PreToolUse/Bash`、`PreToolUse/apply_patch` | 該当ツールの実行前 | 編集対象の生成元や、コマンドの入力に必要な前提 |
 | `PostToolUse/Bash`、`PostToolUse/apply_patch` | 該当ツールの実行後 | コマンド結果の単位や、編集後の検証に使うデータ |
 | `SubagentStart` | サブエージェントの開始時 | 委任先が調べる範囲と、参照先projectが持つ仕様 |
 
-各配信先は独立しています。`SessionStart/startup` のみ設定すると、新規開始時だけ届きます。
+Claude Code の編集には `PreToolUse/Edit`、`PostToolUse/Edit`、ファイル書き込みには
+`PreToolUse/Write`、`PostToolUse/Write` を使用します。各配信先は独立しています。
 本文は中央vaultの `projects/<project_id>/context/<配信先>.md` に保存します。
 
 ```bash
 knowledge-refinery context list
-knowledge-refinery context show SessionStart/startup
-knowledge-refinery context show SessionStart/startup --json
+knowledge-refinery context show PreToolUse/Bash
+knowledge-refinery context show PreToolUse/Bash --json
 ```
 
 `list` は全配信先とrevisionを表示し、未設定の欄は `-` になります。`list --json` と
@@ -52,10 +52,17 @@ knowledge-refinery context show SessionStart/startup --json
 紐付けを検証します。中央vaultを直接開いた保守では、`--vault "$VAULT_ROOT" --project-id "$PROJECT_ID"`
 で登録済みprojectを指定できます。
 
-Codexの `/hooks` で使うhookを信頼すると、同梱の `context hook` が標準入力のイベントと
-`cwd` から該当する本文を選び、`hookSpecificOutput.additionalContext` として返します。
-未登録・無効なrepoや、該当する本文が未設定・空白の場合は出力せず正常終了します。
-保存した変更は次の該当イベントから届きます。根拠を確認して本文を整える手順は
+新規開始・圧縮後は固定のCLIコマンド `context guidance-hook` がrepoの `.refinery.yaml` を確認し、
+有効ならパッケージ同梱の日本語の運用指示を返します。MCP接続やactive vaultの設定は不要です。
+表のイベントではホストの `mcp_tool` hookが作業ディレクトリと配信先を `refinery_deliver_context`
+に渡します。サーバーがrepoとvaultの紐付けを照合し、該当する本文を追加contextとして返します。
+未登録・無効なrepoや本文が空の配信先では、追加contextは入りません。
+
+旧版で保存した `SessionStart/<source>` の本文は自動配信されません。以前の配信先を
+`context show` または `refinery_get_context` に指定して内容を確認し、必要に応じて
+該当する配信先へ移せます。旧本文の解除には `refinery_update_context` に現在のrevisionと `body: null` を渡します。
+
+Codex CLIの `/hooks` で各hookを個別に信頼・無効化できます。デスクトップアプリでは `Settings → Hooks` で信頼状態を確認できます。`context list` と `show` はproject本文を対象にします。根拠を確認して本文を整える手順は
 [refinery-curate-context](skills/refinery-curate-context.md)、イベントの入出力は
 [Codex Hooks](https://learn.chatgpt.com/docs/hooks)を参照してください。
 
@@ -89,8 +96,8 @@ setupの`--vault`は指定vaultをactive vaultにも設定します。現在値�
 version管理可能な`.refinery.yaml`には個人のvault identityを入れません。statusの
 `configured_vault_id`、`active_vault_id`、`vault_match`で誤接続を機械的に検出できます。
 
-`project enable`は既定ではmanaged guidanceを追加しません。自動運用モードへ戻す場合だけ
-`--agents`を指定します。`project disable`は既存managed blockを削除し、block外の利用者記述と
+`project enable`で両方のhookが有効なrepoを再び配信対象にします。`--agents`はファイルへの追記に使います。
+`project disable`は既存managed blockを削除し、block外の利用者記述と
 中央vaultのknowledgeを保持します。
 
 metadata更新は `show` の `updated_at` を `update --expected-updated-at` に渡します。指定したfieldだけを更新し、省略fieldは保持します。tagまたはtechnologyを空にする場合は `--clear-tags`、`--clear-technologies` を明示します。revisionなし、古いrevision、変更fieldなしの更新は拒否されます。tagはlowercase kebab-caseで指定します。
@@ -240,14 +247,14 @@ experience／memory用であり、issueタグには影響しません。
 ## session
 
 ローカルのCodexログから解析JSONを作り、必要な記録を検索・表示します。出力はJSONです。
-listは有効なRefinery登録設定を必要とします。明示ログの抽出・解析JSONの操作は登録不要です。
+listは有効なRefinery登録設定を必要とします。ID・パス指定での抽出と解析JSONの操作は登録不要です。
 MCP接続は不要です。レポート作成を依頼する場合は
 [refinery-review-session](skills/refinery-review-session.md)を使ってください。
 
 | コマンド | 入力 | 用途 |
 | --- | --- | --- |
-| `list` | ログのディレクトリ | 更新日時から対象チャットを選ぶ |
-| `extract` | rollout JSONL | 本文と対応関係を解析JSONに保存する |
+| `list` | ローカルログとタイトル索引 | タイトルや更新日時から対象チャットを選ぶ |
+| `extract` | `/status` のセッションID、またはrollout JSONL | 本文と対応関係を解析JSONに保存する |
 | `search` | 解析JSON | 条件に合う記録を探す |
 | `show` | 解析JSON | 特定記録の前後と関連結果を読む |
 | `stats` | 解析JSON | 呼び出し数・ツール別件数・警告を確認する |
@@ -256,17 +263,19 @@ MCP接続は不要です。レポート作成を依頼する場合は
 
 ```bash
 knowledge-refinery session list \
+  --title 'レビュー' \
   --updated-since 2026-11-07T00:00:00+09:00 \
   --updated-before 2026-11-08T00:00:00+09:00 --limit 3
 ```
 
-現在の登録済みGitプロジェクトから、日本時間11月7日の更新分を直近3件返します。
+現在の登録済みGitプロジェクトから、タイトルに「レビュー」を含み、日本時間11月7日に更新されたログを直近3件まで返します。
 更新の基準はログファイルのmtimeです。
 終了済みかどうかは別途確認してください。
 
 | 引数 | 内容 | 既定 |
 | --- | --- | --- |
 | `--project PATH` | 対象の登録済みGit作業ディレクトリ | 現在のディレクトリ |
+| `--title TEXT` | タイトルの部分一致。大文字・小文字を区別しない | 絞り込みなし |
 | `--updated-since DATE` | 下限以上 | 下限なし |
 | `--updated-before DATE` | 上限未満 | 上限なし |
 | `--sessions-dir DIR` | 探索先を置き換える。複数指定可 | `CODEX_HOME/sessions` |
@@ -283,6 +292,8 @@ knowledge-refinery session list \
 `CODEX_HOME` 未設定時は `~/.codex`。アーカイブは `--sessions-dir` で指定した場合だけ探します。
 日付だけの指定はUTCの0時です。日時には `Z` または `+09:00` などのタイムゾーンが必要です。
 
+タイトルは `CODEX_HOME/session_index.jsonl` の `thread_name` を使います。タイトルを取得できないチャットは
+一覧で `title: null` になり、`--title` の一致対象から外れます。
 `chats[].path` をextractへ渡します。同じチャットの複数ログがある場合は `paths` に並ぶため、対象を確認してください。
 一覧は親チャット単位です。`total` と `next_offset` で続きの有無を、`skipped_files` で読取できなかった件数を確認できます。
 limitは返却数の指定で、ファイル情報と先頭metadataの走査数は制限しません。
@@ -290,17 +301,23 @@ limitは返却数の指定で、ファイル情報と先頭metadataの走査数�
 ### extract：解析JSONを保存する
 
 ```bash
+knowledge-refinery session extract --session-id SESSION_ID --output /tmp/analysis.json
 knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/analysis.json
 ```
 
 | 引数 | 内容 |
 | --- | --- |
-| `path` | 対象チャットのrollout JSONL。必須 |
+| `--session-id ID` | Codexの `/status` に表示される共有セッションID |
+| `path` | 起点チャットのrollout JSONL。`--session-id` とどちらか一方を指定 |
 | `--output PATH` | 新規JSONの保存先。必須 |
 | `--exclude-children` | 子孫を探さず、対象チャットだけ保存する |
-| `--sessions-dir DIR` | 子孫ログの探索先を置き換える。複数指定可。既定は `CODEX_HOME/sessions` |
+| `--sessions-dir DIR` | IDでの親ログ・子孫ログの探索先を置き換える。複数指定可。既定は `CODEX_HOME/sessions` |
 
-既定で子孫も保存します。`--sessions-dir` と `--exclude-children` は併用できません。
+`--session-id` はログ先頭の `session_meta.payload.session_id` が完全一致する親ログを選びます。
+親ログが見つからない場合や複数ある場合はエラーになります。ログのパスが分かる場合は直接指定できます。
+既定では親子関係を確認できた子孫も、固有の `chat_id` を保持して保存します。
+アーカイブを含めるには通常ログとアーカイブのディレクトリを `--sessions-dir` で指定します。
+ID指定で親だけを保存するときも探索先を指定できます。パス指定で親だけを保存するときは `--sessions-dir` を省きます。
 入力は変更せず、既存ファイル・symlinkへの上書きは拒否します。保存先はmode 0600で作成します。
 本文は保存時に切り詰めません。解析JSONは匿名化されないため、公開・Git追跡の対象にしないでください。
 

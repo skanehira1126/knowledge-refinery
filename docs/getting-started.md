@@ -7,7 +7,7 @@
 
 | 必要なもの | 用途 |
 |---|---|
-| CodexまたはChatGPT desktop app | PluginとSkillsを利用する |
+| Codex、ChatGPT desktop app または Claude Code | PluginとSkillsを利用する |
 | Python 3.11以上 | CLIとローカルMCPを実行する |
 | `uv` | CLIのインストールとMCPの起動に使う |
 | knowledge保存用directory | 複数repoのknowledgeを集約する |
@@ -20,6 +20,20 @@ flowchart LR
 ```
 
 ## 1. Pluginを追加
+
+### Claude Code
+
+```bash
+claude plugin marketplace add skanehira1126/knowledge-refinery
+claude plugin install knowledge-refinery@knowledge-refinery
+```
+
+ローカル checkout から導入する場合は GitHub 名の代わりに checkout の絶対パスを指定します。
+新しいセッションで `/knowledge-refinery:refinery-project` を呼び出すと、
+同梱 CLI で vault と対象 repo を設定できます。既存の有効な repo は同じ vault を引き続き使えます。
+Claude Code の Bash 内で使う CLI は同梱されています。通常の端末からも使う場合は手順 2 で導入してください。
+
+### Codex
 
 === "GitHub"
 
@@ -84,14 +98,12 @@ knowledge-refinery vault configure --root "$REFINERY_VAULT"
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"  # 導入対象repoで実行
 knowledge-refinery project setup \
   --target "$PROJECT_ROOT" \
-  --vault "$REFINERY_VAULT" \
-  --agents
+  --vault "$REFINERY_VAULT"
 ```
 
-`--agents`はKnowledge Refineryの共通ルールを`AGENTS.md`へ追記し、通常の開発taskでも利用する
-自動運用モードを有効にします。既存の内容は保持され、管理対象のblockだけが追加または更新されます。
-自動検索は過去の知識が設計・調査・比較などの判断に役立つときに行い、単純なtypo・書式変更では
-省略します。再利用できる経験はagentが判断して保存・確認まで進めます。
+登録後は、Pluginの固定hookが新しいセッションの開始時と圧縮後に運用指示を渡します。
+Codexでは、CLIの `/hooks` またはデスクトップアプリの `Settings → Hooks` で使うhookを信頼してください。通常の作業中に設計・調査・比較の
+判断に役立つときだけ検索し、再利用できる経験や根拠の揃ったproject memoryを保存・確認します。
 
 project IDはrepository directory名を小文字、数字、hyphenのslugにして生成され、登録後は
 変更されません。表示名もdirectory名が初期値です。別の値を指定する必要がある場合だけ、
@@ -106,8 +118,7 @@ knowledge-refinery project setup \
   --project-name "My Project" \
   --summary "プロジェクトの目的を一文で記述" \
   --tag backend \
-  --technology Python \
-  --agents
+  --technology Python
 ```
 
 project IDを自動生成できないdirectory名や、vault内の既存IDと重複する場合は、
@@ -124,20 +135,10 @@ tag、technologyが現在値と異なる場合は、
 指定値を黙って無視せずエラーになります。案内に従って、現在revisionを取得してから
 `project metadata update`を使います。
 
-`AGENTS.md`を変更せず、必要なtaskだけでSkillを呼ぶ明示呼出モードにする場合は、
-`--agents`を省略します。
-
-```bash
-knowledge-refinery project setup \
-  --target "$PROJECT_ROOT" \
-  --vault "$REFINERY_VAULT"
-```
-
-作業領域に固有のルールも追加したい場合は、[AGENTS.md追記サンプル](agents-guidance-examples.md)から必要なものを選んでください。
-
-明示呼出モードでは、通常の開発taskが自動的にKnowledge Refineryを使うとは限りません。
-必要なときにSkill名または目的を明示します。2つのモードと依頼例は
-[エージェントへの頼み方](agent-workflow.md)を参照してください。
+共通指示をファイルにも置く場合だけ`--agents`を付けます。以前の導入で追加したmanaged blockも
+引き続き読み込まれます。固定hookと配信内容が重なる場合は、使いたい経路を選べます。
+Codexで固定hookだけを止める手順と、個別にSkillを呼ぶ依頼例は[エージェントへの頼み方](agent-workflow.md)にあります。
+repoのガイドにも固有のルールを記載する場合は[AGENTS.md追記サンプル](agents-guidance-examples.md)を参照してください。
 
 ```text
 $refinery-projectを使って、このrepoをKnowledge Refineryへ登録してください。
@@ -167,12 +168,11 @@ knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"
 
 !!! success "セットアップ完了"
     `doctor`が`ok: yes`を返し、Plugin settingsに`knowledge-refinery`が表示されていれば準備完了です。
-    次は利用モードに応じて[最初のtask](#6-task)を開始します。
+    次に[最初のtask](#6-task)を開始します。
 
 ## 6. 最初のtask
 
-自動運用モードでは新しいtaskを開いて通常の開発依頼を開始できます。明示呼出モードでは、
-たとえば次のように読み取りだけを依頼します。
+新しいtaskを開いて通常の開発を依頼できます。読み取りだけを依頼する場合は、その範囲を伝えます。
 
 ```text
 Knowledge Refineryから今回の判断に関係するmemoryとexperienceを検索してください。

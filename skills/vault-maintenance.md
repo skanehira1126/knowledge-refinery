@@ -26,9 +26,9 @@ repo-scoped access failure. The user must explicitly request vault administratio
    ID when working only with shared knowledge. Tag browse/search needs a selected context project
    or `all_projects: true`; tag descriptions apply to the whole vault. For project hook text,
    pass the selected project's `vault_context` to the context tools with `project_path: null`.
-5. Continue the owning skill's evidence review, approval, revision, readback, and diff checks with
-   this same context. A maintenance request is not approval of a concrete shared principle,
-   material memory rewrite, or deletion. `refinery_validate` remains vault-wide even when the
+5. Continue the owning skill's evidence review, revision, readback, and diff checks with
+   this same context. Creating or promoting a shared memory and deleting knowledge require
+   approval of the specific change. `refinery_validate` remains vault-wide even when the
    context contains a project ID. Handoff writes have no vault-context route.
 
 The context is a target-identity check, not proof of user approval. Filesystem permissions and the

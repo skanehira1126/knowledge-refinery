@@ -9,6 +9,7 @@ import anyio
 from mcp import ClientSession
 from mcp import StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.types import TextContent
 import pytest
 
 from knowledge_refinery.config_ops import set_active_vault
@@ -67,9 +68,11 @@ def test_stdio_server_lists_expected_tools(
                 )
                 assert invalid.isError
 
-                address = {"project_path": str(project), "target": "SessionStart/compact"}
+                address = {"project_path": str(project), "target": "PostToolUse/Bash"}
+                delivery = {"cwd": str(project), "target": address["target"]}
+                body = "注文数の単位は件。"
                 saved_context = await session.call_tool(
-                    "refinery_update_context", {**address, "body": "圧縮後の前提"}
+                    "refinery_update_context", {**address, "body": body}
                 )
                 assert not saved_context.isError and saved_context.structuredContent is not None
                 revision = saved_context.structuredContent["revision"]
@@ -82,12 +85,26 @@ def test_stdio_server_lists_expected_tools(
                     not readback.isError
                     and readback.structuredContent == saved_context.structuredContent
                 )
+                delivered = await session.call_tool("refinery_deliver_context", delivery)
+                expected = {
+                    "hookSpecificOutput": {
+                        "hookEventName": "PostToolUse",
+                        "additionalContext": body,
+                    }
+                }
+                assert not delivered.isError and delivered.structuredContent == expected
+                (content,) = delivered.content
+                assert isinstance(content, TextContent) and json.loads(content.text) == expected
                 cleared = await session.call_tool(
                     "refinery_update_context",
                     {**address, "body": None, "expected_revision": revision},
                 )
                 assert not cleared.isError and cleared.structuredContent is not None
                 assert cleared.structuredContent["revision"] is None
+                empty = await session.call_tool("refinery_deliver_context", delivery)
+                (empty_content,) = empty.content
+                assert not empty.isError and isinstance(empty_content, TextContent)
+                assert json.loads(empty_content.text) == {}
 
                 created = await session.call_tool(
                     "refinery_create_handoff",
@@ -141,6 +158,7 @@ def test_stdio_server_lists_expected_tools(
         assert names == {
             "refinery_list_contexts",
             "refinery_get_context",
+            "refinery_deliver_context",
             "refinery_update_context",
             "refinery_create_handoff",
             "refinery_list_handoffs",
@@ -169,6 +187,9 @@ def test_stdio_server_lists_expected_tools(
             "refinery_list_contexts": "projectのhook配信先と現在のrevisionを一覧取得します。",
             "refinery_get_context": (
                 "指定したhook配信先の本文とrevisionを取得します。未設定なら両方nullです。"
+            ),
+            "refinery_deliver_context": (
+                "ホストのhookに、現在のrepoで有効な配信先の本文を追加contextとして返します。"
             ),
             "refinery_update_context": (
                 "hook本文を保存します。更新・解除は現在のrevisionを指定し、解除時はbodyをnullにします。"

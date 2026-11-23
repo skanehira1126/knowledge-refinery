@@ -27,7 +27,7 @@ $refinery-handoffを使い、project「project-a」の引き継ぎ「search-fix-
 参照先が移動・削除されていれば、その不足を示します。会話全体の再投入は行いません。
 
 `agents/openai.yaml`の`policy.allow_implicit_invocation: false`により、Skillは明示呼び出し専用です。
-`--agents`による自動運用の対象にも含めません。本体は作成・再開・整理を振り分け、必要な参照ファイル
+本体は依頼された作成・再開・整理を振り分け、必要な参照ファイル
 だけを読みます。新しいチャットの作成は、対応するアプリ機能が利用可能で、別途依頼された場合に扱います。
 
 ## ライフタイム {#lifetime}

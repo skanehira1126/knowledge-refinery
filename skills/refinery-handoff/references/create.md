@@ -37,6 +37,7 @@ $refinery-handoffを使い、project「<project-id>」の引き継ぎ「<handoff
 現在の成果物と照合し、目的と完了条件に沿って作業を再開してください。
 ```
 
+For Claude Code, start the prompt with `/knowledge-refinery:refinery-handoff` followed by the request.
 The prompt carries identity and intent; the handoff carries the task state. Create a new chat
 only when separately requested and a supported app capability is available.
 

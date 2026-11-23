@@ -51,8 +51,8 @@ disabledは故障ではなく利用者が選んだ正常なopt-outです。Skill
 knowledge-refinery project enable --target "$PROJECT_ROOT"
 ```
 
-上のコマンドは明示呼出モードで再開し、managed guidanceを追加しません。自動運用モードへ
-戻す場合だけ`--agents`を付けます。
+再有効化すると、次の新規開始時・圧縮後から固定hookが運用指示を届け、保存済みのproject本文も
+該当するイベントで再び届きます。ファイルにも運用指示を追加する場合は`--agents`を付けます。
 
 ```bash
 knowledge-refinery project enable --target "$PROJECT_ROOT" --agents
@@ -71,6 +71,7 @@ knowledge-refinery project status --target "$PROJECT_ROOT" --json
 JSONの`state`、`ready_for_tools`、`enabled`、`active_vault`、`configured_vault_id`、
 `active_vault_id`、`vault_match`、`vault_registered`、`managed_guidance`、`link_state`を
 automationの安定契約として使えます。
+`managed_guidance`は選択したガイドファイル内のmanaged blockの有無を示します。固定hookの信頼・有効状態はホスト側で確認します。
 `project_metadata` には検証済みmetadata、`project_metadata_error` には読めない場合の理由が入ります。
 
 disabledはhealthy opt-outなので`project status`はexit 0です。doctorもdisabled自体を破損として

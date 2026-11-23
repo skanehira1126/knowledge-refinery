@@ -14,9 +14,9 @@ metadata・experience・memoryを書くときはcontext内の`project_id`で保�
 repoの無効化はこの中央管理と独立していますが、無効repoの通常操作からの自動迂回は禁止です。
 APIの対象指定は[MCP tools](../mcp.md#vault-maintenance)を参照してください。
 
-監査・提案のみなら書き込まず、修復依頼では結論を変えない根拠のある修正まで進めます。
+監査・提案のみなら結果と候補を返し、修復依頼では根拠に基づく対象の更新まで進めます。
 Experience本文の更新は`refinery-experience`、memoryの作成・更新・アーカイブは`refinery-memory`へ委ねます。棚卸しでは候補の適用条件と後継を確認し、過去の判断を追う場合はアーカイブ分を含めて検索します。
-Shared memory、knowledge削除、memoryの大幅な書き換えには具体案への承認が必要です。
+Shared memoryの新規作成・昇格とknowledgeの削除には具体案への承認が必要です。
 
 指定したmetadataやtag説明の事実修正は、現在revisionで更新して読み戻し・差分確認まで行います。
 Schema・provenanceの修復や全体監査で書き込んだ場合は、まとめて適用した後に再validationします。

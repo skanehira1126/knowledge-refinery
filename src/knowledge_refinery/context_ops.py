@@ -9,14 +9,9 @@ from knowledge_refinery.storage_ops import atomic_write_text
 from knowledge_refinery.storage_ops import interprocess_lock
 
 
-_TOOLS = ("Bash", "apply_patch")
-# Each event uses the literal value Codex sends in this field, or one event-wide body.
-HOOK_SELECTORS: dict[str, tuple[str, tuple[str, ...]] | None] = {
-    "SessionStart": ("source", ("startup", "resume", "clear", "compact", "fork")),
-    "UserPromptSubmit": None,
-    "PreToolUse": ("tool_name", _TOOLS),
-    "PostToolUse": ("tool_name", _TOOLS),
-    "SubagentStart": None,
+_TOOLS = ("Bash", "apply_patch", "Edit", "Write")
+_SAVED_SESSION_TARGETS = {
+    f"SessionStart/{source}" for source in ("startup", "resume", "clear", "compact", "fork")
 }
 
 
@@ -35,32 +30,15 @@ class ContextEntry(ContextSummary):
 
 def context_targets() -> list[str]:
     """List every configurable target in hook order."""
-    targets = []
-    for event, selector in HOOK_SELECTORS.items():
-        if selector is None:
-            targets.append(event)
-        else:
-            targets.extend(f"{event}/{value}" for value in selector[1])
-    return targets
-
-
-def hook_target(event: str, payload: dict[str, object]) -> str | None:
-    """Select the exact configured address for a supported hook input."""
-    if event not in HOOK_SELECTORS:
-        return None
-    selector = HOOK_SELECTORS[event]
-    if selector is None:
-        return event
-    field, values = selector
-    value = payload.get(field)
-    if value not in values:
-        return None
-    return f"{event}/{value}"
+    tool_targets = [
+        f"{event}/{tool}" for event in ("PreToolUse", "PostToolUse") for tool in _TOOLS
+    ]
+    return ["UserPromptSubmit", *tool_targets, "SubagentStart"]
 
 
 def _context_path(project_store: Path, target: str) -> Path:
     """Resolve one supported Markdown file inside the registered vault project."""
-    if target not in context_targets():
+    if target not in context_targets() and target not in _SAVED_SESSION_TARGETS:
         raise ValueError(f"Unknown context target: {target}")
     path = project_store / "context" / f"{target}.md"
     if path.resolve() != path:
@@ -98,6 +76,10 @@ def update_context(
     project_store: Path, target: str, body: str | None, *, expected_revision: str | None
 ) -> ContextEntry:
     """Create, replace, or clear one target and return the committed revision."""
+    if target in _SAVED_SESSION_TARGETS and body is not None:
+        raise ValueError(
+            "SessionStart uses fixed plugin guidance. Saved text can be read or cleared."
+        )
     path = _context_path(project_store, target)
     if body is None and expected_revision is None:
         raise ValueError("Clearing a context target requires its current expected_revision")

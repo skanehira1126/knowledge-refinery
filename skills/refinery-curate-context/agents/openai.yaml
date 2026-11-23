@@ -1,4 +1,4 @@
 interface:
   display_name: "Refinery Curate Context"
   short_description: "必要な場面で届くように、確認できたプロジェクトの前提をhook別に整える"
-  default_prompt: "$refinery-curate-contextを使って、このprojectが参照するデータやAPIの管理元を確認し、作業開始時に必要な前提を反映してください。"
+  default_prompt: "$refinery-curate-contextを使って、このprojectが参照するAPIの管理元を確認し、編集前に届く本文に反映してください。"

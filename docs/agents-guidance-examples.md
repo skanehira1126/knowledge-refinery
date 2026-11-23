@@ -1,6 +1,7 @@
 # AGENTS.md追記サンプル
 
-`knowledge-refinery project setup` は、デフォルトでは `AGENTS.md` を作成・変更しません。Knowledge Refineryの共通ルールが必要なrepoでは、次のように明示します。
+通常は、登録済みで有効なrepoの新規開始時と圧縮後にPluginの固定hookが共通の運用指示を届けます。
+同じ指示をrepoのファイルにも置きたい場合は、次のように指定します。
 
 ```bash
 knowledge-refinery project setup \
@@ -10,7 +11,9 @@ knowledge-refinery project setup \
   --agents
 ```
 
-`--agents` が追加するmanaged blockは、Knowledge Refineryを使うための共通ルールです。以下のサンプルは作業領域に固有の補足なので、必要なものだけを `AGENTS.md` のmanaged blockの外側へコピーしてください。外側に置くことで、`update-agents-md` を実行してもサンプル部分は上書きされません。
+`--agents` は共通の運用指示をmanaged blockとして追加します。以下のサンプルは作業領域に固有の補足です。
+ファイルで管理する項目はmanaged blockの外側へ置くと、`update-agents-md`実行時にも保持されます。
+スキーマの管理元など、エージェントに更新を任せたい前提は、その場面の[projectのhook本文](skills/refinery-curate-context.md)に載せられます。
 
 以下の例にも[書き込みと確認の境界](agent-workflow.md#write-approval-boundary)が適用されます。
 検索・診断・提案のみの依頼では記録せず、disabledや未準備ならrefinery操作だけを見送ります。
@@ -20,8 +23,8 @@ knowledge-refinery project setup \
 自動検索は、過去の知識が今回の判断に役立つときに行います。以下の検索項目もこの条件で使い、
 typo・書式変更などの機械的な作業には適用しません。同じ問いと根拠の結果は再利用します。
 記録形式、status・confidence、更新引数の詳細はPlugin Skillに任せ、利用repoへ複製しません。
-過去の原則を採用・見送りした経験も記録の対象です。新しい根拠で既存原則の適用範囲が変わる場合は`refinery-memory`で改訂・統合・アーカイブを検討します。
-handoffの作成・再開・整理は`$refinery-handoff`の明示呼び出し専用であり、以下の自動運用例には含めません。
+過去の原則を採用・見送りした経験も記録の対象です。新しい根拠で既存原則の適用範囲が変われば、`refinery-memory`で同じIDを改訂します。前提が失われた原則は理由を残してアーカイブします。
+handoffの作成・再開・整理は`$refinery-handoff`（Claude Code では `/knowledge-refinery:refinery-handoff`）の明示呼び出し専用であり、以下の自動運用例には含めません。
 
 ## データ分析
 

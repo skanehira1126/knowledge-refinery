@@ -7,6 +7,7 @@ from pathlib import Path
 
 from knowledge_refinery.session_catalog import list_sessions
 from knowledge_refinery.session_ops import extract_session
+from knowledge_refinery.session_ops import extract_session_by_id
 from knowledge_refinery.session_query import KINDS
 from knowledge_refinery.session_query import load_analysis
 from knowledge_refinery.session_query import search_records
@@ -31,13 +32,16 @@ def _add_record_filters(parser: argparse.ArgumentParser) -> None:
 def configure_session_parser(parser: argparse.ArgumentParser) -> None:
     """Register local session commands independently of vault and MCP configuration."""
     commands = parser.add_subparsers(required=True)
-    listing = commands.add_parser("list", help="List root chats by log modification time")
+    listing = commands.add_parser(
+        "list", help="List root chats by title and log modification time"
+    )
     listing.add_argument(
         "--project",
         type=Path,
         default=Path("."),
         help="registered project working directory (default: current directory)",
     )
+    listing.add_argument("--title", help="case-insensitive literal substring of a chat title")
     listing.add_argument(
         "--updated-since",
         help="inclusive lower bound: YYYY-MM-DD (UTC) or ISO timestamp with timezone",
@@ -59,7 +63,9 @@ def configure_session_parser(parser: argparse.ArgumentParser) -> None:
     listing.set_defaults(handler=run_session_list)
 
     extract = commands.add_parser("extract", help="Save full rollout evidence as analysis JSON")
-    extract.add_argument("path", type=Path, help="root chat's local rollout JSONL")
+    source = extract.add_mutually_exclusive_group(required=True)
+    source.add_argument("path", type=Path, nargs="?", help="local rollout JSONL to start from")
+    source.add_argument("--session-id", metavar="ID", help="shared session ID from Codex /status")
     extract.add_argument(
         "--output", type=Path, required=True, help="new private analysis JSON file"
     )
@@ -181,6 +187,8 @@ def run_session_list(args: argparse.Namespace) -> int:
     result = list_sessions(
         args.sessions_dir or [home / "sessions"],
         project=args.project,
+        title=args.title,
+        title_index=home / "session_index.jsonl",
         updated_since=args.updated_since,
         updated_before=args.updated_before,
         limit=args.limit,
@@ -192,13 +200,20 @@ def run_session_list(args: argparse.Namespace) -> int:
 
 def run_session_extract(args: argparse.Namespace) -> int:
     """Save full evidence exclusively and print a compact receipt, not the raw transcript."""
-    if args.sessions_dir and args.exclude_children:
-        raise ValueError("--sessions-dir cannot be combined with --exclude-children")
-    roots = None
-    if not args.exclude_children:
-        home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
-        roots = args.sessions_dir or [home / "sessions"]
-    result = extract_session(args.path, discovery_roots=roots)
+    home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
+    roots = args.sessions_dir or [home / "sessions"]
+    if args.session_id is not None:
+        result = extract_session_by_id(
+            args.session_id, roots=roots, include_children=not args.exclude_children
+        )
+    else:
+        if args.sessions_dir and args.exclude_children:
+            raise ValueError(
+                "--sessions-dir cannot be combined with --exclude-children for a path"
+            )
+        result = extract_session(
+            args.path, discovery_roots=None if args.exclude_children else roots
+        )
     output_path = args.output.expanduser()
     text = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
     fd = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

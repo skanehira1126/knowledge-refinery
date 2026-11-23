@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from dataclasses import field
 import hashlib
@@ -492,19 +493,17 @@ def _child_identity(meta: dict[str, Any]) -> tuple[str, str] | None:
     return (chat, parent) if chat and parent else None
 
 
-def discover_children(roots: list[Path], parent_id: str) -> list[Path]:
-    """Find descendant files by explicit parent metadata, without reading their bodies."""
-    candidates: list[tuple[Path, str, str]] = []
+def _rollout_metadata(roots: list[Path]) -> Iterator[tuple[Path, dict[str, Any]]]:
     for root in roots:
         if not root.expanduser().is_dir():
             continue
         for path in sorted(root.expanduser().rglob("*.jsonl")):
             meta = _metadata(path)
-            if meta is None:
-                continue
-            identity = _child_identity(meta)
-            if identity is not None:
-                candidates.append((path, *identity))
+            if meta is not None:
+                yield path, meta
+
+
+def _descendant_paths(candidates: list[tuple[Path, str, str]], parent_id: str) -> list[Path]:
     selected: set[Path] = set()
     known = {parent_id}
     changed = True
@@ -518,13 +517,67 @@ def discover_children(roots: list[Path], parent_id: str) -> list[Path]:
     return sorted(selected)
 
 
+def discover_children(roots: list[Path], parent_id: str) -> list[Path]:
+    """Find descendant files by explicit parent metadata, without reading their bodies."""
+    candidates = [
+        (path, *identity)
+        for path, meta in _rollout_metadata(roots)
+        if (identity := _child_identity(meta)) is not None
+    ]
+    return _descendant_paths(candidates, parent_id)
+
+
 def extract_session(path: Path, *, discovery_roots: list[Path] | None = None) -> dict[str, Any]:
     """Build an analysis bundle from a root chat and descendants found in discovery roots."""
-    from knowledge_refinery.session_links import build_links
-
     root = read_rollout(path)
     root_id = root["chat"]["chat_id"]
     paths = discover_children(discovery_roots, root_id) if discovery_roots is not None else []
+    return _extract_rollouts(root, paths)
+
+
+def extract_session_by_id(
+    session_id: str, *, roots: list[Path], include_children: bool = True
+) -> dict[str, Any]:
+    """Resolve a shared session ID to a unique root rollout and extract its chat tree."""
+    if string(session_id) is None:
+        raise ValueError("Session ID must not be empty")
+    matches: dict[Path, str] = {}
+    children: list[tuple[Path, str, str]] = []
+    for path, meta in _rollout_metadata(roots):
+        identity = _child_identity(meta)
+        if identity is not None:
+            if include_children:
+                children.append((path, *identity))
+        elif (
+            meta.get("session_id") == session_id
+            and meta.get("thread_source") != "subagent"
+            and (chat_id := string(meta.get("id")))
+        ):
+            matches[path.resolve()] = chat_id
+
+    if not matches:
+        raise ValueError(f"No root rollout found for session ID {session_id!r}")
+    if len(matches) > 1:
+        paths = ", ".join(str(path) for path in sorted(matches))
+        raise ValueError(
+            f"Multiple root rollouts for session ID {session_id!r}; specify a path: {paths}"
+        )
+
+    ((path, chat_id),) = matches.items()
+    root = read_rollout(path)
+    if (
+        root["chat"]["session_id"] != session_id
+        or root["chat"]["chat_id"] != chat_id
+        or root["chat"]["parent_chat_id"] is not None
+    ):
+        raise ValueError(f"Root rollout changed during session ID lookup: {path}")
+    return _extract_rollouts(root, _descendant_paths(children, chat_id))
+
+
+def _extract_rollouts(root: dict[str, Any], paths: list[Path]) -> dict[str, Any]:
+    from knowledge_refinery.session_links import build_links
+
+    root_id = root["chat"]["chat_id"]
     loaded = {root_id: root}
     warnings = []
     for child_path in dict.fromkeys(p.expanduser().resolve() for p in paths):

@@ -16,6 +16,7 @@ from knowledge_refinery import get_version
 from knowledge_refinery.config_ops import get_active_vault
 from knowledge_refinery.context_ops import ContextEntry
 from knowledge_refinery.context_ops import ContextSummary
+from knowledge_refinery.context_ops import context_targets
 from knowledge_refinery.context_ops import list_contexts
 from knowledge_refinery.context_ops import read_context
 from knowledge_refinery.context_ops import update_context
@@ -52,10 +53,13 @@ from knowledge_refinery.vault_ops import PROJECT_METADATA
 from knowledge_refinery.vault_ops import PROJECT_METADATA_SCHEMA_VERSION
 from knowledge_refinery.vault_ops import VaultContext
 from knowledge_refinery.vault_ops import context_from_vault
+from knowledge_refinery.vault_ops import find_project_root
 from knowledge_refinery.vault_ops import inspect_maintenance_vault
 from knowledge_refinery.vault_ops import list_project_metadata
+from knowledge_refinery.vault_ops import read_project_config
 from knowledge_refinery.vault_ops import read_project_metadata
 from knowledge_refinery.vault_ops import read_vault_id
+from knowledge_refinery.vault_ops import resolve_project_context
 from knowledge_refinery.vault_ops import resolve_project_id
 from knowledge_refinery.vault_ops import update_project_metadata
 from knowledge_refinery.vault_ops import validate_maintenance_context
@@ -69,11 +73,11 @@ mcp = FastMCP(
         ".refinery.yamlと中央project metadataを検証し、連携が無効または不正な"
         "repositoryを拒否します。"
         "vaultを直接開いた明示的な保守ではrefinery_vault_statusでvault_contextを取得し、"
-        "knowledge/metadata/tagとhook本文のtoolsへproject_path: nullと共に渡します。"
+        "knowledge/metadata/tagとhook本文の管理toolsへproject_path: nullと共に渡します。"
         "両contextは併用不可です。"
         "vault_contextはrepoのopt-out失敗時の自動代替に使わないでください。"
-        "project対象の更新ではvault_context.project_idを明示します。shared昇格、重要改訂、"
-        "削除の承認要件は保守でも変わりません。"
+        "project対象の更新ではvault_context.project_idを明示します。"
+        "shared memoryの新規作成・昇格とknowledgeの削除には明示承認が必要です。"
         "通常repoではcurrent projectとshared memoryを先に検索し、"
         "必要な場合だけselected projectsまたは"
         "vault全体へ広げてください。更新では省略fieldを保持し、空listは明示clearです。"
@@ -214,6 +218,26 @@ def refinery_get_context(
 ) -> ContextEntry:
     """指定したhook配信先の本文とrevisionを取得します。未設定なら両方nullです。"""
     return read_context(_hook_context_store(project_path, vault_context), target)
+
+
+@mcp.tool()
+def refinery_deliver_context(cwd: str, target: str) -> dict[str, object]:
+    """ホストのhookに、現在のrepoで有効な配信先の本文を追加contextとして返します。"""
+    if target not in context_targets():
+        return {}
+    if not Path(cwd).is_absolute():
+        raise ValueError("Expected an absolute cwd in hook input")
+    root = find_project_root(Path(cwd))
+    if root is None or not read_project_config(root, include_binding=False).enabled:
+        return {}
+    vault = get_active_vault()
+    project = resolve_project_context(root, vault)
+    body = read_context(project.project_store, target)["body"]
+    if not body or not body.strip():
+        return {}
+    read_project_metadata(vault, project.project_id)
+    event = target.partition("/")[0]
+    return {"hookSpecificOutput": {"hookEventName": event, "additionalContext": body}}
 
 
 @mcp.tool()

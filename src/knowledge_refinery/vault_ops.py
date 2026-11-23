@@ -379,8 +379,19 @@ def _validate_setup_metadata(
         )
 
 
-def read_project_config(project: Path) -> ProjectConfig:
-    """Read and validate repository-local Knowledge Refinery configuration."""
+def find_project_root(cwd: Path) -> Path | None:
+    """Find the nearest refinery configuration without crossing a Git repository boundary."""
+    cwd = cwd.expanduser().resolve()
+    for root in (cwd, *cwd.parents):
+        if (root / PROJECT_CONFIG).is_file():
+            return root
+        if (root / ".git").exists():
+            break
+    return None
+
+
+def read_project_config(project: Path, *, include_binding: bool = True) -> ProjectConfig:
+    """Read the repository configuration, optionally including its local vault binding."""
     config_path = project.expanduser().resolve() / PROJECT_CONFIG
     if not config_path.is_file():
         raise ValueError(f"Missing {PROJECT_CONFIG} in {project}")
@@ -398,7 +409,11 @@ def read_project_config(project: Path) -> ProjectConfig:
     enabled = raw.get("enabled", True)
     if not isinstance(enabled, bool):
         raise ValueError(f"Invalid enabled flag in project config: {config_path}")
-    vault_id = _read_project_vault_id(project.expanduser().resolve(), legacy=raw.get("vault_id"))
+    vault_id = None
+    if include_binding:
+        vault_id = _read_project_vault_id(
+            project.expanduser().resolve(), legacy=raw.get("vault_id")
+        )
     return ProjectConfig(
         schema_version=2,
         project_id=project_id,
@@ -880,9 +895,9 @@ def _vault_agents() -> str:
 - Keep Knowledge tag descriptions stable and factual in `knowledge-tags.yaml`.
 - Do not store credentials, tokens, personal or customer data, or unredacted sensitive logs.
 - Preserve current revisions, supporting sources, and unrelated edits when updating knowledge.
-- Knowledge deletion, memory archival, or material changes to a principle or its applicability
-  require explicit approval of the concrete diff and evidence. Reuse approval for unchanged work;
-  prepare permitted inspection and drafts before asking, and continue independent work.
+- Revise existing project and shared memories as the evidence changes. Archive with a reason
+  when the premise disappears or a successor covers the full scope. Verify the saved record.
+- Obtain explicit approval for shared-memory creation or promotion and for knowledge deletion.
 - If an instruction blocks an action, link its file, quote the requirement briefly, and explain
   its application without treating an interpretation as a written rule.
 """

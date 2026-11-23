@@ -1,4 +1,4 @@
 interface:
   display_name: "Refinery Memory"
-  short_description: "根拠から判断原則を抽出・改訂し、既存memoryの統合やアーカイブを提案します。"
+  short_description: "根拠から判断原則を抽出・改訂し、既存memoryを統合・アーカイブします。"
   default_prompt: "$refinery-memoryを使い、根拠のあるexperienceからprojectまたはshared memoryを抽出してください。"

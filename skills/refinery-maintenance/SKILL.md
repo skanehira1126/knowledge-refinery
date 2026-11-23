@@ -8,7 +8,8 @@ description: Knowledge Refinery vaultを直接開いて行う保守、定期棚�
 Read the [shared operating rules](../operating-rules.md) for authorization,
 blocked operations, and completion. Input is the requested vault, project set, or records and
 any reported defects. An audit-only or proposal-only request returns findings and repair candidates;
-a repair request also authorizes supported factual fixes that preserve conclusions.
+a repair request authorizes evidence-based fixes, including memory revisions and archival
+within the requested scope.
 
 ## Choose the review scope
 
@@ -46,7 +47,6 @@ independently; never switch access routes to bypass a repo opt-out.
 Apply authorized factual metadata or taxonomy fixes with the current revision and read them back.
 Use `refinery-experience` for experience content updates and `refinery-memory` for memory creation,
 revision, or archival; those skills own evidence, conflict handling, and readback.
-A general maintenance request does not approve a specific shared principle, deletion, or material rewrite.
 
 After schema or provenance repair, or writes made during a vault audit, run `refinery_validate`
 once for the batch. A targeted factual update normally finishes after readback; validate more broadly

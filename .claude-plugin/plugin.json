@@ -3,6 +3,7 @@
   "description": "ローカルの中央vaultで開発経験とメモリを管理します。",
   "author": { "name": "Shinichi Kanehira" },
   "icon": "./docs/assets/knowledge-refinery.png",
+  "hooks": "./.claude-plugin/context-hooks.json",
   "mcpServers": {
     "knowledge-refinery": {
       "command": "uv",

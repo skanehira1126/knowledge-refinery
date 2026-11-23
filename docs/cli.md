@@ -25,24 +25,23 @@ active vaultとのpath不一致はexit 2です。project登録やactive vaultの
 ## context
 
 Codex・Claude Codeへ渡す短いMarkdownを、projectと配信先ごとに確認できます。配信先はイベント名と、
-必要に応じて開始理由かツール名をスラッシュでつないで指定します。
+ツール実行前後の場合はツール名をスラッシュでつないで指定します。
 
 | 配信先 | 届くタイミング | 載せる内容の例 |
 |---|---|---|
-| `SessionStart/<source>` | 新規開始 `startup`、再開 `resume`、クリア `clear`、圧縮後 `compact`、分岐 `fork` | 新規開始時に知らせたい依存先や、圧縮後に再確認したいデータ定義 |
 | `UserPromptSubmit` | ユーザーが入力するたび | どの依頼の解釈にも関わる用語の意味 |
 | `PreToolUse/Bash`、`PreToolUse/apply_patch` | 該当ツールの実行前 | 編集対象の生成元や、コマンドの入力に必要な前提 |
 | `PostToolUse/Bash`、`PostToolUse/apply_patch` | 該当ツールの実行後 | コマンド結果の単位や、編集後の検証に使うデータ |
 | `SubagentStart` | サブエージェントの開始時 | 委任先が調べる範囲と、参照先projectが持つ仕様 |
 
 Claude Code の編集には `PreToolUse/Edit`、`PostToolUse/Edit`、ファイル書き込みには
-`PreToolUse/Write`、`PostToolUse/Write` を使用します。各配信先は独立しています。`SessionStart/startup` のみ設定すると、新規開始時だけ届きます。
+`PreToolUse/Write`、`PostToolUse/Write` を使用します。各配信先は独立しています。
 本文は中央vaultの `projects/<project_id>/context/<配信先>.md` に保存します。
 
 ```bash
 knowledge-refinery context list
-knowledge-refinery context show SessionStart/startup
-knowledge-refinery context show SessionStart/startup --json
+knowledge-refinery context show PreToolUse/Bash
+knowledge-refinery context show PreToolUse/Bash --json
 ```
 
 `list` は全配信先とrevisionを表示し、未設定の欄は `-` になります。`list --json` と
@@ -53,10 +52,17 @@ knowledge-refinery context show SessionStart/startup --json
 紐付けを検証します。中央vaultを直接開いた保守では、`--vault "$VAULT_ROOT" --project-id "$PROJECT_ID"`
 で登録済みprojectを指定できます。
 
-Codexの `/hooks` で使うhookを信頼すると、同梱の `context hook` が標準入力のイベントと
-`cwd` から該当する本文を選び、`hookSpecificOutput.additionalContext` として返します。
-未登録・無効なrepoや、該当する本文が未設定・空白の場合は出力せず正常終了します。
-保存した変更は次の該当イベントから届きます。根拠を確認して本文を整える手順は
+新規開始・圧縮後は固定のCLIコマンド `context guidance-hook` がrepoの `.refinery.yaml` を確認し、
+有効ならパッケージ同梱の日本語の運用指示を返します。MCP接続やactive vaultの設定は不要です。
+表のイベントではホストの `mcp_tool` hookが作業ディレクトリと配信先を `refinery_deliver_context`
+に渡します。サーバーがrepoとvaultの紐付けを照合し、該当する本文を追加contextとして返します。
+未登録・無効なrepoや本文が空の配信先では、追加contextは入りません。
+
+旧版で保存した `SessionStart/<source>` の本文は自動配信されません。以前の配信先を
+`context show` または `refinery_get_context` に指定して内容を確認し、必要に応じて
+該当する配信先へ移せます。旧本文の解除には `refinery_update_context` に現在のrevisionと `body: null` を渡します。
+
+Codex CLIの `/hooks` で各hookを個別に信頼・無効化できます。デスクトップアプリでは `Settings → Hooks` で信頼状態を確認できます。`context list` と `show` はproject本文を対象にします。根拠を確認して本文を整える手順は
 [refinery-curate-context](skills/refinery-curate-context.md)、イベントの入出力は
 [Codex Hooks](https://learn.chatgpt.com/docs/hooks)を参照してください。
 
@@ -90,8 +96,8 @@ setupの`--vault`は指定vaultをactive vaultにも設定します。現在値�
 version管理可能な`.refinery.yaml`には個人のvault identityを入れません。statusの
 `configured_vault_id`、`active_vault_id`、`vault_match`で誤接続を機械的に検出できます。
 
-`project enable`は既定ではmanaged guidanceを追加しません。自動運用モードへ戻す場合だけ
-`--agents`を指定します。`project disable`は既存managed blockを削除し、block外の利用者記述と
+`project enable`で両方のhookが有効なrepoを再び配信対象にします。`--agents`はファイルへの追記に使います。
+`project disable`は既存managed blockを削除し、block外の利用者記述と
 中央vaultのknowledgeを保持します。
 
 metadata更新は `show` の `updated_at` を `update --expected-updated-at` に渡します。指定したfieldだけを更新し、省略fieldは保持します。tagまたはtechnologyを空にする場合は `--clear-tags`、`--clear-technologies` を明示します。revisionなし、古いrevision、変更fieldなしの更新は拒否されます。tagはlowercase kebab-caseで指定します。

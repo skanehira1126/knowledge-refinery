@@ -11,7 +11,7 @@ bash scripts/validate.sh
 - Ruff、Mypy、Pytest（tox）
 - `mkdocs build --strict`
 - 配布構成とPlugin/Python versionの整合性検査
-- Plugin manifest validator
+- Codex CLIの `app-server` によるローカルmarketplaceの読み込み。独立した一時環境で `plugin/read` を呼び、5つのhook・MCPサーバー・配布Skillの登録を確認する
 - 配布Skillの検証
 
 Claude Code の marketplace はリポジトリルートを配布し、更新の識別には Git commit を使います。

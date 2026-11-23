@@ -50,7 +50,11 @@ Read back the result and verify that `project_id` is unchanged.
 ## Toggle use
 
 - Enable with `knowledge-refinery project enable --target "$PROJECT_ROOT"` after the authorization
-  above. Add `--agents` when the user requests managed guidance for knowledge search and recording.
+  above. In a ready project the plugin's fixed SessionStart hook supplies operating instructions
+  on startup and compaction. The host calls the connected MCP server for project text on
+  prompt submission, tool use, and subagent start. In Codex, review or disable individual hooks
+  in `/hooks`. Add `--agents` only when the user wants
+  the instructions written into a repository guide as well.
   For Claude Code guidance, pass `--filename CLAUDE.md` when enabling, disabling, or inspecting it.
 - Disable with `knowledge-refinery project disable --target "$PROJECT_ROOT"`.
 - Verify either transition with `knowledge-refinery project status --target "$PROJECT_ROOT"`.

@@ -1,4 +1,4 @@
-"""Manage the Knowledge Refinery instruction block in repository guide files."""
+"""Load plugin operating instructions and manage their optional repository guide block."""
 
 from importlib.resources import files
 from pathlib import Path
@@ -31,7 +31,7 @@ def resolve_agents_path(target: Path, filename: str = "AGENTS.md") -> Path:
 
 
 def load_agents_snippet(lang: str) -> str:
-    """Load the packaged managed-block text for a supported language."""
+    """Load the packaged operating instructions without repository guide markers."""
     if lang not in LANG_CHOICES:
         raise ValueError(f"Unsupported language: {lang}")
     return (

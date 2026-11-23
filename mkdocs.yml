@@ -60,7 +60,7 @@ nav:
   - ホーム: index.md
   - はじめる:
       - インストールと初期設定: getting-started.md
-      - 利用モードと依頼例: agent-workflow.md
+      - 自動運用と依頼例: agent-workflow.md
       - AGENTS.mdの設定例: agents-guidance-examples.md
   - 基本概念:
       - ナレッジモデルと検索: knowledge-model.md

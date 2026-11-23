@@ -15,6 +15,7 @@ from knowledge_refinery.mcp_server import refinery_archive_memory
 from knowledge_refinery.mcp_server import refinery_browse_knowledge_tags
 from knowledge_refinery.mcp_server import refinery_create_handoff
 from knowledge_refinery.mcp_server import refinery_delete_handoff
+from knowledge_refinery.mcp_server import refinery_deliver_context
 from knowledge_refinery.mcp_server import refinery_get_context
 from knowledge_refinery.mcp_server import refinery_get_experience
 from knowledge_refinery.mcp_server import refinery_get_handoff
@@ -60,8 +61,8 @@ def test_mcp_context_lifecycle_and_revisions(
 ) -> None:
     vault = configured_mcp(tmp_path, monkeypatch)
     repo = str(tmp_path / "pybr")
-    target = "SessionStart/startup"
-    path = vault / "projects/pybr/context/SessionStart/startup.md"
+    target = "PreToolUse/Bash"
+    path = vault / "projects/pybr/context/PreToolUse/Bash.md"
     unset = refinery_get_context(repo, target)
     assert unset == {"target": target, "body": None, "revision": None}
     assert {"target": target, "revision": None} in refinery_list_contexts(repo)
@@ -81,6 +82,9 @@ def test_mcp_context_lifecycle_and_revisions(
     )
     assert revised["revision"] != saved["revision"]
     assert path.read_text(encoding="utf-8") == revised["body"]
+    assert refinery_deliver_context(repo, target) == {
+        "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": revised["body"]}
+    }
     path.write_text("編集済み", encoding="utf-8")
     with pytest.raises(ValueError, match="conflict"):
         refinery_update_context(repo, target, None, revised["revision"])
@@ -88,6 +92,7 @@ def test_mcp_context_lifecycle_and_revisions(
     assert current["body"] == "編集済み"
     assert refinery_update_context(repo, target, None, current["revision"]) == unset
     assert not path.exists() and refinery_get_context(repo, target) == unset
+    assert refinery_deliver_context(repo, target) == {}
     assert refinery_get_context(repo, "SubagentStart") == other
 
 
@@ -190,7 +195,7 @@ def test_local_mcp_records_searches_and_validates(
     assert tagged_metadata["technologies"] == ["Python"]
     assert refinery_list_projects() == [tagged_metadata]
     assert refinery_info() == {
-        "version": "0.8.0",
+        "version": "0.9.0",
         "schema_version": 2,
         "project_metadata_schema_version": 1,
         "tag_taxonomy_schema_version": 1,

@@ -1,0 +1,66 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "plugin:knowledge-refinery:knowledge-refinery",
+            "tool": "refinery_deliver_context",
+            "input": {
+              "cwd": "${cwd}",
+              "target": "UserPromptSubmit"
+            }
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "plugin:knowledge-refinery:knowledge-refinery",
+            "tool": "refinery_deliver_context",
+            "input": {
+              "cwd": "${cwd}",
+              "target": "PreToolUse/${tool_name}"
+            }
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "plugin:knowledge-refinery:knowledge-refinery",
+            "tool": "refinery_deliver_context",
+            "input": {
+              "cwd": "${cwd}",
+              "target": "PostToolUse/${tool_name}"
+            }
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "plugin:knowledge-refinery:knowledge-refinery",
+            "tool": "refinery_deliver_context",
+            "input": {
+              "cwd": "${cwd}",
+              "target": "SubagentStart"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

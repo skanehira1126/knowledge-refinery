@@ -1,27 +1,19 @@
 # エージェントへの頼み方
 
-経験の検索・記録には、必要なときだけSkillを呼ぶ「明示呼出モード」と、repoの
-`AGENTS.md`へ共通ルールを追加する「自動運用モード」があります。どちらのモードでも、
-保存先はローカルの中央vaultです。
+登録済みで有効なrepoでは、Pluginの固定hookが新規開始時と圧縮後に運用指示を届けます。
+エージェントはその後の作業に応じて、ローカルの中央vaultを使います。通常の導入に`--agents`は不要です。
 
-## 2つの利用モード
+## 作業中に何が起きるか
 
-| モード | 向いている使い方 | 有効にする方法 |
-|---|---|---|
-| 明示呼出 | 検索や記録を必要なtaskだけで行う | setupを既定のまま実行し、依頼時にSkill名または目的を伝える |
-| 自動運用 | 過去の知識が判断に役立つときに検索し、再利用できる経験を保存・確認する | `project setup --agents` でmanaged guidanceを追加する |
+| 作業中に得たもの・必要になったもの | エージェントの動作 |
+|---|---|
+| 過去の判断が設計・診断・比較に役立つ問い | 関連するmemoryとexperienceを検索する。同じ問いと根拠なら既に確認した結果を使う |
+| 将来の選択や検証方法を変える試行、不採用理由、有用な失敗 | 結果・根拠・限界を一つのexperienceにまとめて保存し、読み戻す |
+| 複数のexperienceに裏付けられた判断原則 | project memoryを作成する。既存原則は新しい根拠・反例に合わせて同じIDで改訂し、前提が失われたら理由を残してアーカイブする |
+| 特定の場面で毎回知っておくべきprojectの前提や依存関係 | `refinery-curate-context`で、該当する配信先の本文を数行だけ更新する。前提が失われたら古い行を除く |
 
-通常の開発依頼にナレッジ検索や経験の記録を組み込む場合は、`--agents` で自動運用を選びます。
-
-自動検索は設計判断、原因調査、手法比較、既知の制約などに関係する場合に行います。単純な
-typo修正や書式変更では省略し、同じ問いと根拠なら既に確認した結果を再利用します。明示された
-検索依頼には応じます。意味のある試行・不採用理由・有用な失敗はagentが記録価値を判断し、
-保存結果の確認まで進めます。毎回「検索・記録しますか」と質問する運用にはしません。
-
-hook本文の管理は、どちらのモードでも登録済み・有効なprojectでエージェントに任せます。
-特定の場面で繰り返し必要になる前提や他projectとの依存関係が変わったときに、
-`refinery-curate-context` が根拠を確認し、MCPで該当する配信先を更新します。
-検索・診断・候補の提案だけを依頼した場合は読み取りに留めます。[hook本文の管理](skills/refinery-curate-context.md)
+セッション開始や圧縮のたびに検索・保存を行う必要はありません。typoや書式だけの修正はそのまま進めます。
+Skill名や目的を指定して依頼することもできます。検索・診断・候補の提案だけを依頼した場合は読み取りで完了します。[hook本文の管理](skills/refinery-curate-context.md)
 
 作業の引き継ぎは自動運用の対象外です。`$refinery-handoff`（Claude Code では `/knowledge-refinery:refinery-handoff`）を明示して、作成・再開・整理を依頼します。
 本体が必要な手順だけを参照し、通常のナレッジ検索には引き継ぎ資料を混ぜません。
@@ -38,9 +30,10 @@ Pluginの各`SKILL.md`は、共通の実行・承認・完了条件を
 `skills/operating-rules.md`から読み、個別手順は各Skillで扱います。Experienceの記録と導入の詳細は、
 該当操作のときだけ参照ファイルを読みます。タグ選択の共通規則は
 `skills/knowledge-tags.md`に置き、タグを付けるときやtaxonomyを点検するときに読みます。
-この開発repoの`AGENTS.md`はプラグイン保守用です。利用repoへはCLIが日英のmanaged blockを
-追加し、利用repoに適用される指示と組み合わせます。Managed blockは発動条件と権限を持ち、
-記録形式やAPI操作はPlugin Skillへ委ねます。サンプルの依頼文は、その依頼を選んだ場合の例です。
+固定hookはrepoの有効設定を見て、新規開始・圧縮時にPlugin同梱の運用指示を返します。
+project別の本文は入力時、ツールの実行前後、サブエージェント開始時にホストが接続済みMCPから取得します。
+運用指示をファイルでも配布したい場合は`--agents`で日英のmanaged blockを
+追加できます。記録形式やAPI操作はPlugin Skillが扱います。
 
 実行環境の権限、アクセス制御、組織上の必須承認を守ったうえで、利用者の明示要件をSkillの
 一般指針より優先します。検索・診断・提案だけの依頼では書き込まず、実行を依頼された操作は
@@ -54,10 +47,8 @@ disabled、未準備、vault不一致はrepo-scopedなrefinery操作の制限で
 ```text
 $refinery-projectを使って、このrepoをKnowledge Refineryへ登録してください。
 変更できないproject IDの候補と、現在のactive vaultから切り替わるかを先に示し、
-私が確認してからsetupしてください。自動運用モードにするためAGENTS.mdも更新してください。
+私が確認してからsetupしてください。
 ```
-
-明示呼出モードにする場合は、最後の文を「AGENTS.mdは変更しないでください」へ置き換えます。
 
 ### 書き込まずに検索する
 
@@ -98,10 +89,10 @@ active vault、project ID、enabled状態、失敗した検査だけを報告し
   提示し、未承認の選択だけを確認します。正確なID・保存先・切り替えが既に明示承認されていれば
   同じ質問を繰り返しません。`--agents`や`--link`は、それぞれを利用者が明示的に希望した場合だけ追加します。
 - Experienceとproject memoryは、利用者が明示的に記録を依頼した場合、または
-  `--agents`で自動運用を選んだ場合に、記録価値と根拠の条件を満たせば保存・確認まで進めます。
+  固定hookや適用中のrepo指示で自動運用が許可されている場合に、根拠の条件を満たせば保存・確認まで進めます。
   検索・診断・提案のみという明示要件がある場合は、自動運用でも書き込みません。
-- 新しい根拠が既存原則に影響した場合は、同じIDでの適用条件の改訂、後継への統合、後継のない取り下げを検討します。
-- shared memoryの新規作成、memoryの大幅な書き換え・アーカイブ、knowledge文書の削除は、候補、根拠、
+- 既存のproject・shared memoryは、エージェントが根拠に合わせて改訂・統合・アーカイブし、結果を読み戻します。
+- shared memoryの新規作成・昇格とknowledge文書の削除は、候補、根拠、
   影響を提示し、利用者が確認してから行います。
 - `enabled: false`は意図的な停止です。検索や記録のために暗黙で再有効化しません。
 - CLIとMCPはvaultのGit commit、push、backupを自動実行しません。Git履歴が必要な場合は
@@ -132,6 +123,12 @@ Evidenceは既定ではpathやURIへの参照であり、参照先の安全性�
 
 ## 自動運用を停止・再開する
 
-`project disable`は`.refinery.yaml`を`enabled: false`にし、managed guidanceを削除しますが、
-中央vaultのknowledgeは保持します。再開時に自動運用へ戻す場合は`project enable --agents`、
-明示呼出モードで戻す場合は`project enable`を使います。
+Codexでは `/hooks` で `context guidance-hook` だけを無効にできます。以降の新規セッションでは、
+project固有のcontext配信とSkillの明示呼び出しを使い続けられます。過去に`--agents`で追加した
+ファイル内の指示も読み込まれる環境では、その指示は引き続き適用されます。[Codexのhook設定](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)
+
+既存のrepoを固定hookだけの運用に移す場合は、`AGENTS.md`（Claude Codeでは`CLAUDE.md`）の
+`<!-- knowledge-refinery:agents:start … -->`から`<!-- knowledge-refinery:agents:end -->`までを取り除くと、共通指示の重複を解消できます。
+
+repo全体の連携を止めるには`project disable`、再開には`project enable`を使います。
+中央vaultのknowledgeとproject固有のcontext本文はどちらの操作でも保持されます。

@@ -12,9 +12,9 @@ IDs. Read the recording reference only when creating or updating an experience.
 
 ## Search
 
-Search when explicitly requested, or when opted-in repository guidance calls for past knowledge
-that could affect a design choice, diagnosis, comparison, or known constraint. Ordinary development
-work does not need a search merely because it started; skip unrelated lookups for mechanical edits.
+Search when explicitly requested, or when the project's operating instructions apply and past
+knowledge could affect a design choice, diagnosis, comparison, or known constraint. Skip
+unrelated lookups for mechanical edits and on startup or compaction alone.
 Reuse relevant results already inspected while their sources and the question remain unchanged.
 
 In a repository, search current project memory together with shared memory, then current project experiences.
@@ -38,7 +38,8 @@ qualify. Skip routine completion logs, progress summaries, obvious typo fixes, a
 no new evidence, condition, or counterexample. Rejected implementations and untracked evidence
 can still support a useful record.
 
-When recording is explicitly requested or authorized by opted-in guidance, read
-[recording.md](references/recording.md), save the integrated experience, and verify it. This value
-judgment does not require a routine question to the user. Search needed for the record can reuse
-the relevant results from the current task.
+When recording is authorized under the shared rules, read [recording.md](references/recording.md).
+Save the attempt, result and limits together. Update the same experience when new evidence
+clarifies that attempt, and verify the saved record. Use results already inspected for the task.
+If this and earlier experiences support a reusable decision or change an existing principle,
+use `refinery-memory` with those source IDs.

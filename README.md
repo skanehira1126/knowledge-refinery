@@ -59,20 +59,21 @@ PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 
 knowledge-refinery project setup \
   --target "$PROJECT_ROOT" \
-  --vault "$REFINERY_VAULT" \
-  --agents
+  --vault "$REFINERY_VAULT"
 
 knowledge-refinery doctor --target "$PROJECT_ROOT"
 ```
 
-project IDと表示名はrepoのdirectory名から自動設定されます。`--agents`は、通常の開発taskでも
-Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS.md`へ追加します。
-`doctor`に`ok: yes`と表示されたら準備完了です。
+project IDと表示名はrepoのdirectory名から自動設定されます。`doctor`で`ok: yes`を確認してください。
+有効なrepoでは、新しいセッションの開始時とコンテキストの圧縮後に、Pluginの固定hookが
+Knowledge Refineryの運用指示を渡します。Codexでは、CLIの`/hooks`またはデスクトップアプリの
+`Settings → Hooks`で、新しいhookを確認して信頼してください。
+通常の導入で`AGENTS.md`の編集は不要です。ファイルにも指示を置きたい場合は`--agents`を使えます。
 
 新しいtaskを開き、いつもどおり開発を依頼してください。設計判断・原因調査・手法比較など、
 過去の知識が役立つ場面で検索し、単純なtypo・書式変更では省略します。再利用できる試行や
-有用な失敗は、毎回の確認質問を挟まずexperienceとして保存し、保存結果まで確認します。
-検索・診断・提案のみの依頼では書き込みません。
+有用な失敗をexperienceに記録し、複数のexperienceが同じ判断原則を裏付けたらproject memoryを作成・更新します。
+保存した結果は読み戻します。検索・診断・提案のみの依頼は読み取りで完了します。
 
 ## 主な機能
 
@@ -80,7 +81,7 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 - experienceから再利用可能なproject memoryとshared memoryを抽出する
 - 現在のrepoから、必要に応じて他repoのknowledgeまで検索する
 - `refinery_archive_memory`で原則を通常検索から外し、旧IDに本文・理由・任意の後継参照を残す。履歴を含めるには`refinery_search_memory`の`include_archived`を指定する。[運用ルール](docs/knowledge-operations.md#memory-lifecycle)
-- セッション開始・圧縮後、入力時、ツール実行の前後、サブエージェント開始時に、その場面用に保存したプロジェクトの前提を渡す。[context CLI](docs/cli.md#context)
+- 入力時、対象ツールの実行前後、サブエージェント開始時に、その場面用に保存したprojectの前提をMCPから渡す。[配信先一覧](docs/cli.md#context)
 - 任意でCodexを使い、中央vaultの検証済みsnapshotから根拠付きの深い検索を行う
 - repoごとに利用を無効化・再有効化する
 - 中央vaultを独立したGit repositoryとして履歴管理する
@@ -91,7 +92,8 @@ Knowledge Refineryを利用するための管理対象ルールをrepoの`AGENTS
 登録済みで有効なprojectでは、hookで渡す前提の管理を既定でエージェントに任せます。
 たとえば作業中に注文スキーマの管理元が変わったと確認できたら、エージェントが
 `refinery_get_context` で現在の本文を読み、`refinery_update_context` で該当する配信先だけを更新します。
-配信先の一覧は `refinery_list_contexts`、保存済み本文の配信はローカルのhook CLIが担当します。
+配信先は `refinery_list_contexts` で確認できます。該当イベントではCodex・Claude Codeが接続済みMCPの
+`refinery_deliver_context` を直接呼びます。固定のSessionStart hookはrepoの有効設定を確認し、CLIパッケージ同梱の指示を返します。
 [refinery-curate-context](docs/skills/refinery-curate-context.md)・[contextのMCP操作](docs/mcp.md#hook-context)
 
 ## 課題を管理する
@@ -110,7 +112,7 @@ project未所属・複数projectへの紐付けに対応します。repo登録�
 返された`vault_context`と`project_path: null`を渡します。vault自身のproject登録は不要です。
 
 この入口は中央の保存資料を管理し、各repoのopt-outは変更しません。無効repoからの自動迂回には
-使わず、shared memory昇格・重要改訂・削除の承認条件も維持します。
+使いません。shared memoryの新規作成・昇格とknowledgeの削除には具体的な対象への明示承認が必要です。
 対象の指定とAPI例は[MCP tools](docs/mcp.md#vault-maintenance)、手順は
 [refinery-maintenance](docs/skills/refinery-maintenance.md)を参照してください。
 

@@ -1,8 +1,9 @@
-"""List local root chats by log modification time without reading transcript bodies."""
+"""List local root chats by title and modification time without reading transcript bodies."""
 
 from datetime import UTC
 from datetime import date
 from datetime import datetime
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -34,18 +35,23 @@ def list_sessions(
     roots: list[Path],
     *,
     project: Path = Path("."),
+    title: str | None = None,
+    title_index: Path | None = None,
     updated_since: str | None = None,
     updated_before: str | None = None,
     limit: int = 20,
     offset: int = 0,
 ) -> dict[str, Any]:
-    """Return root chats once each, newest first, in a half-open modification-time range."""
+    """Return matching root chats once each, newest first, with local titles when available."""
     since = parse_updated_bound(updated_since)
     before = parse_updated_bound(updated_before)
     if since is not None and before is not None and since >= before:
         raise ValueError("updated-since must be earlier than updated-before")
     if limit <= 0 or offset < 0:
         raise ValueError("limit must be positive and offset nonnegative")
+    if title is not None and not title.strip():
+        raise ValueError("Title filter must not be empty")
+    title_query = title.casefold() if title is not None else None
     identity = _repository_identity(project)
     if identity is None:
         raise ValueError(f"Project is not an accessible Git working tree: {project}")
@@ -53,11 +59,15 @@ def list_sessions(
     project_id = resolve_project_id(project_root)
     entries, scanned, skipped = _scan_root_chats(roots)
     entries = _project_chats(entries, common_dir)
+    titles = _read_titles(title_index) if title_index is not None else {}
+    for entry in entries:
+        entry["title"] = titles.get(entry["chat_id"])
     selected = [
         entry
         for entry in entries
         if (since is None or datetime.fromisoformat(entry["updated_at"]) >= since)
         and (before is None or datetime.fromisoformat(entry["updated_at"]) < before)
+        and (title_query is None or title_query in (entry["title"] or "").casefold())
     ]
     selected.sort(key=lambda entry: entry["chat_id"])
     selected.sort(key=lambda entry: entry["updated_at"], reverse=True)
@@ -75,6 +85,27 @@ def list_sessions(
         "skipped_files": skipped,
         "chats": selected[offset : offset + limit],
     }
+
+
+def _read_titles(path: Path) -> dict[str, str | None]:
+    titles: dict[str, str | None] = {}
+    try:
+        with path.expanduser().open("rb") as index:
+            for line in index:
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if (
+                    isinstance(row, dict)
+                    and (chat_id := string(row.get("id")))
+                    and isinstance(name := row.get("thread_name"), str)
+                ):
+                    # Codex appends name updates and resolves the last entry for each chat ID.
+                    titles[chat_id] = string(name)
+    except OSError:
+        return {}
+    return titles
 
 
 def _scan_root_chats(roots: list[Path]) -> tuple[list[dict[str, Any]], int, int]:
@@ -99,6 +130,7 @@ def _scan_root_chats(roots: list[Path]) -> tuple[list[dict[str, Any]], int, int]
             continue
         entry = {
             "chat_id": chat_id,
+            "session_id": string(meta.get("session_id")),
             "updated_at": updated.isoformat(),
             "path": str(path),
             "cwd": string(meta.get("cwd")),

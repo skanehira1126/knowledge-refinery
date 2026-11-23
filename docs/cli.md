@@ -241,14 +241,14 @@ experience／memory用であり、issueタグには影響しません。
 ## session
 
 ローカルのCodexログから解析JSONを作り、必要な記録を検索・表示します。出力はJSONです。
-listは有効なRefinery登録設定を必要とします。明示ログの抽出・解析JSONの操作は登録不要です。
+listは有効なRefinery登録設定を必要とします。ID・パス指定での抽出と解析JSONの操作は登録不要です。
 MCP接続は不要です。レポート作成を依頼する場合は
 [refinery-review-session](skills/refinery-review-session.md)を使ってください。
 
 | コマンド | 入力 | 用途 |
 | --- | --- | --- |
-| `list` | ログのディレクトリ | 更新日時から対象チャットを選ぶ |
-| `extract` | rollout JSONL | 本文と対応関係を解析JSONに保存する |
+| `list` | ローカルログとタイトル索引 | タイトルや更新日時から対象チャットを選ぶ |
+| `extract` | `/status` のセッションID、またはrollout JSONL | 本文と対応関係を解析JSONに保存する |
 | `search` | 解析JSON | 条件に合う記録を探す |
 | `show` | 解析JSON | 特定記録の前後と関連結果を読む |
 | `stats` | 解析JSON | 呼び出し数・ツール別件数・警告を確認する |
@@ -257,17 +257,19 @@ MCP接続は不要です。レポート作成を依頼する場合は
 
 ```bash
 knowledge-refinery session list \
+  --title 'レビュー' \
   --updated-since 2026-11-07T00:00:00+09:00 \
   --updated-before 2026-11-08T00:00:00+09:00 --limit 3
 ```
 
-現在の登録済みGitプロジェクトから、日本時間11月7日の更新分を直近3件返します。
+現在の登録済みGitプロジェクトから、タイトルに「レビュー」を含み、日本時間11月7日に更新されたログを直近3件まで返します。
 更新の基準はログファイルのmtimeです。
 終了済みかどうかは別途確認してください。
 
 | 引数 | 内容 | 既定 |
 | --- | --- | --- |
 | `--project PATH` | 対象の登録済みGit作業ディレクトリ | 現在のディレクトリ |
+| `--title TEXT` | タイトルの部分一致。大文字・小文字を区別しない | 絞り込みなし |
 | `--updated-since DATE` | 下限以上 | 下限なし |
 | `--updated-before DATE` | 上限未満 | 上限なし |
 | `--sessions-dir DIR` | 探索先を置き換える。複数指定可 | `CODEX_HOME/sessions` |
@@ -284,6 +286,8 @@ knowledge-refinery session list \
 `CODEX_HOME` 未設定時は `~/.codex`。アーカイブは `--sessions-dir` で指定した場合だけ探します。
 日付だけの指定はUTCの0時です。日時には `Z` または `+09:00` などのタイムゾーンが必要です。
 
+タイトルは `CODEX_HOME/session_index.jsonl` の `thread_name` を使います。タイトルを取得できないチャットは
+一覧で `title: null` になり、`--title` の一致対象から外れます。
 `chats[].path` をextractへ渡します。同じチャットの複数ログがある場合は `paths` に並ぶため、対象を確認してください。
 一覧は親チャット単位です。`total` と `next_offset` で続きの有無を、`skipped_files` で読取できなかった件数を確認できます。
 limitは返却数の指定で、ファイル情報と先頭metadataの走査数は制限しません。
@@ -291,17 +295,23 @@ limitは返却数の指定で、ファイル情報と先頭metadataの走査数�
 ### extract：解析JSONを保存する
 
 ```bash
+knowledge-refinery session extract --session-id SESSION_ID --output /tmp/analysis.json
 knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/analysis.json
 ```
 
 | 引数 | 内容 |
 | --- | --- |
-| `path` | 対象チャットのrollout JSONL。必須 |
+| `--session-id ID` | Codexの `/status` に表示される共有セッションID |
+| `path` | 起点チャットのrollout JSONL。`--session-id` とどちらか一方を指定 |
 | `--output PATH` | 新規JSONの保存先。必須 |
 | `--exclude-children` | 子孫を探さず、対象チャットだけ保存する |
-| `--sessions-dir DIR` | 子孫ログの探索先を置き換える。複数指定可。既定は `CODEX_HOME/sessions` |
+| `--sessions-dir DIR` | IDでの親ログ・子孫ログの探索先を置き換える。複数指定可。既定は `CODEX_HOME/sessions` |
 
-既定で子孫も保存します。`--sessions-dir` と `--exclude-children` は併用できません。
+`--session-id` はログ先頭の `session_meta.payload.session_id` が完全一致する親ログを選びます。
+親ログが見つからない場合や複数ある場合はエラーになります。ログのパスが分かる場合は直接指定できます。
+既定では親子関係を確認できた子孫も、固有の `chat_id` を保持して保存します。
+アーカイブを含めるには通常ログとアーカイブのディレクトリを `--sessions-dir` で指定します。
+ID指定で親だけを保存するときも探索先を指定できます。パス指定で親だけを保存するときは `--sessions-dir` を省きます。
 入力は変更せず、既存ファイル・symlinkへの上書きは拒否します。保存先はmode 0600で作成します。
 本文は保存時に切り詰めません。解析JSONは匿名化されないため、公開・Git追跡の対象にしないでください。
 

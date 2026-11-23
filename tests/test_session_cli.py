@@ -22,11 +22,19 @@ def record(kind: str, **payload: Any) -> dict[str, Any]:
     return {"type": kind, "timestamp": "2026-11-07T00:00:00Z", "payload": payload}
 
 
-def meta(chat: str, parent: str | None = None, agent: str = "/root/worker") -> dict[str, Any]:
+def meta(
+    chat: str,
+    parent: str | None = None,
+    agent: str = "/root/worker",
+    *,
+    session_id: str = "shared",
+) -> dict[str, Any]:
     source: Any = "cli"
     if parent:
         source = {"subagent": {"thread_spawn": {"parent_thread_id": parent, "agent_path": agent}}}
-    return record("session_meta", id=chat, session_id="shared", source=source, cli_version="test")
+    return record(
+        "session_meta", id=chat, session_id=session_id, source=source, cli_version="test"
+    )
 
 
 def call(cid: str = "c1", name: str = "exec_command", **extra: Any) -> dict[str, Any]:
@@ -703,3 +711,70 @@ def test_cli_extract_excludes_descendants(
     capsys.readouterr()
     assert main(args) == 0
     assert {c["chat_id"] for c in json.loads(target.read_text())["chats"]} == {"parent"}
+
+
+def test_cli_extract_by_session_id_keeps_each_descendant_chat(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    logs = tmp_path / "codex" / "sessions"
+    write_log(logs / "root.jsonl", meta("parent"), call(), output())
+    write_log(logs / "worker.jsonl", meta("child", "parent"), call(), output())
+    write_log(logs / "nested.jsonl", meta("grandchild", "child"), call(), output())
+    write_log(logs / "orphan.jsonl", meta("orphan", "missing-parent"))
+    write_log(logs / "rollout-shared.jsonl", meta("shared", session_id="shared-other"))
+
+    target = tmp_path / "analysis.json"
+    assert main(["session", "extract", "--session-id", "shared", "--output", str(target)]) == 0
+    assert json.loads(capsys.readouterr().out)["root_chat_id"] == "parent"
+    bundle = load_analysis(target)
+    assert {chat["chat_id"]: chat["session_id"] for chat in bundle["chats"]} == {
+        "parent": "shared",
+        "child": "shared",
+        "grandchild": "shared",
+    }
+    assert {call["chat_id"] for call in bundle["calls"]} == {"parent", "child", "grandchild"}
+
+
+def test_cli_extract_session_id_parent_only_with_explicit_archive(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    archive = tmp_path / "codex" / "archived_sessions"
+    write_log(archive / "parent.jsonl", meta("parent"))
+    write_log(archive / "child.jsonl", meta("child", "parent"))
+    target = tmp_path / "analysis.json"
+    args = ["session", "extract", "--session-id", "shared", "--output", str(target)]
+    assert main(args) == 2
+    assert "No root rollout" in capsys.readouterr().err
+    assert not target.exists()
+
+    assert main([*args, "--exclude-children", "--sessions-dir", str(archive)]) == 0
+    assert [chat["chat_id"] for chat in load_analysis(target)["chats"]] == ["parent"]
+
+
+@pytest.mark.parametrize(
+    ("root_count", "error"), [(0, "No root rollout"), (2, "Multiple root rollouts")]
+)
+def test_cli_extract_session_id_requires_one_root(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], root_count: int, error: str
+) -> None:
+    logs = tmp_path / "codex" / "sessions"
+    write_log(logs / "child.jsonl", meta("child", "parent"))
+    for index in range(root_count):
+        write_log(logs / f"parent-{index}.jsonl", meta("parent"))
+
+    target = tmp_path / "analysis.json"
+    assert main(["session", "extract", "--session-id", "shared", "--output", str(target)]) == 2
+    stderr = capsys.readouterr().err
+    assert error in stderr
+    if root_count:
+        assert "parent-0.jsonl" in stderr and "parent-1.jsonl" in stderr
+    assert not target.exists()
+
+
+@pytest.mark.parametrize("source", [[], ["rollout.jsonl", "--session-id", "shared"]])
+def test_cli_extract_requires_exactly_one_source(tmp_path: Path, source: list[str]) -> None:
+    target = tmp_path / "analysis.json"
+    with pytest.raises(SystemExit) as error:
+        main(["session", "extract", *source, "--output", str(target)])
+    assert error.value.code == 2
+    assert not target.exists()

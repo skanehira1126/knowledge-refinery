@@ -1,12 +1,15 @@
 # refinery-review-session
 
 終了済みチャットを振り返り、実行結果・Skillの使われ方・改善を検討する根拠を日本語レポートにまとめます。
-セッションID、リンク、ローカルログのパス、または対象期間を指定してください。
+Codexの `/status` に表示されるセッションID、チャットリンク、ローカルログのパス、タイトルの一部、または対象期間を指定してください。
 
 ```text
 $knowledge-refinery:refinery-review-session を使い、終了済みセッション <session-id> をレビューして、
 reports/session-review.md に保存してください。
 ```
+
+セッションIDを渡すと、Skillは `session extract --session-id` で親ログを探し、既定で子孫も抽出します。
+タイトルの一部を渡すと、Skillは `session list --title` でローカルの候補を探します。
 
 ## 必要なもの
 
@@ -15,9 +18,9 @@ reports/session-review.md に保存してください。
 
 対象の指定方法によって、登録の要否が変わります。
 
-- Codex appツールでタイトルやプロジェクトから候補を探す場合：Refinery登録は不要です。
-- CLIの `session list` で期間や直近の条件から候補を探す場合：対象リポジトリの有効なRefinery登録が必要です。
-- ログのパスを直接指定する場合：Refinery登録は不要です。
+- CLIの `session list` でタイトル、期間、直近の条件から候補を探す場合：対象リポジトリの有効なRefinery登録が必要です。
+- Codex appツールで候補を探す場合：Refinery登録は不要です。
+- セッションIDやログのパスを直接指定する場合：Refinery登録は不要です。
 
 RefineryのMCP接続は不要です。アプリツールは候補と状態の確認に使い、本文の解析には
 ローカルログとCLIを使います。進行中のチャットは終了後にレビューしてください。

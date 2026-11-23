@@ -87,11 +87,54 @@ def test_cli_list_range_sorting_paging_and_parent_scope(
     assert first["updated_at_source"] == "file_mtime"
     assert first["total"] == 2 and first["next_offset"] == 1
     assert first["chats"][0]["chat_id"] == "b"
+    assert first["chats"][0]["title"] is None
     assert main([*args, "--offset", "1"]) == 0
     second = json.loads(capsys.readouterr().out)
     assert second["chats"][0]["chat_id"] == "a"
     assert second["chats"][0]["cwd"] == str(project)
     assert second["next_offset"] is None
+
+
+def test_cli_list_matches_latest_title_before_paging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    project: Path,
+) -> None:
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    logs = tmp_path / "sessions"
+    log(logs / "one.jsonl", "one", "2026-11-07T01:00:00Z", session_id="shared")
+    log(logs / "two.jsonl", "two", "2026-11-07T02:00:00Z")
+    log(logs / "renamed.jsonl", "renamed", "2026-11-07T03:00:00Z")
+    log(logs / "unnamed.jsonl", "unnamed", "2026-11-07T04:00:00Z", session_id="shared")
+    log(logs / "child.jsonl", "child", "2026-11-07T05:00:00Z", parent_thread_id="one")
+    titles = [
+        ("one", "CLI 回帰[TEST]の確認"),
+        ("two", "CLI 回帰[test]の追加"),
+        ("renamed", "CLI 回帰[TEST]の旧名"),
+        ("renamed", "CLI 回帰Tの名称変更"),
+        ("shared", "別チャットの回帰[TEST]"),
+        ("child", "子チャットの回帰[TEST]"),
+    ]
+    (tmp_path / "session_index.jsonl").write_text(
+        "\n".join(
+            json.dumps({"id": chat_id, "thread_name": title, "updated_at": "2026-11-07T00:00:00Z"})
+            for chat_id, title in titles
+        )
+        + '\n{"id":"one","thread_name":',
+        encoding="utf-8",
+    )
+
+    args = ["session", "list", "--title", "回帰[test]", "--limit", "1"]
+    assert main(args) == 0
+    first = json.loads(capsys.readouterr().out)
+    assert (first["total"], first["next_offset"]) == (2, 1)
+    assert first["chats"][0]["chat_id"] == "two"
+    assert main([*args, "--updated-before", "2026-11-07T02:00:00Z"]) == 0
+    narrowed = json.loads(capsys.readouterr().out)
+    assert narrowed["total"] == 1
+    chat = narrowed["chats"][0]
+    assert (chat["chat_id"], chat["session_id"], chat["title"]) == ("one", "shared", titles[0][1])
 
 
 def test_list_deduplicates_chat_before_date_filtering(tmp_path: Path, project: Path) -> None:
@@ -126,6 +169,7 @@ def test_cli_list_explicit_archive_and_skipped_metadata(
         ["--updated-since", "2026-11-07", "--updated-before", "2026-11-07"],
         ["--limit", "0"],
         ["--offset", "-1"],
+        ["--title", "  "],
     ],
 )
 def test_cli_list_rejects_invalid_range_and_page(

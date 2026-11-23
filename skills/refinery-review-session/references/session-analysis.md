@@ -7,8 +7,8 @@
 
 | コマンド | 入力 | 役割 |
 | --- | --- | --- |
-| `list` | ローカルログのディレクトリ | 更新日時の範囲から親チャットの候補を直近順に選ぶ |
-| `extract` | 起点チャットのrollout JSONL | 子孫ログを探索し、本文と対応関係を解析JSONに保存する |
+| `list` | ローカルログとタイトル索引 | タイトルや更新日時から親チャットの候補を直近順に選ぶ |
+| `extract` | `/status` のセッションID、または起点チャットのrollout JSONL | 子孫ログを探索し、本文と対応関係を解析JSONに保存する |
 | `search` | 解析JSON | 条件に合う記録を探す |
 | `show` | 解析JSON | IDで選んだ記録と、その前後・関連記録を読む |
 | `stats` | 解析JSON | 呼び出し・ツール・チャット別の件数や警告を確認する |
@@ -30,6 +30,7 @@ extract/search/show/statsは既定で子孫を含める。`extract`はログを�
 | 引数 | 役割・既定値 |
 | --- | --- |
 | `--project PATH` | 対象の登録済みGit作業ディレクトリ。既定は現在のディレクトリ |
+| `--title TEXT` | タイトルの部分一致。大文字・小文字を区別しない |
 | `--updated-since DATE` | 更新日時の下限。この時刻を含む。省略すると下限なし |
 | `--updated-before DATE` | 更新日時の上限。この時刻を含まない。省略すると上限なし |
 | `--sessions-dir DIR` | ログの探索先。複数指定可能。既定のCODEX_HOME/sessionsを置き換える |
@@ -43,11 +44,16 @@ extract/search/show/statsは既定で子孫を含める。`extract`はログを�
 
 日時指定にはタイムゾーンが必須。日付のみはUTCの0時、日本時間は `+09:00` を付ける。
 更新の基準はファイルmtimeで、コピー・復元でも変わる。終了状態は別途確認する。
-一覧は親チャット単位。`chats[].path` をextractへ渡し、複数の `paths` があれば対象を確認する。
+タイトルは `CODEX_HOME/session_index.jsonl`（未設定なら `~/.codex/session_index.jsonl`）の
+`thread_name` を使う。タイトルが不明なら `chats[].title` はnullで、`--title` 指定時は一致しない。
+一覧は親チャット単位で、`chats[].path` をextractへ渡す。複数の `paths` があれば対象を確認する。
 `total`・`next_offset` で続きを、`skipped_files` で取得できなかった件数を確認する。
 limitは返却数を制限するが、ファイル情報と先頭metadataの走査数は制限しない。
 
 ```bash
+# 登録済みプロジェクトで、タイトルに「レビュー」を含む親チャットを選ぶ
+knowledge-refinery session list --title 'レビュー'
+
 # 日本時間11月7日の更新分から直近3件を選ぶ
 knowledge-refinery session list \
   --updated-since 2026-11-07T00:00:00+09:00 \
@@ -58,14 +64,15 @@ knowledge-refinery session list \
 
 | 引数 | 役割・既定値 |
 | --- | --- |
-| `path` | 起点チャットのrollout JSONL。位置引数で必須 |
+| `--session-id ID` | `/status` の共有セッションID。先頭metadataが完全一致する親ログを探す |
+| `path` | 起点チャットのrollout JSONL。`--session-id` とどちらか一方を指定 |
 | `--output PATH` | 新規解析JSONの保存先。必須。既存ファイルは上書きしない |
 | `--exclude-children` | 子孫を探索せず、起点チャットだけ保存する |
-| `--sessions-dir DIR` | 子孫ログの探索先。複数指定可能。既定の探索先を置き換える |
+| `--sessions-dir DIR` | IDでの親ログ・子孫ログの探索先。複数指定可能。既定の探索先を置き換える |
 
 探索先の既定は `CODEX_HOME/sessions`（CODEX_HOME未設定なら `~/.codex/sessions`）。
 アーカイブや別の場所は `--sessions-dir` で明示する。通常ログとアーカイブを両方探す場合は
-両方のディレクトリを指定する。`--sessions-dir` と `--exclude-children` は併用できない。
+両方のディレクトリを指定する。パス指定で親だけを抽出するときは `--sessions-dir` を省く。
 探索対象はmetadataで親子関係を確認できた子孫で、無関係なチャットは含めない。
 
 ### search / show / stats 共通

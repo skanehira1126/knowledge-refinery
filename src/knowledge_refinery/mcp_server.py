@@ -10,6 +10,9 @@ from typing import Literal
 from typing import TypeVar
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ContentBlock
+from mcp.types import Tool
+from mcp.types import ToolAnnotations
 import yaml
 
 from knowledge_refinery import get_version
@@ -41,6 +44,9 @@ from knowledge_refinery.handoff_ops import delete_handoff_at
 from knowledge_refinery.handoff_ops import list_handoffs_at
 from knowledge_refinery.handoff_ops import read_handoff_at
 from knowledge_refinery.handoff_ops import validate_handoffs_at
+from knowledge_refinery.issue_ops import IssueStatus
+from knowledge_refinery.issue_ops import get_issue
+from knowledge_refinery.issue_ops import list_issue_summaries
 from knowledge_refinery.tag_ops import TAG_TAXONOMY
 from knowledge_refinery.tag_ops import TAG_TAXONOMY_SCHEMA_VERSION
 from knowledge_refinery.tag_ops import TagBrowseResult
@@ -65,7 +71,40 @@ from knowledge_refinery.vault_ops import update_project_metadata
 from knowledge_refinery.vault_ops import validate_maintenance_context
 
 
-mcp = FastMCP(
+_FILTER_HINTS = {
+    "refinery_search_experiences": 'Use terms=["word"] for text search.',
+    "refinery_search_memory": 'Use terms=["word"] for text and scopes=["project", "shared"].',
+    "refinery_list_issues": "Use project_id, status or tag to filter issues.",
+}
+
+
+class _RefineryMCP(FastMCP):
+    """Reject unknown filters before FastMCP can silently discard them and broaden a search."""
+
+    async def list_tools(self) -> list[Tool]:
+        """Advertise the closed input schemas for filtered reads."""
+        tools = await super().list_tools()
+        for tool in tools:
+            if tool.name in _FILTER_HINTS:
+                tool.inputSchema["additionalProperties"] = False
+        return tools
+
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any]
+    ) -> Sequence[ContentBlock] | dict[str, Any]:
+        """Validate filter names against the same registered schema used for discovery."""
+        if name in _FILTER_HINTS:
+            tool = self._tool_manager.get_tool(name)
+            assert tool is not None
+            unknown = arguments.keys() - tool.parameters["properties"].keys()
+            if unknown:
+                raise ValueError(
+                    f"Unknown arguments: {', '.join(sorted(unknown))}. {_FILTER_HINTS[name]}"
+                )
+        return await super().call_tool(name, arguments)
+
+
+mcp = _RefineryMCP(
     "knowledge-refinery",
     instructions=(
         "ローカルの中央refinery vaultから開発経験と再利用可能なmemoryを検索・記録します。"
@@ -84,6 +123,7 @@ mcp = FastMCP(
         "handoffは明示された引き継ぎ操作専用です。通常のknowledge検索・記録には含めません。"
         "handoffの一覧・取得はproject_idによるactive vaultの参照で、repository pathは不要です。"
         "一覧でproject_idを省略すると全projectを対象にします。"
+        "issueはactive vaultで一覧・ID取得でき、project_idは一覧の絞り込みに使います。"
     ),
 )
 
@@ -152,6 +192,22 @@ def _entry(entry: Any, vault: Path) -> dict[str, object]:
         "updated_at": entry.updated_at,
         "path": str(entry.path.relative_to(vault)),
     }
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+def refinery_list_issues(
+    project_id: str | None = None,
+    status: IssueStatus | None = None,
+    tag: str | None = None,
+) -> list[dict[str, object]]:
+    """active vaultのissueをproject ID・状態・タグで絞り込み、更新順に一覧取得します。"""
+    return list_issue_summaries(get_active_vault(), project=project_id, status=status, tag=tag)
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+def refinery_get_issue(issue_id: str) -> dict[str, object]:
+    """issue IDで本文・完了条件・更新履歴・revisionを取得します。"""
+    return dict(get_issue(get_active_vault(), issue_id))
 
 
 @mcp.tool()

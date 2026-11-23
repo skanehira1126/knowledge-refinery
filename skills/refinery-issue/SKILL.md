@@ -7,13 +7,14 @@ description: Knowledge Refineryのissue（課題・TODO）の作成、一覧、�
 
 Read the [shared operating rules](../operating-rules.md) for authorization, vault-scoped access,
 and completion. Input is the requested issue operation and its title, ID, or selection criteria.
-Use the `knowledge-refinery issue` CLI; there are no issue MCP tools. Do not edit `issues.json`
-directly. Skill discovery does not authorize creating issues from ordinary development findings
+Read issues through MCP. Use the `knowledge-refinery issue` CLI for writes and tag administration.
+Skill discovery does not authorize creating issues from ordinary development findings
 or from automatic experience/memory recording guidance.
 
 ## Select the scope
 
-Use the active vault, or an explicitly requested existing vault through `REFINERY_VAULT`.
+Use the active vault. If a different existing vault is explicitly requested via
+`REFINERY_VAULT`, use that same CLI environment for both the operation and readback.
 Issue commands do not infer a project from the working directory. `--project` takes a registered
 project ID, not a path; creation may repeat it to link multiple projects or omit it for no project.
 Use an already known binding or `refinery_list_projects` when a requested project needs resolving.
@@ -24,15 +25,12 @@ Variables in the examples stand for concrete values from the request or CLI resu
 
 ## Find or inspect
 
-```bash
-knowledge-refinery issue list --json
-knowledge-refinery issue list --project "$PROJECT_ID" --status in_progress --tag "$TAG" --json
-knowledge-refinery issue show "$ISSUE_ID" --json
-```
-
-Apply only requested filters; they combine with AND. The list is newest-update first and includes
-done/cancelled issues unless filtered. It omits history; `show` returns the full history.
-Select by returned ID rather than guessing from a title. A read-only request ends with findings.
+Use `refinery_list_issues` with the requested `project_id`, `status`, and `tag` filters.
+They combine with AND. An empty argument object lists issues across the vault in newest-update
+order, including done and cancelled issues. Use `refinery_get_issue(issue_id)` for the description,
+completion criteria, history and current revision. A known ID can go straight to this tool.
+The equivalent CLI reads are `issue list [--project ID] [--status STATUS] [--tag TAG] --json`
+and `issue show ID --json`. A read-only request ends with findings.
 
 ## Create or update
 
@@ -58,7 +56,7 @@ Every status change requires `--reason`. For `done`, ensure a nonempty `done_whe
 completion and verification evidence in `--reason`. The CLI checks presence, not whether the work
 meets its criteria; do not claim unverified completion. There is no issue-delete command.
 
-After a write, use `show` to verify the affected fields and history. Report the ID, status, revision,
+After a write, use `refinery_get_issue` to verify the affected fields and history. Report the ID, status, revision,
 and any remaining limitation. Recording an issue does not itself perform the work described in it.
 
 ## Maintain issue tags
@@ -68,7 +66,7 @@ case-sensitive issue labels, separate from knowledge taxonomy and its `issue/...
 For one issue, use `issue update` with `--add-tag` or `--remove-tag`.
 
 `issue tag rename OLD NEW --json` and `issue tag remove TAG --json` affect every project and status.
-Before either, inspect `issue list --tag "$TAG" --json` and ensure that the requested scope covers
+Before either, use `refinery_list_issues(tag=TAG)` and ensure that the requested scope covers
 all matches; do not turn a project-specific request into a global mutation. Rename merges into an
 existing destination tag; remove detaches the tag without deleting issues or history. Verify the
-returned `affected_issues` with `show` and check the resulting tag counts with `issue tag list`.
+returned `affected_issues` with `refinery_get_issue` and check the resulting tag counts with `issue tag list`.

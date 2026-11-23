@@ -4,6 +4,7 @@ import pytest
 
 from knowledge_refinery.experience_ops import SearchFilters
 from knowledge_refinery.experience_ops import parse_datetime_filter
+from knowledge_refinery.experience_ops import parse_evidence_reference
 from knowledge_refinery.experience_ops import search_documents
 from knowledge_refinery.experience_ops import upsert_experience
 from knowledge_refinery.experience_ops import upsert_memory
@@ -401,8 +402,10 @@ def test_schema_validation_rejects_unstructured_evidence() -> None:
         validate_document_header(header, kind="experiences")
 
     header["evidence"] = [{"type": "file", "path": "../secret.log", "retention": "reference"}]
-    with pytest.raises(ValueError, match="repository-relative"):
+    with pytest.raises(ValueError, match="repository-relative.*reports/result.md"):
         validate_document_header(header, kind="experiences")
+    with pytest.raises(ValueError, match="--evidence file:reports/result.md"):
+        parse_evidence_reference('{"type":"file","path":"reports/result.md"}')
 
     header["evidence"] = [
         {

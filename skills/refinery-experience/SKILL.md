@@ -18,6 +18,8 @@ unrelated lookups for mechanical edits and on startup or compaction alone.
 Reuse relevant results already inspected while their sources and the question remain unchanged.
 
 In a repository, search current project memory together with shared memory, then current project experiences.
+Pass search words as `terms: ["word"]` to both MCP searches. Memory accepts
+`scopes: ["project", "shared"]`. Omit filters for an intentional listing.
 Expand beyond the project only when the local result is insufficient: choose IDs with
 `refinery_list_projects` and pass `project_ids`; use `all_projects: true` only when no bounded
 project set is defensible. Never combine `project_ids` with `all_projects: true`.

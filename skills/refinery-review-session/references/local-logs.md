@@ -3,12 +3,14 @@
 ## 1. ログを選ぶ
 
 指定パスを優先する。`/status` のセッションIDを指定された場合は、次節の `--session-id` を使う。
-アーカイブは明示依頼時だけ探す。複数候補を勝手に連結しない。
+履歴を探す範囲は依頼に合わせる。同一チャットの継続ファイルはCLIが出典を保持してまとめる。
 対象ホストにログがなければ提供を依頼する。
 
 IDやパスが未確定なら、登録済みプロジェクトの候補を `session list` で探す。
-タイトルの一部は `--title`、別プロジェクトは `--project`、期間は `--updated-since` と
-`--updated-before` で指定する。タイトルで絞った結果の `total` と `next_offset` を確認し、
+タイトルの一部は `--title`、別プロジェクトは `--project` で指定する。期間中の作業は
+`--active-since` と `--active-before`、ファイル更新期間は `--updated-since` と
+`--updated-before` で絞る。過去の作業を棚卸しするときは `--include-archived` を使い、
+削除済みCodex worktreeも対象なら `--include-removed-worktrees` を加える。`total` と `next_offset` を確認し、
 一意に選べない場合はタイトルと更新日時を示して選択を求める。選んだ `chats[].path` を抽出に使う。
 引数と出力は[CLI早見表](session-analysis.md)を参照する。
 
@@ -50,7 +52,7 @@ knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/session-
 ```
 
 探索先は `CODEX_HOME/sessions`（未設定なら `~/.codex/sessions`）。アーカイブを含める依頼では
-通常ログとアーカイブのディレクトリをそれぞれ `--sessions-dir` で指定する。
+`--include-archived` を指定する。圧縮ログと同一チャットの継続ファイルも直接抽出できる。
 保存先はGit追跡・公開対象でない新規ファイルにする。解析JSONは匿名化済みではない。
 親だけの依頼では `--exclude-children` を指定する。
 

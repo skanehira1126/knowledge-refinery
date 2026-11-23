@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
+from backports import zstd
 import pytest
 
 from knowledge_refinery.cli import main
@@ -160,6 +161,44 @@ def test_cli_list_explicit_archive_and_skipped_metadata(
     assert result["total"] == 1 and result["skipped_files"] == 2
 
 
+def test_activity_bounds_use_owned_items_across_archived_segments(
+    tmp_path: Path,
+    project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    start = "2026-11-07T00:00:00Z"
+    end = "2026-11-08T00:00:00Z"
+    for chat, owner, when in (
+        ("active", "active", start),
+        ("inherited", "other", start),
+        ("settings", "settings", start),
+        ("boundary", "boundary", end),
+    ):
+        path = log(tmp_path / "archived_sessions" / f"{chat}.jsonl", chat, end)
+        payload = {
+            "type": "thread_settings_applied" if chat == "settings" else "item_completed",
+            "thread_id": owner,
+            "item": {"id": "id"},
+            "completed_at_ms": int(datetime.fromisoformat(when).timestamp() * 1000),
+        }
+        event = {"type": "event_msg", "timestamp": end, "payload": payload}
+        header = path.read_bytes().splitlines()[0]
+        path.with_suffix(".jsonl.zst").write_bytes(
+            zstd.compress(header + b"\n" + json.dumps(event).encode() + b"\n")
+        )
+        path.unlink()
+    log(tmp_path / "sessions/reopened.jsonl", "active", "2026-11-10T00:00:00Z")
+    args = ["session", "list", "--active-since", start, "--active-before", end]
+    assert main(args) == 0 and json.loads(capsys.readouterr().out)["total"] == 0
+    assert main([*args, "--include-archived"]) == 0
+    (chat,) = json.loads(capsys.readouterr().out)["chats"]
+    assert chat["chat_id"] == "active" and len(chat["paths"]) == 2
+    assert main([*args, "--include-archived", "--updated-before", end]) == 0
+    assert json.loads(capsys.readouterr().out)["total"] == 0
+
+
 @pytest.mark.parametrize(
     "options",
     [
@@ -167,6 +206,7 @@ def test_cli_list_explicit_archive_and_skipped_metadata(
         ["--updated-since", "2026-11-07T12:00:00"],
         ["--updated-since", "2026-11-08", "--updated-before", "2026-11-07"],
         ["--updated-since", "2026-11-07", "--updated-before", "2026-11-07"],
+        ["--active-since", "2026-11-08", "--active-before", "2026-11-07"],
         ["--limit", "0"],
         ["--offset", "-1"],
         ["--title", "  "],
@@ -216,6 +256,38 @@ def test_project_scope_includes_worktrees_but_not_deleted_or_other_clones(
     assert main(["session", "list", "--project", str(other), "--sessions-dir", str(logs)]) == 0
     result = json.loads(capsys.readouterr().out)
     assert {entry["chat_id"] for entry in result["chats"]} == {"other"}
+
+
+def test_removed_worktree_requires_managed_path_origin_and_known_commit(
+    tmp_path: Path,
+    project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    origin = "https://example.org/product.git"
+    git(project, "remote", "add", "origin", origin)
+    commit = subprocess.check_output(
+        ["git", "-C", str(project), "rev-parse", "HEAD"], text=True
+    ).strip()
+    removed = tmp_path / "worktrees/slot/repo"
+    for chat, cwd, url, revision in (
+        ("removed", removed, origin, commit),
+        ("different", removed, "different", commit),
+        ("unknown", removed, origin, "e" * 40),
+        ("outside", tmp_path / "clone", origin, commit),
+    ):
+        log(
+            tmp_path / "sessions" / f"{chat}.jsonl",
+            chat,
+            "2026-11-07T00:00:00Z",
+            cwd=str(cwd),
+            git={"repository_url": url, "commit_hash": revision},
+        )
+    assert main(["session", "list"]) == 0 and json.loads(capsys.readouterr().out)["total"] == 0
+    assert main(["session", "list", "--include-removed-worktrees"]) == 0
+    (match,) = json.loads(capsys.readouterr().out)["chats"]
+    assert match["chat_id"] == "removed" and match["project_match"] == "recorded_origin_and_commit"
 
 
 def test_cli_list_requires_enabled_registration(

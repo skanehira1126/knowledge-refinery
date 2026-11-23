@@ -4,10 +4,16 @@ Pluginはローカルstdio MCPを起動します。repo-scoped toolsには`.refi
 現在repoの絶対パスを`project_path`として渡します。serverが`project_id`、`enabled`、project
 metadata、repoとactive vaultの`vault_id`一致を検証します。
 
+experienceとmemoryの検索語は `terms: ["語"]` で指定します。memoryのscopeは
+`scopes: ["project", "shared"]` で選べます。未定義の検索引数はエラーになります。
+条件を省略すると対象範囲の一覧を返します。
+
 | Tool | 用途 | repo gate |
 |---|---|---|
 | `refinery_list_projects` | active vaultのproject metadata一覧 | 管理tool |
 | `refinery_info` | MCP package/schema versionとactive vault ID | 管理tool |
+| `refinery_list_issues` | 任意の `project_id`・`status`・`tag` の全条件に一致するissueの一覧。更新順、履歴は省略 | active vault |
+| `refinery_get_issue` | `issue_id` に対応する本文・完了条件・履歴・revision | active vault |
 | `refinery_vault_status` | 開いたvaultを照合し保守contextを取得 | `vault_path` |
 | `refinery_get_project_metadata` | 現在repoのproject metadata取得 | repo / vault context |
 | `refinery_update_project_metadata` | project metadataのrevision付き更新 | repo / vault context |

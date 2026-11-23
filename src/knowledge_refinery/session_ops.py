@@ -12,6 +12,10 @@ from pathlib import Path
 import re
 from typing import Any
 
+from knowledge_refinery.session_sources import open_rollout
+from knowledge_refinery.session_sources import rollout_paths
+from knowledge_refinery.session_sources import rollout_segment
+
 
 FORMAT = "knowledge-refinery.session-analysis"
 SCHEMA_VERSION = 2
@@ -387,22 +391,30 @@ def read_rollout(path: Path) -> dict[str, Any]:
     path = path.expanduser().resolve()
     extractor = _Extractor()
     digest = hashlib.sha256()
-    with path.open("rb") as source:
+    with open_rollout(path) as source:
         before = _signature(os.fstat(source.fileno()))
         for line, raw in enumerate(source, 1):
             digest.update(raw)
             extractor.consume(raw.decode("utf-8"), line)
         after = _signature(os.fstat(source.fileno()))
+    logical_hash = digest.hexdigest()
+    if path.suffix == ".zst":
+        with path.open("rb") as stored:
+            digest = hashlib.file_digest(stored, "sha256")
     if before != after or after != _signature(path.stat()):
         raise ValueError("Session file changed while reading; retry a stable snapshot")
     if not extractor.metadata:
         raise ValueError("Missing session metadata; expected a Codex rollout JSONL")
     chat_id = extractor.metadata["id"]
+    segment = rollout_segment(path, chat_id)
+    prefix = f"{chat_id}:{segment}" if segment and segment != "base" else chat_id
     _mark_ownership(extractor, chat_id)
     for record in extractor.records:
-        record.update(record_id=f"{chat_id}:L{record['line']}", chat_id=chat_id)
+        record.update(record_id=f"{prefix}:L{record['line']}", chat_id=chat_id)
+        if segment and segment != "base":
+            record["segment_id"] = segment
     for warning in extractor.warnings:
-        warning.update(chat_id=chat_id, record_id=f"{chat_id}:L{warning['line']}")
+        warning.update(chat_id=chat_id, record_id=f"{prefix}:L{warning['line']}")
     metadata = extractor.metadata
     source_info = metadata.get("source")
     spawn = source_info.get("subagent", {}) if isinstance(source_info, dict) else {}
@@ -419,6 +431,8 @@ def read_rollout(path: Path) -> dict[str, Any]:
             "source": {
                 "path": str(path),
                 "sha256": digest.hexdigest(),
+                **({"jsonl_sha256": logical_hash} if path.suffix == ".zst" else {}),
+                **({"segment_id": segment} if segment else {}),
                 "bytes": after[2],
                 "lines": len(extractor.records),
             },
@@ -473,7 +487,7 @@ def _owns_record(
 def _metadata(path: Path) -> dict[str, Any] | None:
     # Discovery reads only the first record; it never searches unrelated conversation bodies.
     try:
-        with path.open(encoding="utf-8") as source:
+        with open_rollout(path) as source:
             value = json.loads(source.readline())
         if isinstance(value, dict) and value.get("type") == "session_meta":
             payload = value.get("payload")
@@ -494,13 +508,10 @@ def _child_identity(meta: dict[str, Any]) -> tuple[str, str] | None:
 
 
 def _rollout_metadata(roots: list[Path]) -> Iterator[tuple[Path, dict[str, Any]]]:
-    for root in roots:
-        if not root.expanduser().is_dir():
-            continue
-        for path in sorted(root.expanduser().rglob("*.jsonl")):
-            meta = _metadata(path)
-            if meta is not None:
-                yield path, meta
+    for path in rollout_paths(roots):
+        meta = _metadata(path)
+        if meta is not None:
+            yield path, meta
 
 
 def _descendant_paths(candidates: list[tuple[Path, str, str]], parent_id: str) -> list[Path]:
@@ -527,11 +538,26 @@ def discover_children(roots: list[Path], parent_id: str) -> list[Path]:
     return _descendant_paths(candidates, parent_id)
 
 
-def extract_session(path: Path, *, discovery_roots: list[Path] | None = None) -> dict[str, Any]:
+def extract_session(
+    path: Path, *, discovery_roots: list[Path] | None = None, include_children: bool = True
+) -> dict[str, Any]:
     """Build an analysis bundle from a root chat and descendants found in discovery roots."""
     root = read_rollout(path)
     root_id = root["chat"]["chat_id"]
-    paths = discover_children(discovery_roots, root_id) if discovery_roots is not None else []
+    source = root["chat"]["source"]
+    paths = (
+        discover_children(discovery_roots, root_id) if include_children and discovery_roots else []
+    )
+    if source.get("segment_id"):
+        candidates = set(rollout_paths(discovery_roots or []))
+        candidates.update(Path(source["path"]).parent.glob("rollout-*.jsonl*"))
+        for candidate in sorted(candidates):
+            if str(candidate) == source["path"] or not rollout_segment(candidate, root_id):
+                continue
+            meta = _metadata(candidate)
+            if meta is None or meta.get("id") != root_id:
+                raise ValueError(f"Conflicting rollout metadata for chat {root_id}: {candidate}")
+            paths.append(candidate)
     return _extract_rollouts(root, paths)
 
 
@@ -557,13 +583,17 @@ def extract_session_by_id(
 
     if not matches:
         raise ValueError(f"No root rollout found for session ID {session_id!r}")
-    if len(matches) > 1:
+    chat_ids = set(matches.values())
+    names = {path.name.removesuffix(".zst") for path in matches}
+    if len(chat_ids) > 1 or (
+        len(names) > 1 and not all(rollout_segment(path, chat) for path, chat in matches.items())
+    ):
         paths = ", ".join(str(path) for path in sorted(matches))
         raise ValueError(
             f"Multiple root rollouts for session ID {session_id!r}; specify a path: {paths}"
         )
 
-    ((path, chat_id),) = matches.items()
+    path, chat_id = next(iter(matches.items()))
     root = read_rollout(path)
     if (
         root["chat"]["session_id"] != session_id
@@ -571,24 +601,59 @@ def extract_session_by_id(
         or root["chat"]["parent_chat_id"] is not None
     ):
         raise ValueError(f"Root rollout changed during session ID lookup: {path}")
-    return _extract_rollouts(root, _descendant_paths(children, chat_id))
+    return _extract_rollouts(root, [*matches, *_descendant_paths(children, chat_id)])
+
+
+def _merge_chat(parts: list[dict[str, Any]]) -> dict[str, Any]:
+    parts.sort(key=lambda part: Path(part["chat"]["source"]["path"]).name)
+    first = parts[0]
+    chat = first["chat"]
+    sources: dict[str, dict[str, Any]] = {}
+    for part in parts:
+        current = part["chat"]
+        source = current["source"]
+        segment = source.get("segment_id", "base")
+        if (current["session_id"], current["parent_chat_id"]) != (
+            chat["session_id"],
+            chat["parent_chat_id"],
+        ):
+            raise ValueError(f"Conflicting rollout metadata for chat {chat['chat_id']}")
+        if segment in sources:
+            previous = sources[segment]
+            if source.get("jsonl_sha256", source["sha256"]) != previous.get(
+                "jsonl_sha256", previous["sha256"]
+            ):
+                raise ValueError(f"Conflicting rollout files for chat {chat['chat_id']}")
+            first["warnings"].append(
+                {
+                    "code": "duplicate_source",
+                    "chat_id": chat["chat_id"],
+                    "path": source["path"],
+                    "same_as": previous["path"],
+                }
+            )
+            continue
+        sources[segment] = source
+        if part is not first:
+            first["records"].extend(part["records"])
+            first["warnings"].extend(part["warnings"])
+    if len(sources) > 1:
+        chat["sources"] = list(sources.values())
+    return first
 
 
 def _extract_rollouts(root: dict[str, Any], paths: list[Path]) -> dict[str, Any]:
     from knowledge_refinery.session_links import build_links
 
     root_id = root["chat"]["chat_id"]
-    loaded = {root_id: root}
-    warnings = []
+    groups = {root_id: [root]}
     for child_path in dict.fromkeys(p.expanduser().resolve() for p in paths):
+        if str(child_path) == root["chat"]["source"]["path"]:
+            continue
         child = read_rollout(child_path)
         child_id = child["chat"]["chat_id"]
-        if child_id in loaded:
-            if child["chat"]["source"]["sha256"] != loaded[child_id]["chat"]["source"]["sha256"]:
-                raise ValueError(f"Conflicting rollout files for chat {child_id}")
-            warnings.append({"code": "duplicate_source", "chat_id": child_id})
-        else:
-            loaded[child_id] = child
+        groups.setdefault(child_id, []).append(child)
+    loaded = {chat_id: _merge_chat(parts) for chat_id, parts in groups.items()}
     _validate_descendants(loaded, root_id)
     bundle = {
         "format": FORMAT,
@@ -596,7 +661,7 @@ def _extract_rollouts(root: dict[str, Any], paths: list[Path]) -> dict[str, Any]
         "root_chat_id": root_id,
         "chats": [item["chat"] for item in loaded.values()],
         "records": [record for item in loaded.values() for record in item["records"]],
-        "warnings": warnings + [w for item in loaded.values() for w in item["warnings"]],
+        "warnings": [w for item in loaded.values() for w in item["warnings"]],
     }
     build_links(bundle)
     return bundle

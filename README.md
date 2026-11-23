@@ -79,7 +79,7 @@ Knowledge Refineryの運用指示を渡します。Codexでは、CLIの`/hooks`�
 
 - 成功、失敗、不採用案をexperienceとして記録し、既存の原則が判断に影響したときは採用・見送りの理由と観測結果も残す
 - experienceから再利用可能なproject memoryとshared memoryを抽出する
-- 現在のrepoから、必要に応じて他repoのknowledgeまで検索する
+- 現在のrepoから、必要に応じて他repoのknowledgeまで検索する。MCPの検索語は `terms` の配列で指定し、未知の引数はエラーとして返す。[MCPの検索引数](docs/mcp.md)
 - `refinery_archive_memory`で原則を通常検索から外し、旧IDに本文・理由・任意の後継参照を残す。履歴を含めるには`refinery_search_memory`の`include_archived`を指定する。[運用ルール](docs/knowledge-operations.md#memory-lifecycle)
 - 入力時、対象ツールの実行前後、サブエージェント開始時に、その場面用に保存したprojectの前提をMCPから渡す。[配信先一覧](docs/cli.md#context)
 - 任意でCodexを使い、中央vaultの検証済みsnapshotから根拠付きの深い検索を行う
@@ -101,6 +101,8 @@ Knowledge Refineryの運用指示を渡します。Codexでは、CLIの`/hooks`�
 「Knowledge Refineryにこの課題を記録して」「project exampleの進行中issueを一覧して」のように
 目的を伝えるか、`$refinery-issue`を指定して依頼できます。issueはactive vault単位で管理し、
 project未所属・複数projectへの紐付けに対応します。repo登録や有効化は不要です。
+エージェントは `refinery_list_issues` でproject ID・状態・タグを絞り、
+`refinery_get_issue` で本文・完了条件・履歴・revisionを取得します。作成と更新にはCLIを使います。
 作成・更新は依頼された範囲で行い、ナレッジの自動記録からissueを自動生成しません。
 使い方は[refinery-issue](docs/skills/refinery-issue.md)と[CLIリファレンス](docs/cli.md#issue)を参照してください。
 
@@ -156,4 +158,6 @@ handoffはprojectごとの専用領域に保存され、通常のexperience／me
 明示して呼び出します。成果物はローカルのMarkdownで、vaultへ自動保存しません。
 
 候補一覧は現在の登録済みGitプロジェクトとworktreeに絞ります。
+期間内に実際に作業したチャットは `session list --active-since … --active-before … --include-archived` で探せます。
+圧縮ログと同じチャットの継続ファイルも直接抽出できます。
 CLIを直接使う場合は[sessionコマンド](docs/cli.md#session)を参照してください。

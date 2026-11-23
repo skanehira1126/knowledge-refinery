@@ -25,10 +25,8 @@
     "capabilities": ["Search", "Write", "Local MCP"],
     "defaultPrompt": [
       "このrepositoryにKnowledge Refineryを設定してください。変更できないproject IDとactive vaultの切り替えを先に確認してください。",
-      "このrepositoryでKnowledge Refineryが有効か、設定を変更せずに診断してください。",
       "この判断に関係するmemoryとexperienceを検索してください。今回はvaultへ書き込まないでください。",
-      "今回の有用な試行を一つのexperienceとして記録してください。secretや個人情報は保存しないでください。",
-      "既存experienceからmemory候補を提案してください。shared memoryへ書き込む前に根拠と適用範囲を確認してください。"
+      "今回の有用な試行を一つのexperienceとして記録してください。secretや個人情報は保存しないでください。"
     ]
   }
 }

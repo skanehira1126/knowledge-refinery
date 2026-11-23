@@ -84,10 +84,48 @@ def _duplicate_key(record: dict[str, Any]) -> tuple[str, ...] | None:
     )
 
 
-def _duplicates(records: list[dict[str, Any]], relations: list[dict[str, Any]]) -> None:
+def _replay_key(record: dict[str, Any]) -> tuple[str, ...] | None:
+    kind = record["kind"]
+    if kind not in {"call", "result", "execution", "message"}:
+        return None
+    ids = record["source_ids"]
+    identifier = ids["call_id"] if kind in {"call", "result"} else ids["item_id"]
+    if not identifier:
+        return None
+    payload = record["data"]
+    if record["unparsed"]:
+        payload = json.loads(record["unparsed"]["raw_text"])["payload"]
+    return (
+        record["chat_id"],
+        record["ownership"],
+        kind,
+        identifier,
+        json.dumps(payload, sort_keys=True, ensure_ascii=False),
+    )
+
+
+def _duplicates(
+    records: list[dict[str, Any]], relations: list[dict[str, Any]], segmented: set[str]
+) -> None:
     seen: dict[tuple[str, ...], str] = {}
+    replays: dict[tuple[str, ...], tuple[str, str]] = {}
     for record in records:
+        rid = record["record_id"]
         record["duplicate_of"] = None
+        if record["chat_id"] in segmented and (replay := _replay_key(record)):
+            segment = record.get("segment_id", "base")
+            prior_segment, original = replays.setdefault(replay, (segment, rid))
+            if prior_segment != segment:
+                record["duplicate_of"] = original
+                relations.append(
+                    {
+                        "type": "duplicate",
+                        "from": rid,
+                        "to": original,
+                        "basis": "same_identifier_and_payload_across_segments",
+                    }
+                )
+                continue
         key = _duplicate_key(record)
         if key is None:
             continue
@@ -133,6 +171,7 @@ def _link_results(
     by_call: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     by_item: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     record_map = {r["record_id"]: r for r in records}
+    positions = {r["record_id"]: index for index, r in enumerate(records)}
     for call in calls:
         by_call[call["chat_id"], call["call_id"]].append(call)
         request = record_map[call["request_record"]]
@@ -148,7 +187,7 @@ def _link_results(
         candidates = _candidates(record, by_call, by_item)
         if len(candidates) == 1:
             call = candidates[0]
-            if record["kind"] == "result" and not _compatible(record_map, record, call):
+            if record["kind"] == "result" and not _compatible(record_map, positions, record, call):
                 candidates = []
             else:
                 field = "result_records" if record["kind"] == "result" else "execution_records"
@@ -202,11 +241,16 @@ def _candidates(
     return list(found.values())
 
 
-def _compatible(record_map: dict[str, Any], result: dict[str, Any], call: dict[str, Any]) -> bool:
+def _compatible(
+    record_map: dict[str, Any],
+    positions: dict[str, int],
+    result: dict[str, Any],
+    call: dict[str, Any],
+) -> bool:
     request = record_map[call["request_record"]]
     return (
         request["source_subtype"] + "_output" == result["source_subtype"]
-        and result["line"] > request["line"]
+        and positions[result["record_id"]] > positions[request["record_id"]]
     )
 
 
@@ -332,7 +376,8 @@ def build_links(bundle: dict[str, Any]) -> None:
     """Populate deterministic links without guessing relationships from text similarity."""
     records = bundle["records"]
     relations: list[dict[str, Any]] = []
-    _duplicates(records, relations)
+    segmented = {chat["chat_id"] for chat in bundle["chats"] if chat.get("sources")}
+    _duplicates(records, relations, segmented)
     calls = _calls(records)
     _link_results(records, calls, relations, bundle["warnings"])
     _process_links(records, calls, relations)

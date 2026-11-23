@@ -58,6 +58,10 @@ def _validate_plugin() -> None:
         )
     if plugin.get("skills") != "./skills/" or plugin.get("mcpServers") != "./.mcp.json":
         raise ValueError("Plugin skill or MCP path does not match the repository layout")
+    interface = plugin.get("interface", {})
+    prompts = interface.get("defaultPrompt", []) if isinstance(interface, dict) else []
+    if isinstance(prompts, list) and len(prompts) > 3:
+        raise ValueError("Codex accepts at most three interface.defaultPrompt entries")
 
 
 def _validate_mcp() -> None:

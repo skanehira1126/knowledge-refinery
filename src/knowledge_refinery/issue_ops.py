@@ -6,8 +6,10 @@ from datetime import datetime
 import json
 from pathlib import Path
 import re
+from typing import Literal
 from typing import TypedDict
 from typing import cast
+from typing import get_args
 from uuid import uuid4
 
 from knowledge_refinery.errors import RefineryCliError
@@ -17,7 +19,8 @@ from knowledge_refinery.vault_ops import read_project_metadata
 from knowledge_refinery.vault_ops import validate_vault_root
 
 
-ISSUE_STATUSES = ("backlog", "ready", "in_progress", "blocked", "done", "cancelled")
+IssueStatus = Literal["backlog", "ready", "in_progress", "blocked", "done", "cancelled"]
+ISSUE_STATUSES = get_args(IssueStatus)
 ISSUE_ID_RE = re.compile(r"issue-[0-9a-f]{32}")
 
 
@@ -212,6 +215,16 @@ def list_issues(
         key=lambda issue: (issue["updated_at"], issue["id"]),
         reverse=True,
     )
+
+
+def list_issue_summaries(
+    vault: Path, *, project: str | None = None, status: str | None = None, tag: str | None = None
+) -> list[dict[str, object]]:
+    """Return the list view shared by CLI and MCP, keeping history in the detail view."""
+    return [
+        {key: value for key, value in issue.items() if key != "history"}
+        for issue in list_issues(vault, project=project, status=status, tag=tag)
+    ]
 
 
 def _record_change(issue: Issue, before: dict[str, object], reason: str) -> bool:

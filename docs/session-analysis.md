@@ -14,12 +14,20 @@
 | `chats[].title` / `session_id` | ローカル索引のタイトル / ログmetadataの共有セッションID。取得できない項目はnull |
 | `chats[].updated_at` | 最新ログのmtime。UTC。会話の最終イベント時刻や終了状態ではない |
 | `chats[].path` / `paths` | 最新ログのパス / 同一チャットIDの全パス |
+| `chats[].project_match` | 削除済みCodex worktreeをorigin・コミットで照合したときは `recorded_origin_and_commit` |
 | `updated_since` / `updated_before` | 下限以上・上限未満の日時。未指定はnull |
+| `active_since` / `active_before` | 親自身の活動期間の下限以上・上限未満。未指定はnull |
 | `total` / `next_offset` | 条件に一致したチャット数 / 続きを取得するoffset。続きがなければnull |
 | `scanned_files` / `skipped_files` | 走査したファイル数 / 読取不可・metadata不正等で除外した数 |
 
 同一チャットの複数ログは最新mtimeで1候補にまとめてから期間で絞ります。
 mtimeはコピー・復元でも変わります。レビュー済みかどうかは記録しません。
+
+活動期間を指定した場合は、対象repoとタイトルで選んだ親の各ログを読みます。
+親の `thread_id` と項目IDを持つ `event_msg.item_completed` の `completed_at_ms` を使い、
+この時刻を欠く項目はタイムゾーン付きのイベント時刻で判定します。
+設定変更だけのチャットや、他のチャットから継承した項目は活動に数えません。
+該当形式の完了項目がない古いログを探すには、タイトルまたは更新日時を使えます。
 
 タイトルは `CODEX_HOME/session_index.jsonl` の `id` と、rollout先頭の `session_meta.payload.id` を照合して取得します。
 同じIDの有効な行が複数ある場合は、ファイル末尾に近い行の `thread_name` を使います。
@@ -40,8 +48,9 @@ mtimeはコピー・復元でも変わります。レビュー済みかどうか
 | --- | --- |
 | `root_chat_id` | 起点チャットの固有ID |
 | `chats` | 固有ID・共有session ID・親ID・agent path・Codex版・出典 |
-| `chats[].source` | 入力パス・SHA-256・bytes・行数 |
-| `records` | チャットごとの元行順の記録 |
+| `chats[].source` | 先頭の入力パス・保存ファイルのSHA-256とbytes・展開後の行数。圧縮時は展開したJSONLの `jsonl_sha256` も含む |
+| `chats[].sources` | 継続ファイルを含む場合の全出典。各出典の `segment_id` で元ファイルを識別 |
+| `records` | チャット内のファイル開始順、各ファイルの元行順の記録 |
 | `calls` | 重複を除いた呼び出し要求と、結果・実行イベントへの参照 |
 | `relations` | 重複・結果・実行イベント・プロセス参照の関係 |
 | `skill_mentions` | Skill名・本文提供・読込候補などの参照 |
@@ -54,7 +63,7 @@ mtimeはコピー・復元でも変わります。レビュー済みかどうか
 
 | 項目 | 内容 |
 | --- | --- |
-| `record_id` | `<chat_id>:L<元行番号>`。出典のSHA-256と併せて識別する |
+| `record_id` | `<chat_id>:L<元行番号>`。継続ファイルは `<chat_id>:<segment_id>:L<元行番号>` |
 | `chat_id`, `line`, `timestamp`, `ordinal` | 出典・元の日時・順序 |
 | `source_type`, `source_subtype`, `source_metadata` | 元の種類と外側のmetadata |
 | `kind` | metadata / context / message / call / result / execution / lifecycle / usage / unparsed / excluded |
@@ -114,7 +123,9 @@ request_record、result_records、execution_records、link_statusを持ちます
 未取得・帰属不明を「実行0回」と解釈しないでください。
 
 子孫の探索では各JSONLの先頭metadataを使います。先頭metadataのないログや読取不可のログは発見できません。
-同一chat IDの内容が異なるログはエラー、一致する複製は統合して `duplicate_source` 警告を残します。
+同じchat・共有session・親に属するCodexの `rollout-日時-chatID_区分UUID.jsonl[.zst]` は
+継続ファイルとして束ねます。ファイル間で同じ操作ID・種類・payloadを持つ再掲は出典を残して重複扱いにします。
+同一区分の内容が食い違う場合はエラー、一致する複製は `duplicate_source` 警告を残します。
 
 ### skill_mentions：Skill参照
 

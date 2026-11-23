@@ -1,4 +1,5 @@
 from dataclasses import replace
+import json
 from pathlib import Path
 from typing import Any
 from typing import cast
@@ -7,6 +8,7 @@ import anyio
 import pytest
 import yaml
 
+from knowledge_refinery.cli import main
 from knowledge_refinery.config_ops import set_active_vault
 from knowledge_refinery.front_matter import render_front_matter
 from knowledge_refinery.mcp_server import mcp
@@ -19,11 +21,13 @@ from knowledge_refinery.mcp_server import refinery_deliver_context
 from knowledge_refinery.mcp_server import refinery_get_context
 from knowledge_refinery.mcp_server import refinery_get_experience
 from knowledge_refinery.mcp_server import refinery_get_handoff
+from knowledge_refinery.mcp_server import refinery_get_issue
 from knowledge_refinery.mcp_server import refinery_get_memory
 from knowledge_refinery.mcp_server import refinery_get_project_metadata
 from knowledge_refinery.mcp_server import refinery_info
 from knowledge_refinery.mcp_server import refinery_list_contexts
 from knowledge_refinery.mcp_server import refinery_list_handoffs
+from knowledge_refinery.mcp_server import refinery_list_issues
 from knowledge_refinery.mcp_server import refinery_list_projects
 from knowledge_refinery.mcp_server import refinery_record_experience
 from knowledge_refinery.mcp_server import refinery_record_memory
@@ -54,6 +58,76 @@ def configured_mcp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     setup_project(project, vault, project_id="pybr")
     set_active_vault(vault)
     return vault
+
+
+def test_issue_mcp_reads_share_cli_filters_history_and_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    configured_mcp(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    assert main(["issue", "create", "--title", "Unassigned", "--json"]) == 0
+    capsys.readouterr()
+    assert (
+        main(
+            [
+                "issue",
+                "create",
+                "--title",
+                "Task",
+                "--done-when",
+                "Tested",
+                "--project",
+                "pybr",
+                "--tag",
+                "review",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    issue_id = json.loads(capsys.readouterr().out)["id"]
+    assert (
+        main(
+            [
+                "issue",
+                "update",
+                issue_id,
+                "--expected-revision",
+                "1",
+                "--status",
+                "ready",
+                "--reason",
+                "Scoped",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    assert (
+        main(
+            [
+                "issue",
+                "list",
+                "--project",
+                "pybr",
+                "--status",
+                "ready",
+                "--tag",
+                "review",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    rows = refinery_list_issues("pybr", "ready", "review")
+    assert rows == json.loads(capsys.readouterr().out)
+    assert len(rows) == 1 and "history" not in rows[0] and rows[0]["id"] == issue_id
+    assert len(refinery_list_issues()) == 2 and refinery_list_issues(status="done") == []
+    assert main(["issue", "show", issue_id, "--json"]) == 0
+    detail = refinery_get_issue(issue_id)
+    assert detail == json.loads(capsys.readouterr().out)
+    assert detail["revision"] == 2 and detail["history"] and detail["done_when"] == "Tested"
 
 
 def test_mcp_context_lifecycle_and_revisions(

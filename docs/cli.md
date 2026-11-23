@@ -253,7 +253,7 @@ MCP接続は不要です。レポート作成を依頼する場合は
 
 | コマンド | 入力 | 用途 |
 | --- | --- | --- |
-| `list` | ローカルログとタイトル索引 | タイトルや更新日時から対象チャットを選ぶ |
+| `list` | ローカルログとタイトル索引 | タイトル、ファイル更新日時、チャットの活動期間から対象を選ぶ |
 | `extract` | `/status` のセッションID、またはrollout JSONL | 本文と対応関係を解析JSONに保存する |
 | `search` | 解析JSON | 条件に合う記録を探す |
 | `show` | 解析JSON | 特定記録の前後と関連結果を読む |
@@ -278,18 +278,24 @@ knowledge-refinery session list \
 | `--title TEXT` | タイトルの部分一致。大文字・小文字を区別しない | 絞り込みなし |
 | `--updated-since DATE` | 下限以上 | 下限なし |
 | `--updated-before DATE` | 上限未満 | 上限なし |
+| `--active-since DATE` / `--active-before DATE` | 親自身に完了項目がある期間。下限以上、上限未満 | 絞り込みなし |
+| `--include-archived` | `CODEX_HOME/archived_sessions` も探索 | 無効 |
+| `--include-removed-worktrees` | 削除済みCodex worktreeのログを、記録済みoriginとコミットで照合 | 無効 |
 | `--sessions-dir DIR` | 探索先を置き換える。複数指定可 | `CODEX_HOME/sessions` |
 | `--limit N` | 返すチャット数。正の整数 | 20 |
 | `--offset N` | 飛ばすチャット数。0以上 | 0 |
 
 対象は現在のリポジトリと、その存在するworktreeです。
-削除済みworktreeや所属を確認できないログは含めません。同じremoteの別cloneも別リポジトリとして扱います。
+月次の活動を探す例は `knowledge-refinery session list --active-since 2026-10-01 --active-before 2026-11-01 --include-archived --include-removed-worktrees` です。
+削除済みworktreeを含める指定では、`CODEX_HOME/worktrees` 配下にあったログのorigin URLが一致し、
+そのコミットが対象repoに存在する場合に候補とし、`project_match: recorded_origin_and_commit` を返します。
+現存する別cloneはGit共通ディレクトリで区別します。
 
 選んだ作業ツリーのルートには、有効な `.refinery.yaml` が必要です。
 設定のないworktreeから実行する場合は、登録済みの作業ツリーを `--project` に指定してください。
 未登録・無効の場合は、登録・有効化してから実行してください。
 
-`CODEX_HOME` 未設定時は `~/.codex`。アーカイブは `--sessions-dir` で指定した場合だけ探します。
+`CODEX_HOME` 未設定時は `~/.codex`。探索対象は `.jsonl` と `.jsonl.zst` です。
 日付だけの指定はUTCの0時です。日時には `Z` または `+09:00` などのタイムゾーンが必要です。
 
 タイトルは `CODEX_HOME/session_index.jsonl` の `thread_name` を使います。タイトルを取得できないチャットは
@@ -312,12 +318,12 @@ knowledge-refinery session extract /path/to/rollout.jsonl --output /tmp/analysis
 | `--output PATH` | 新規JSONの保存先。必須 |
 | `--exclude-children` | 子孫を探さず、対象チャットだけ保存する |
 | `--sessions-dir DIR` | IDでの親ログ・子孫ログの探索先を置き換える。複数指定可。既定は `CODEX_HOME/sessions` |
+| `--include-archived` | `CODEX_HOME/archived_sessions` も探索する |
 
 `--session-id` はログ先頭の `session_meta.payload.session_id` が完全一致する親ログを選びます。
-親ログが見つからない場合や複数ある場合はエラーになります。ログのパスが分かる場合は直接指定できます。
+同じ親チャットの継続ファイルをまとめます。親を一意に識別できない場合はログのパスを指定します。
 既定では親子関係を確認できた子孫も、固有の `chat_id` を保持して保存します。
-アーカイブを含めるには通常ログとアーカイブのディレクトリを `--sessions-dir` で指定します。
-ID指定で親だけを保存するときも探索先を指定できます。パス指定で親だけを保存するときは `--sessions-dir` を省きます。
+`--exclude-children` でも、指定した探索先にある同じチャットの継続ファイルを含みます。
 入力は変更せず、既存ファイル・symlinkへの上書きは拒否します。保存先はmode 0600で作成します。
 本文は保存時に切り詰めません。解析JSONは匿名化されないため、公開・Git追跡の対象にしないでください。
 

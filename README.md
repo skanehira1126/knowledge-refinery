@@ -8,7 +8,7 @@ Codex や Claude Code で得た開発経験を、複数のプロジェクトか�
 
 ## はじめる
 
-Python 3.11 以上と `uv` を用意します。
+Python 3.11 以上と `uv` を用意します。初期設定に使う CLI はプラグインに同梱されています。
 
 ### Claude Code
 
@@ -17,69 +17,33 @@ claude plugin marketplace add skanehira1126/knowledge-refinery
 claude plugin install knowledge-refinery@knowledge-refinery
 ```
 
-ローカルの変更を使う場合は、最初のコマンドの GitHub 名を checkout の絶対パスに置き換えます。
-新しい Claude Code セッションで `/knowledge-refinery:refinery-project` を呼び出して、
-利用先のリポジトリを設定するか、既存の設定を確認してください。Skills、hooks、ローカル MCP、
-Claude Code 内で使う CLI が一緒に読み込まれます。セッション解析が扱う履歴は Codex 形式です。
-
 ### Codex / ChatGPT desktop app
-
-まずPluginとCLIをインストールします。
 
 ```bash
 codex plugin marketplace add skanehira1126/knowledge-refinery
-uv tool install git+https://github.com/skanehira1126/knowledge-refinery.git
 ```
 
-CodexのPlugin画面で`knowledge-refinery`をインストールし、新しいtask/sessionを開きます。
-
-すでにインストール済みのPluginとCLIを更新する場合は、次を実行します。
-
-```bash
-codex plugin marketplace upgrade knowledge-refinery
-uv tool upgrade knowledge-refinery
-```
-
-CodexのPlugin画面で`knowledge-refinery`を再インストールし、新しいtask/sessionを開きます。
+マーケットプレイスを追加したら、Codex のプラグイン画面で `knowledge-refinery` をインストールします。
 
 ### vault と利用先リポジトリの設定
 
-次に、knowledgeの保存先となる中央vaultを一度だけ作ります。
+利用したいリポジトリで新しいセッションを開きます。Codex では `$refinery-project`、
+Claude Code では `/knowledge-refinery:refinery-project` を選んで、次のように依頼してください。
 
-```bash
-REFINERY_VAULT="${HOME}/knowledge-refinery-vault"
-knowledge-refinery vault init --root "$REFINERY_VAULT"
-```
+> このリポジトリで Knowledge Refinery を使えるように設定してください。
 
-Knowledge Refineryを使いたいrepoで、次を実行します。
+ナレッジの保存先（vault）とプロジェクト ID を確認すると、スキルが必要に応じて vault を作成し、リポジトリを登録して動作を確認します。
+Codex では `/hooks`（デスクトップでは `Settings → Hooks`）で、使う hook を確認して信頼してください。
 
-```bash
-REFINERY_VAULT="${HOME}/knowledge-refinery-vault"
-PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+登録後は新しいセッションで普段どおり開発を依頼できます。エージェントは過去の経験が役立つときに検索し、再利用できる試行や失敗を記録します。検索・診断・提案のみの依頼は読み取りで完了します。
 
-knowledge-refinery project setup \
-  --target "$PROJECT_ROOT" \
-  --vault "$REFINERY_VAULT"
-
-knowledge-refinery doctor --target "$PROJECT_ROOT"
-```
-
-project IDと表示名はrepoのdirectory名から自動設定されます。`doctor`で`ok: yes`を確認してください。
-有効なrepoでは、新しいセッションの開始時とコンテキストの圧縮後に、Pluginの固定hookが
-Knowledge Refineryの運用指示を渡します。Codexでは、CLIの`/hooks`またはデスクトップアプリの
-`Settings → Hooks`で、新しいhookを確認して信頼してください。
-通常の導入で`AGENTS.md`の編集は不要です。ファイルにも指示を置きたい場合は`--agents`を使えます。
-
-新しいtaskを開き、いつもどおり開発を依頼してください。設計判断・原因調査・手法比較など、
-過去の知識が役立つ場面で検索し、単純なtypo・書式変更では省略します。再利用できる試行や
-有用な失敗をexperienceに記録し、複数のexperienceが同じ判断原則を裏付けたらproject memoryを作成・更新します。
-保存した結果は読み戻します。検索・診断・提案のみの依頼は読み取りで完了します。
+[端末用 CLI と手動セットアップ](docs/getting-started.md)・[Codex プラグインの更新](docs/development.md#plugin更新の確認)
 
 ## 主な機能
 
 - 成功、失敗、不採用案をexperienceとして記録し、既存の原則が判断に影響したときは採用・見送りの理由と観測結果も残す
 - experienceから再利用可能なproject memoryとshared memoryを抽出する
-- 現在のrepoから、必要に応じて他repoのknowledgeまで検索する
+- 現在のrepoから、必要に応じて他repoのknowledgeまで検索する。MCPの検索語は `terms` の配列で指定し、未知の引数はエラーとして返す。[MCPの検索引数](docs/mcp.md)
 - `refinery_archive_memory`で原則を通常検索から外し、旧IDに本文・理由・任意の後継参照を残す。履歴を含めるには`refinery_search_memory`の`include_archived`を指定する。[運用ルール](docs/knowledge-operations.md#memory-lifecycle)
 - 入力時、対象ツールの実行前後、サブエージェント開始時に、その場面用に保存したprojectの前提をMCPから渡す。[配信先一覧](docs/cli.md#context)
 - 任意でCodexを使い、中央vaultの検証済みsnapshotから根拠付きの深い検索を行う
@@ -101,6 +65,8 @@ Knowledge Refineryの運用指示を渡します。Codexでは、CLIの`/hooks`�
 「Knowledge Refineryにこの課題を記録して」「project exampleの進行中issueを一覧して」のように
 目的を伝えるか、`$refinery-issue`を指定して依頼できます。issueはactive vault単位で管理し、
 project未所属・複数projectへの紐付けに対応します。repo登録や有効化は不要です。
+エージェントは `refinery_list_issues` でproject ID・状態・タグを絞り、
+`refinery_get_issue` で本文・完了条件・履歴・revisionを取得します。作成と更新にはCLIを使います。
 作成・更新は依頼された範囲で行い、ナレッジの自動記録からissueを自動生成しません。
 使い方は[refinery-issue](docs/skills/refinery-issue.md)と[CLIリファレンス](docs/cli.md#issue)を参照してください。
 
@@ -151,9 +117,11 @@ handoffはprojectごとの専用領域に保存され、通常のexperience／me
 
 ## セッション解析と改善提案
 
-終了済みチャットの振り返りには[refinery-review-session](docs/skills/refinery-review-session.md)、
+終了済みの Codex チャットの振り返りには[refinery-review-session](docs/skills/refinery-review-session.md)、
 レポートから改善案を比較するには[refinery-propose-improvements](docs/skills/refinery-propose-improvements.md)を
 明示して呼び出します。成果物はローカルのMarkdownで、vaultへ自動保存しません。
 
 候補一覧は現在の登録済みGitプロジェクトとworktreeに絞ります。
+期間内に実際に作業したチャットは `session list --active-since … --active-before … --include-archived` で探せます。
+圧縮ログと同じチャットの継続ファイルも直接抽出できます。
 CLIを直接使う場合は[sessionコマンド](docs/cli.md#session)を参照してください。

@@ -152,9 +152,10 @@ def _validate_experience_options(
 
 def parse_evidence_reference(reference: str) -> dict[str, str]:
     """Parse a compact evidence reference into its structured representation."""
+    example = "Use --evidence file:reports/result.md or --evidence git:<commit>:reports/result.md"
     prefix, separator, value = reference.partition(":")
-    if not separator or not value:
-        raise ValueError(f"Invalid evidence reference: {reference}")
+    if not separator or not value or reference.lstrip().startswith(("{", "[")):
+        raise ValueError(f"Invalid evidence reference. {example}")
     if prefix == "untracked":
         return {
             "type": "file",
@@ -175,7 +176,7 @@ def parse_evidence_reference(reference: str) -> dict[str, str]:
         return {"type": "url", "uri": value, "retention": "external"}
     if prefix == "external":
         return {"type": "external", "uri": value, "retention": "external"}
-    raise ValueError(f"Unsupported evidence type: {prefix}")
+    raise ValueError(f"Unsupported evidence type: {prefix}. {example}")
 
 
 def upsert_experience(
@@ -1092,7 +1093,13 @@ def _validate_evidence_path(value: str) -> None:
         or ".." in posix.parts
         or ".." in windows.parts
     ):
-        raise ValueError("evidence path must be repository-relative and must not contain ..")
+        raise ValueError(
+            "evidence path must be repository-relative and must not contain .. "
+            '(e.g. {"type":"file","path":"reports/result.md","retention":"reference"}). '
+            "For committed evidence use type=git, commit=<sha>, path=reports/result.md, "
+            "retention=source. For an external artifact use type=external, uri, "
+            "retention=external."
+        )
 
 
 def normalize_evidence(

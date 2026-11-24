@@ -33,12 +33,16 @@ extract/search/show/statsは既定で子孫を含める。`extract`はログを�
 | `--title TEXT` | タイトルの部分一致。大文字・小文字を区別しない |
 | `--updated-since DATE` | 更新日時の下限。この時刻を含む。省略すると下限なし |
 | `--updated-before DATE` | 更新日時の上限。この時刻を含まない。省略すると上限なし |
+| `--active-since DATE` / `--active-before DATE` | 親自身が項目を完了した期間。下限以上、上限未満 |
+| `--include-archived` | アーカイブの通常・圧縮ログも探索 |
+| `--include-removed-worktrees` | 削除済みCodex worktreeの記録済みoriginとコミットを照合 |
 | `--sessions-dir DIR` | ログの探索先。複数指定可能。既定のCODEX_HOME/sessionsを置き換える |
 | `--limit N` | 一度に返すチャット数。既定20、正の整数 |
 | `--offset N` | 直近順の一覧で飛ばす件数。既定0、0以上 |
 
 対象のGitルートに有効な `.refinery.yaml` が必要。未登録・無効ならエラーになる。
-同じGit共通ディレクトリのworktreeを含め、削除済みworktree・cwd不明・Git外・別cloneは除く。
+同じGit共通ディレクトリのworktreeを含む。削除済みCodex worktreeまで調べる場合は
+`--include-removed-worktrees` を指定し、`project_match` が示す照合根拠を確認する。
 対象worktreeに設定がなければ登録済みの作業ツリーを `--project` に指定する。
 出力のproject_id・project_root・git_common_dirで対象を確認する。
 
@@ -71,8 +75,8 @@ knowledge-refinery session list \
 | `--sessions-dir DIR` | IDでの親ログ・子孫ログの探索先。複数指定可能。既定の探索先を置き換える |
 
 探索先の既定は `CODEX_HOME/sessions`（CODEX_HOME未設定なら `~/.codex/sessions`）。
-アーカイブや別の場所は `--sessions-dir` で明示する。通常ログとアーカイブを両方探す場合は
-両方のディレクトリを指定する。パス指定で親だけを抽出するときは `--sessions-dir` を省く。
+通常ログとアーカイブを両方探す場合は `--include-archived` を指定する。
+圧縮ログも直接読める。親だけを抽出するときも同じチャットの継続ファイルを含む。
 探索対象はmetadataで親子関係を確認できた子孫で、無関係なチャットは含めない。
 
 ### search / show / stats 共通

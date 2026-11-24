@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run --no-dev --project \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}\" knowledge-refinery context guidance-hook || exit 1"
+            "command": "\"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/bin/knowledge-refinery\" context guidance-hook || exit 1"
           }
         ]
       }

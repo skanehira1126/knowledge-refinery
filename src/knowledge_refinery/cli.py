@@ -1158,7 +1158,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Parse arguments, dispatch the selected command, and render CLI errors."""
     parser = build_parser()
     try:
-        args = parser.parse_args(argv)
+        tokens = list(sys.argv[1:] if argv is None else argv)
+        if tokens[:1] == ["status"] or (
+            tokens[:2] == ["project", "status"]
+            and any(t.partition("=")[0] == "--project-path" for t in tokens[2:])
+        ):
+            parser.error("Use: knowledge-refinery project status --target <repo> --json")
+        args = parser.parse_args(tokens)
         return int(args.handler(args))
     except RefineryCliError as error:
         print(error.render(), file=sys.stderr)

@@ -20,7 +20,8 @@ Skill名や目的を指定して依頼することもできます。検索・診
 具体例は[新しいチャットへの引き継ぎ](handoffs.md)を参照してください。
 
 課題・TODOの管理は`refinery-issue`へ依頼します。たとえば「Knowledge Refineryにこの課題を
-記録して」「project exampleの進行中issueを一覧して」と伝えると、SkillがCLIで操作します。
+記録して」「project exampleの進行中issueを一覧して」と伝えると、Skillが作成・更新にはCLI、
+一覧・詳細の取得にはMCPを使います。
 issueはvault単位であり、repo登録や有効化は不要です。ナレッジの自動運用設定によってissueを
 自動作成・更新することはありません。詳細は[refinery-issue](skills/refinery-issue.md)を参照してください。
 

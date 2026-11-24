@@ -3,6 +3,10 @@
 Read this file when using any Knowledge Refinery skill. It governs execution scope,
 authorization, and completion; each `SKILL.md` owns its task-specific workflow.
 
+In CLI examples, `knowledge-refinery` means the bundled executable at
+`../bin/knowledge-refinery` relative to this file's directory. Run its quoted absolute
+path from the working directory specified by the workflow.
+
 ## Scope and authorization
 
 - Respect system, developer, environment, access-control, and organizational requirements.

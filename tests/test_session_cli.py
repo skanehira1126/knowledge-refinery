@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ from knowledge_refinery.session_query import load_analysis
 from knowledge_refinery.session_query import search_records
 from knowledge_refinery.session_query import session_stats
 from knowledge_refinery.session_query import show_records
+from knowledge_refinery.session_sources import zstd
 
 
 @pytest.fixture(autouse=True)
@@ -706,11 +708,76 @@ def test_cli_extract_excludes_descendants(
     write_log(logs / "child.jsonl", meta("child", "parent"), call(), output())
     target = tmp_path / "analysis.json"
     args = ["session", "extract", str(parent), "--exclude-children", "--output", str(target)]
-    assert main([*args, "--sessions-dir", str(logs)]) == 2
-    assert not target.exists()
-    capsys.readouterr()
-    assert main(args) == 0
+    assert main([*args, "--sessions-dir", str(logs)]) == 0
     assert {c["chat_id"] for c in json.loads(target.read_text())["chats"]} == {"parent"}
+
+
+@pytest.mark.parametrize("by_id", [True, False])
+def test_extract_mixed_segments_once_with_source_lines(tmp_path: Path, by_id: bool) -> None:
+    home = tmp_path / "codex"
+    name = "rollout-2026-11-07T01-00-00-root.jsonl"
+    segment = "abcdef01-1234-5678-9012-abcdef123456"
+    base = write_log(home / "sessions" / name, meta("root"), call(), output(), call("cross"))
+    archive = home / "archived_sessions"
+    archive.mkdir(parents=True)
+    (archive / (name + ".zst")).write_bytes(zstd.compress(base.read_bytes()))
+    continued = archive / f"rollout-2026-11-07T02-00-00-root_{segment}.jsonl.zst"
+    data = (
+        "\n".join(
+            json.dumps(r)
+            for r in (
+                meta("root"),
+                output("cross"),
+                call(),
+                output(),
+                call("retry"),
+                output("retry"),
+            )
+        )
+        + "\n"
+    )
+    continued.write_bytes(zstd.compress(data.encode()))
+    write_log(home / "sessions/child.jsonl", meta("child", "root"), call(), output())
+    dest = tmp_path / "result.json"
+    source = ["--session-id", "shared"] if by_id else [str(continued)]
+    assert (
+        main(
+            [
+                "session",
+                "extract",
+                *source,
+                "--include-archived",
+                "--exclude-children",
+                "--output",
+                str(dest),
+            ]
+        )
+        == 0
+    )
+    bundle = load_analysis(dest)
+    (chat,) = bundle["chats"]
+    assert {s["segment_id"] for s in chat["sources"]} == {"base", segment}
+    second = next(s for s in chat["sources"] if s["segment_id"] == segment)
+    assert second["sha256"] == hashlib.sha256(continued.read_bytes()).hexdigest()
+    assert second["jsonl_sha256"] == hashlib.sha256(data.encode()).hexdigest()
+    assert len(bundle["calls"]) == 3 and all(
+        c["link_status"] == "matched" for c in bundle["calls"]
+    )
+    cross = next(c for c in bundle["calls"] if c["call_id"] == "cross")
+    assert cross["request_record"] == "root:L4"
+    assert cross["result_records"] == [f"root:{segment}:L2"]
+    assert session_stats(bundle)["duplicate_records"] == 2
+    assert any(w["code"] == "duplicate_source" for w in bundle["warnings"])
+
+
+def test_truncated_zstd_does_not_save_partial_bundle(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "broken.jsonl.zst"
+    source.write_bytes(zstd.compress(json.dumps(meta("root")).encode())[:-1])
+    target = tmp_path / "result.json"
+    assert main(["session", "extract", str(source), "--output", str(target)]) == 2
+    assert not target.exists() and "decompress" in capsys.readouterr().err
 
 
 def test_cli_extract_by_session_id_keeps_each_descendant_chat(

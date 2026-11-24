@@ -132,6 +132,8 @@ def _preview(
         )
     }
     content = record.get("data")
+    if "segment_id" in record:
+        result["segment_id"] = record["segment_id"]
     if record.get("source_metadata") is not None:
         content = {"payload": content, "metadata": record["source_metadata"]}
     result["warnings"] = [w for w in warnings if w.get("record_id") == record["record_id"]]

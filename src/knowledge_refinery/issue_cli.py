@@ -7,8 +7,8 @@ from knowledge_refinery.config_ops import get_active_vault
 from knowledge_refinery.issue_ops import ISSUE_STATUSES
 from knowledge_refinery.issue_ops import create_issue
 from knowledge_refinery.issue_ops import get_issue
+from knowledge_refinery.issue_ops import list_issue_summaries
 from knowledge_refinery.issue_ops import list_issue_tags
-from knowledge_refinery.issue_ops import list_issues
 from knowledge_refinery.issue_ops import maintain_issue_tag
 from knowledge_refinery.issue_ops import update_issue
 
@@ -72,10 +72,9 @@ def run_issue(args: argparse.Namespace) -> int:
     elif operation == "show":
         payload = get_issue(vault, args.issue_id)
     elif operation == "list":
-        payload = [
-            {key: value for key, value in issue.items() if key != "history"}
-            for issue in list_issues(vault, project=args.project, status=args.status, tag=args.tag)
-        ]
+        payload = list_issue_summaries(
+            vault, project=args.project, status=args.status, tag=args.tag
+        )
     elif operation == "update":
         payload = update_issue(
             vault,

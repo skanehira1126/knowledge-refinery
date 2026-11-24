@@ -93,7 +93,8 @@ issueはprojectに所有させず、active vault直下の`issues.json`へ独立�
 issueコマンドは保存データのschema・ID重複・履歴を読み込み時に検証します。
 
 `issue_ops.py`がドメイン処理と永続化を所有し、`issue_cli.py`がCLIの入力・出力を担当します。
-`refinery-issue` SkillからローカルCLIを使います。issue専用のMCP toolsやリモート通信はありません。
+`mcp_server.py` は同じドメイン処理を `refinery_list_issues` と `refinery_get_issue` で公開します。
+`refinery-issue` Skillは参照にこの2つのMCP tool、更新やタグ管理にローカルCLIを使います。
 ローカルrepoのパスや設定を必要とせず、project IDで紐付けるvault単位の操作です。
 そのためrepoの`enabled`はissueの閲覧・更新権限を表しません。
 

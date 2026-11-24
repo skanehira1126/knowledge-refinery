@@ -9,14 +9,15 @@
 |---|---|
 | Codex、ChatGPT desktop app または Claude Code | PluginとSkillsを利用する |
 | Python 3.11以上 | CLIとローカルMCPを実行する |
-| `uv` | CLIのインストールとMCPの起動に使う |
+| `uv` | 同梱CLIとローカルMCPを起動する |
 | knowledge保存用directory | 複数repoのknowledgeを集約する |
 
 セットアップは次の順序で進めます。
 
 ```mermaid
 flowchart LR
-    P["1. Plugin"] --> C["2. CLI"] --> V["3. 中央vault"] --> R["4. repo登録"] --> D["5. doctor"]
+    P["1. Plugin"] --> V["3. 中央vault"] --> R["4. repo登録"] --> D["5. doctor"]
+    P --> C["2. 端末用CLI（任意）"] --> V
 ```
 
 ## 1. Pluginを追加
@@ -31,7 +32,6 @@ claude plugin install knowledge-refinery@knowledge-refinery
 ローカル checkout から導入する場合は GitHub 名の代わりに checkout の絶対パスを指定します。
 新しいセッションで `/knowledge-refinery:refinery-project` を呼び出すと、
 同梱 CLI で vault と対象 repo を設定できます。既存の有効な repo は同じ vault を引き続き使えます。
-Claude Code の Bash 内で使う CLI は同梱されています。通常の端末からも使う場合は手順 2 で導入してください。
 
 ### Codex
 
@@ -48,11 +48,13 @@ Claude Code の Bash 内で使う CLI は同梱されています。通常の端
     codex plugin marketplace add "$PLUGIN_ROOT"
     ```
 
-Codex CLIの `/plugins`、IDEのPlugin settings、またはdesktop appのPlugin directoryで `knowledge-refinery` をinstallします。install後は新しいtask/sessionを開いてください。
+Codex CLIの `/plugins`、IDEのPlugin settings、またはdesktop appのPlugin directoryで `knowledge-refinery` をinstallします。
+新しいタスクで `$refinery-project` に依頼すると、同梱CLIでvaultと利用先リポジトリを設定できます。
 
-## 2. CLIを追加
+## 2. 端末用CLIを追加（任意）
 
-Skillがproject lifecycleを常に同じ手順で操作できるよう、CLIをPATHへinstallします。
+CodexとClaude CodeのSkill・hookが使うCLIは、Pluginと一緒に更新されます。
+手順3以降のコマンドを自分の端末で `knowledge-refinery` と入力して実行する場合は、CLIをPATHへインストールします。
 
 === "GitHub"
 
@@ -164,7 +166,7 @@ MCP接続後は `refinery_info` の `version` を `MCP_VERSION` に設定し、d
 knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"
 ```
 
-一致しない場合はPluginとCLIの片方だけが更新されています。両方を同じreleaseへ揃えてから書き込みを開始します。
+端末用CLIの版がMCPと異なる場合は、`uv tool upgrade knowledge-refinery` などで同じリリースに揃えてから書き込みを開始します。
 
 !!! success "セットアップ完了"
     `doctor`が`ok: yes`を返し、Plugin settingsに`knowledge-refinery`が表示されていれば準備完了です。

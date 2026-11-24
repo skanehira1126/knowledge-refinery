@@ -62,6 +62,19 @@ item_completedのSubAgentActivityにはagent_path、agent_thread_id、id、kind�
 SubAgentActivity／Extensionの一部ではitem.idと親の呼び出しcall_idが一致した。
 CommandExecution等では一致しない例もあるため、全イベントを類似した呼び出しへ統合しない。
 
+## 2026-11-24に確認した保存形式と活動期間
+
+Codexの公開資料は、threadのアーカイブとアーカイブ済みthreadの一覧取得を説明している。
+以下のファイル名・圧縮形式・イベント時刻はローカルの保存履歴で確認した。
+[Codex App Serverのthread API](https://developers.openai.com/codex/app-server/)
+
+- 5リポジトリの月次調査では通常・アーカイブ両ディレクトリにJSONLとzstd圧縮JSONLがあった。
+  更新時刻が締切後でも、親自身のthread IDとitem IDを持つ完了イベントのcompleted_at_msで期間内の活動を確認できた。
+- Codex `0.171.0-alpha.13` の同一親チャットで、同じchat ID・session IDを持つ2ファイルを確認した。
+  2本目は開始日時と末尾の区分UUIDが異なり、ordinalは0から再開した。行番号は各ファイル内で識別する。
+- 既に削除されたCodex worktreeに対応する親ログ1件では、先頭metadataのrepository_urlとcommit_hashを、
+  対象リポジトリのoriginと現存するGitコミットに照合できた。
+
 ## 現在の実装契約
 
 [解析JSONとCLIの仕様](../../../../docs/session-analysis.md)を正本とする。

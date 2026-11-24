@@ -33,7 +33,7 @@ def configure_session_parser(parser: argparse.ArgumentParser) -> None:
     """Register local session commands independently of vault and MCP configuration."""
     commands = parser.add_subparsers(required=True)
     listing = commands.add_parser(
-        "list", help="List root chats by title and log modification time"
+        "list", help="List root chats by title, log modification time, or activity"
     )
     listing.add_argument(
         "--project",
@@ -49,6 +49,17 @@ def configure_session_parser(parser: argparse.ArgumentParser) -> None:
     listing.add_argument(
         "--updated-before",
         help="exclusive upper bound: YYYY-MM-DD (UTC) or ISO timestamp with timezone",
+    )
+    listing.add_argument(
+        "--active-since", help="inclusive start for the root chat's completed items"
+    )
+    listing.add_argument(
+        "--active-before", help="exclusive end for the root chat's completed items"
+    )
+    listing.add_argument(
+        "--include-removed-worktrees",
+        action="store_true",
+        help="include removed Codex worktrees whose recorded origin and commit match the project",
     )
     listing.add_argument(
         "--sessions-dir",
@@ -78,6 +89,12 @@ def configure_session_parser(parser: argparse.ArgumentParser) -> None:
         action="append",
         help="discovery root (repeatable; defaults to CODEX_HOME/sessions)",
     )
+    for command in (listing, extract):
+        command.add_argument(
+            "--include-archived",
+            action="store_true",
+            help="also discover rollouts in CODEX_HOME/archived_sessions",
+        )
     extract.set_defaults(handler=run_session_extract)
 
     search = commands.add_parser("search", help="Find records in saved analysis JSON")
@@ -181,16 +198,29 @@ def configure_session_parser(parser: argparse.ArgumentParser) -> None:
     stats.set_defaults(handler=run_session_query, operation="stats")
 
 
+def _session_roots(args: argparse.Namespace, home: Path) -> list[Path]:
+    roots = args.sessions_dir or [home / "sessions"]
+    archive = home / "archived_sessions"
+    if args.include_archived and archive.is_dir():
+        if not args.sessions_dir and not roots[0].is_dir():
+            return [archive]
+        return [*roots, archive]
+    return roots
+
+
 def run_session_list(args: argparse.Namespace) -> int:
-    """Print a bounded metadata-only inventory of root chat logs."""
+    """Print a bounded inventory of matching root chats."""
     home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
     result = list_sessions(
-        args.sessions_dir or [home / "sessions"],
+        _session_roots(args, home),
         project=args.project,
         title=args.title,
         title_index=home / "session_index.jsonl",
         updated_since=args.updated_since,
         updated_before=args.updated_before,
+        active_since=args.active_since,
+        active_before=args.active_before,
+        removed_worktrees_root=home / "worktrees" if args.include_removed_worktrees else None,
         limit=args.limit,
         offset=args.offset,
     )
@@ -201,18 +231,14 @@ def run_session_list(args: argparse.Namespace) -> int:
 def run_session_extract(args: argparse.Namespace) -> int:
     """Save full evidence exclusively and print a compact receipt, not the raw transcript."""
     home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
-    roots = args.sessions_dir or [home / "sessions"]
+    roots = _session_roots(args, home)
     if args.session_id is not None:
         result = extract_session_by_id(
             args.session_id, roots=roots, include_children=not args.exclude_children
         )
     else:
-        if args.sessions_dir and args.exclude_children:
-            raise ValueError(
-                "--sessions-dir cannot be combined with --exclude-children for a path"
-            )
         result = extract_session(
-            args.path, discovery_roots=None if args.exclude_children else roots
+            args.path, discovery_roots=roots, include_children=not args.exclude_children
         )
     output_path = args.output.expanduser()
     text = json.dumps(result, ensure_ascii=False, indent=2) + "\n"

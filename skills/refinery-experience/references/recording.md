@@ -1,7 +1,8 @@
 # Record an experience
 
 1. Before creating an experience, choose a stable, descriptive lowercase slug for `experience_id`. Record one integrated document with `refinery_record_experience`; do not split the attempt and its evaluation into separate records. Creating a new experience omits `expected_updated_at`. Updating an existing experience requires the exact `updated_at` returned by `refinery_get_experience` or the prior record response. On update, omitted optional fields are preserved, an explicit empty list clears a list field, and `clear_confidence: true` explicitly clears confidence. If the revision is stale, read and reconcile before retrying.
-2. Search the returned ID or read it back to confirm the saved record.
+2. Check that the MCP result has `isError: false` and returns the intended `experience_id`.
+   Read that ID with `refinery_get_experience` and verify the saved content before reporting success.
 
 If a create call has an ambiguous outcome, do not blindly retry it. First use exact get with the chosen `experience_id`, then search that ID if needed. Retry creation only after confirming that the record does not exist.
 
@@ -43,6 +44,16 @@ Pass evidence as structured mappings:
 - Local or untracked file: `type: file`, `path`, `retention: reference`, and optional `git_state`. When present, `git_state` must be one of `tracked`, `untracked`, `modified`, `staged`, `ignored`, or `deleted`.
 - Committed source: `type: git`, `commit`, `path`, `retention: source`.
 - Remote evidence: `type: mlflow`, `url`, or `external`, with `uri` and `retention: external`.
+
+Use a repository-relative path for both file and Git evidence, for example
+`{"type":"file","path":"reports/result.md","retention":"reference"}`. For a committed result use
+`{"type":"git","commit":"<commit>","path":"reports/result.md","retention":"source"}`.
+The CLI accepts compact references such as `--evidence file:reports/result.md` or
+`--evidence git:<commit>:reports/result.md`.
+
+For a comparison someone may repeat, cite the inspected commit and path, a retained artifact
+or a session ID with the call or record position. If the only input or output is temporary,
+include the decisive measurements and conditions in the body and identify the temporary reference.
 
 Link related or superseded experience IDs when known, and do not invent evidence that was not inspected.
 

@@ -8,6 +8,19 @@ from knowledge_refinery.cli import build_parser
 from knowledge_refinery.cli import main
 
 
+@pytest.mark.parametrize(
+    "args",
+    [["status"], ["status", "--project-path", "."], ["project", "status", "--project-path=."]],
+)
+def test_status_mistakes_show_repo_command(
+    args: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as failure:
+        main(args)
+    assert failure.value.code == 2
+    assert "knowledge-refinery project status --target <repo> --json" in capsys.readouterr().err
+
+
 def test_parser_rejects_removed_deep_search_command(capsys: pytest.CaptureFixture[str]) -> None:
     parser = build_parser()
     assert "deep-search" not in parser.format_help()
@@ -617,7 +630,7 @@ def test_cli_can_disable_status_and_reenable_project(
     assert drift["runtime"][-1] == {
         "name": "version_match",
         "ok": False,
-        "detail": "cli=0.9.0, mcp=0.1.0",
+        "detail": "cli=0.9.1, mcp=0.1.0",
     }
 
 

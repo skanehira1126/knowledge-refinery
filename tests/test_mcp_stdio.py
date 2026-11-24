@@ -13,6 +13,8 @@ from mcp.types import TextContent
 import pytest
 
 from knowledge_refinery.config_ops import set_active_vault
+from knowledge_refinery.mcp_server import refinery_record_experience
+from knowledge_refinery.mcp_server import refinery_record_memory
 from knowledge_refinery.vault_ops import init_vault
 from knowledge_refinery.vault_ops import setup_project
 
@@ -27,6 +29,10 @@ def test_stdio_server_lists_expected_tools(
     init_vault(vault)
     setup_project(project, vault, project_id="product")
     set_active_vault(vault)
+    refinery_record_experience(
+        str(project), "Test", "Search", "completed", "Result", experience_id="trial"
+    )
+    refinery_record_memory(str(project), "Test", "Search", ["trial"], memory_id="principle")
 
     async def exercise_server() -> None:
         root = Path(__file__).resolve().parent.parent
@@ -47,6 +53,34 @@ def test_stdio_server_lists_expected_tools(
             async with ClientSession(reader, writer) as session:
                 await session.initialize()
                 result = await session.list_tools()
+                for name in ("refinery_search_experiences", "refinery_search_memory"):
+                    args = {"project_path": str(project)}
+                    listing = await session.call_tool(name, args)
+                    assert not listing.isError and listing.structuredContent
+                    assert len(listing.structuredContent["result"]) == 1
+                    empty = await session.call_tool(name, {**args, "terms": ["absent-keyword"]})
+                    assert not empty.isError and empty.structuredContent == {"result": []}
+                    rejected = await session.call_tool(
+                        name,
+                        {**args, "query": "absent-keyword", "limit": 1, "include_shared": True},
+                    )
+                    assert rejected.isError and rejected.structuredContent is None
+                    message = rejected.content[0]
+                    assert isinstance(message, TextContent)
+                    assert all(
+                        key in message.text
+                        for key in ("query", "limit", "include_shared", "terms")
+                    )
+                    schema = next(t.inputSchema for t in result.tools if t.name == name)
+                    assert schema["additionalProperties"] is False
+                issues = await session.call_tool("refinery_list_issues", {})
+                assert not issues.isError and issues.structuredContent == {"result": []}
+                typo = await session.call_tool(
+                    "refinery_list_issues", {"project_path": str(project)}
+                )
+                assert typo.isError
+                missing = await session.call_tool("refinery_get_issue", {"issue_id": "absent"})
+                assert missing.isError
                 status = await session.call_tool(
                     "refinery_vault_status", {"vault_path": str(vault)}
                 )
@@ -156,6 +190,8 @@ def test_stdio_server_lists_expected_tools(
 
         names = {tool.name for tool in result.tools}
         assert names == {
+            "refinery_list_issues",
+            "refinery_get_issue",
             "refinery_list_contexts",
             "refinery_get_context",
             "refinery_deliver_context",
@@ -233,6 +269,10 @@ def test_stdio_server_lists_expected_tools(
             "refinery_list_projects": (
                 "active vaultに登録されたprojectの識別・検索用metadataを一覧取得します。"
             ),
+            "refinery_list_issues": (
+                "active vaultのissueをproject ID・状態・タグで絞り込み、更新順に一覧取得します。"
+            ),
+            "refinery_get_issue": "issue IDで本文・完了条件・更新履歴・revisionを取得します。",
             "refinery_record_experience": (
                 "experienceを作成・更新します。更新の省略fieldは保持し、空listはclearします。"
             ),

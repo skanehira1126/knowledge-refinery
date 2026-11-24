@@ -27,16 +27,8 @@ IDやパスが未確定なら、登録済みプロジェクトの候補を `sess
 
 ## 2. CLIで抽出する
 
-対象のCodexログが読める環境で `knowledge-refinery session` を使う。未導入なら次で導入する。
-
-```bash
-uv tool install git+https://github.com/skanehira1126/knowledge-refinery.git
-```
-
-タイトル指定時は `knowledge-refinery session list --help` で `--title` を確認する。
-ID指定時は `knowledge-refinery session extract --help` で `--session-id` を確認する。
-古い版なら `uv tool upgrade knowledge-refinery` で更新する。
-導入・更新・抽出が失敗した場合は原因を報告し、解析を保留する。
+対象のCodexログが読める環境で、Plugin同梱の `knowledge-refinery session` を使う。
+抽出に失敗した場合は原因を報告し、解析を保留する。
 
 `/status` のセッションIDを使う場合は、CLIが共有 `session_id` で親ログを探し、既定で子孫も抽出する。
 標準出力の `root_chat_id` が親チャットの固有ID。候補が複数ある場合は、対象のログパスを確定してから進める。

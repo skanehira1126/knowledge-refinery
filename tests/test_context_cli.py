@@ -2,6 +2,7 @@ import io
 import json
 from pathlib import Path
 import re
+import shlex
 from typing import Any
 
 import pytest
@@ -75,7 +76,9 @@ def test_manifests_route_matching_events_to_the_host_server(project_store: Path)
         assert set(groups) == {"SessionStart", *events}
         (start,) = groups.pop("SessionStart")
         (fixed,) = start["hooks"]
-        assert fixed["type"] == "command" and " context guidance-hook " in fixed["command"]
+        program, *args = shlex.split(fixed["command"])
+        assert fixed["type"] == "command" and program.endswith("/bin/knowledge-refinery")
+        assert args[:2] == ["context", "guidance-hook"]
         for source in ("startup", "compact", "resume", "clear", "fork"):
             assert bool(re.fullmatch(start["matcher"], source)) == (
                 source in ("startup", "compact")

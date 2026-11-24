@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from backports import zstd
 import pytest
 
 from knowledge_refinery.cli import main
@@ -13,6 +12,7 @@ from knowledge_refinery.session_query import load_analysis
 from knowledge_refinery.session_query import search_records
 from knowledge_refinery.session_query import session_stats
 from knowledge_refinery.session_query import show_records
+from knowledge_refinery.session_sources import zstd
 
 
 @pytest.fixture(autouse=True)

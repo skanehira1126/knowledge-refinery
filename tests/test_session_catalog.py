@@ -5,11 +5,11 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
-from backports import zstd
 import pytest
 
 from knowledge_refinery.cli import main
 from knowledge_refinery.session_catalog import list_sessions
+from knowledge_refinery.session_sources import zstd
 from knowledge_refinery.vault_ops import init_vault
 from knowledge_refinery.vault_ops import set_project_enabled
 from knowledge_refinery.vault_ops import setup_project

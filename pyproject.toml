@@ -29,7 +29,7 @@ classifiers = [
 ]
 license-files = ["LICENSE"]
 dependencies = [
-    "backports.zstd>=1.0,<2",
+    "backports.zstd>=1.0,<2; python_version < '3.14'",
     "mcp>=1.0,<2",
     "PyYAML>=6.0.2,<7",
     "typing-extensions>=4.12,<5",
@@ -114,7 +114,6 @@ lines-after-imports = 2
 "tests/**" = ["D100", "D101", "D102", "D103", "D105", "D107"]
 
 [tool.mypy]
-python_version = "3.11"
 show_column_numbers = true
 files = ["src/knowledge_refinery", "tests"]
 check_untyped_defs = true

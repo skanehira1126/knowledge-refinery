@@ -5,8 +5,13 @@ from contextlib import contextmanager
 from io import BufferedIOBase
 from pathlib import Path
 import re
+import sys
 
-from backports import zstd
+
+if sys.version_info >= (3, 14):
+    from compression import zstd
+else:
+    from backports import zstd
 
 
 def rollout_paths(roots: list[Path]) -> list[Path]:

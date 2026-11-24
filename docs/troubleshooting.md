@@ -28,7 +28,7 @@ OFFのまま使うことはできません。MCPもserver側で拒否します�
 
 ## PluginとCLIのversionが違う
 
-`refinery_info.version` を `MCP_VERSION` に設定し、`knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"` へ渡します。不一致ならmarketplaceをupgradeしてPluginを再installし、CLIも `uv tool upgrade knowledge-refinery` で同じreleaseへ更新します。更新後は新しいtask/sessionを開きます。
+`refinery_info.version` を `MCP_VERSION` に設定し、`knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"` へ渡します。Skillとhookの同梱CLIはPluginの更新に含まれます。Pluginを再インストールしたら新しいセッションを開いてください。端末用CLIを別途導入している場合は、`uv tool upgrade knowledge-refinery` で同じリリースに揃えます。
 
 ## `vault_registered: false`
 
@@ -48,6 +48,8 @@ codex plugin marketplace upgrade knowledge-refinery
 `doctor` の `mcp_runtime: ok` はローカルserver moduleが起動可能であることを示しますが、Codex側でPluginがinstall/enabledかは判定しません。MCPが表示されない場合は必ずPlugin settingsも確認します。
 
 ## CLIが見つからない
+
+SkillとhookはPlugin同梱のCLIを使います。端末で `knowledge-refinery` コマンドを使う場合は、次を実行します。
 
 ```bash
 uv tool install git+https://github.com/skanehira1126/knowledge-refinery.git

@@ -9,18 +9,36 @@
 |---|---|
 | Codex、ChatGPT desktop app または Claude Code | PluginとSkillsを利用する |
 | Python 3.11以上 | CLIとローカルMCPを実行する |
-| `uv` | 同梱CLIとローカルMCPを起動する |
+| `uv` | 以下の手順でCLIをインストールする |
 | knowledge保存用directory | 複数repoのknowledgeを集約する |
 
 セットアップは次の順序で進めます。
 
 ```mermaid
 flowchart LR
-    P["1. Plugin"] --> V["3. 中央vault"] --> R["4. repo登録"] --> D["5. doctor"]
-    P --> C["2. 端末用CLI（任意）"] --> V
+    C["1. CLI"] --> P["2. Plugin"] --> V["3. 中央vault"] --> R["4. repo登録"] --> D["5. doctor"]
 ```
 
-## 1. Pluginを追加
+## 1. CLIをインストール
+
+Codex と Claude Code は、それぞれの PATH にある `knowledge-refinery` を使います。Plugin と同じ版の CLI を導入してください。
+
+=== "GitHub"
+
+    ```bash
+    uv tool install git+https://github.com/skanehira1126/knowledge-refinery.git
+    ```
+
+=== "開発checkout"
+
+    ```bash
+    PLUGIN_ROOT="$(pwd -P)"  # knowledge-refinery checkoutのrootで実行
+    uv tool install --editable "$PLUGIN_ROOT"
+    ```
+
+ホストを起動する環境で `knowledge-refinery --version` を実行し、導入した版が表示されることを確認します。
+
+## 2. Pluginを追加
 
 ### Claude Code
 
@@ -31,7 +49,7 @@ claude plugin install knowledge-refinery@knowledge-refinery
 
 ローカル checkout から導入する場合は GitHub 名の代わりに checkout の絶対パスを指定します。
 新しいセッションで `/knowledge-refinery:refinery-project` を呼び出すと、
-同梱 CLI で vault と対象 repo を設定できます。既存の有効な repo は同じ vault を引き続き使えます。
+CLI で vault と対象 repo を設定できます。既存の有効な repo は同じ vault を引き続き使えます。
 
 ### Codex
 
@@ -49,25 +67,7 @@ claude plugin install knowledge-refinery@knowledge-refinery
     ```
 
 Codex CLIの `/plugins`、IDEのPlugin settings、またはdesktop appのPlugin directoryで `knowledge-refinery` をinstallします。
-新しいタスクで `$refinery-project` に依頼すると、同梱CLIでvaultと利用先リポジトリを設定できます。
-
-## 2. 端末用CLIを追加（任意）
-
-CodexとClaude CodeのSkill・hookが使うCLIは、Pluginと一緒に更新されます。
-手順3以降のコマンドを自分の端末で `knowledge-refinery` と入力して実行する場合は、CLIをPATHへインストールします。
-
-=== "GitHub"
-
-    ```bash
-    uv tool install git+https://github.com/skanehira1126/knowledge-refinery.git
-    ```
-
-=== "開発checkout"
-
-    ```bash
-    PLUGIN_ROOT="$(pwd -P)"  # knowledge-refinery checkoutのrootで実行
-    uv tool install --editable "$PLUGIN_ROOT"
-    ```
+新しいタスクで `$refinery-project` に依頼すると、CLIでvaultと利用先リポジトリを設定できます。
 
 ## 3. 中央vaultを初期化
 
@@ -166,7 +166,7 @@ MCP接続後は `refinery_info` の `version` を `MCP_VERSION` に設定し、d
 knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"
 ```
 
-端末用CLIの版がMCPと異なる場合は、`uv tool upgrade knowledge-refinery` などで同じリリースに揃えてから書き込みを開始します。
+版が異なる場合は、ホストの PATH を確認し、CLI の更新後に新しいセッションを開きます。
 
 !!! success "セットアップ完了"
     `doctor`が`ok: yes`を返し、Plugin settingsに`knowledge-refinery`が表示されていれば準備完了です。

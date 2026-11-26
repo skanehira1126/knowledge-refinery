@@ -64,23 +64,22 @@ def _validate_plugin() -> None:
         raise ValueError("Codex accepts at most three interface.defaultPrompt entries")
 
 
-def _validate_mcp() -> None:
-    mcp = _read_json(ROOT / ".mcp.json")
+def _validate_mcp(path: Path) -> None:
+    mcp = _read_json(path)
     servers = mcp.get("mcpServers")
     if not isinstance(servers, dict) or "knowledge-refinery" not in servers:
-        raise ValueError(".mcp.json must define the knowledge-refinery server")
+        raise ValueError(f"{path} must define the knowledge-refinery server")
     server = servers["knowledge-refinery"]
     if not isinstance(server, dict):
         raise ValueError("knowledge-refinery MCP server config must be an object")
     expected_server = {
-        "cwd": ".",
-        "command": "uv",
-        "args": ["run", "--project", ".", "knowledge-refinery", "mcp", "serve"],
+        "command": "knowledge-refinery",
+        "args": ["mcp", "serve"],
     }
     for key, expected in expected_server.items():
         if server.get(key) != expected:
             raise ValueError(
-                f"MCP server {key} drift: expected={expected}, actual={server.get(key)}"
+                f"{path}: MCP server {key} drift: expected={expected}, actual={server.get(key)}"
             )
 
 
@@ -234,7 +233,8 @@ async def _validate_codex_loading() -> None:
 
 def validate() -> None:
     _validate_plugin()
-    _validate_mcp()
+    _validate_mcp(ROOT / ".mcp.json")
+    _validate_mcp(ROOT / ".claude-plugin" / "plugin.json")
     _validate_skills()
     _validate_marketplace()
     _validate_claude_distribution()

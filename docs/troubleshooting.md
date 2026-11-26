@@ -28,7 +28,7 @@ OFFのまま使うことはできません。MCPもserver側で拒否します�
 
 ## PluginとCLIのversionが違う
 
-`refinery_info.version` を `MCP_VERSION` に設定し、`knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"` へ渡します。Skillとhookの同梱CLIはPluginの更新に含まれます。Pluginを再インストールしたら新しいセッションを開いてください。端末用CLIを別途導入している場合は、`uv tool upgrade knowledge-refinery` で同じリリースに揃えます。
+`refinery_info.version` を `MCP_VERSION` に設定し、`knowledge-refinery doctor --target "$PROJECT_ROOT" --mcp-version "$MCP_VERSION"` へ渡します。この値は接続中のMCPサーバーの版です。SessionStart hook の通知には Plugin が必要とする版と PATH 上の CLI の版が表示されます。両方を同じリリースに揃え、ホストを再起動してください。
 
 ## `vault_registered: false`
 
@@ -37,7 +37,7 @@ active vaultが正しいか確認し、初回登録なら `project setup`、既�
 ## MCPが表示されない
 
 1. Pluginがinstall/enabledか確認する。
-2. `uv` がPATHにあるか `doctor` で確認する。
+2. ホストを起動する環境で `knowledge-refinery --version` を実行する。
 3. marketplaceをupgradeし、Pluginを再installする。
 4. 新しいtask/sessionを開く。
 
@@ -49,14 +49,14 @@ codex plugin marketplace upgrade knowledge-refinery
 
 ## CLIが見つからない
 
-SkillとhookはPlugin同梱のCLIを使います。端末で `knowledge-refinery` コマンドを使う場合は、次を実行します。
+SessionStart hook が CLI を見つけられない場合は、インストール先がホストの PATH に含まれるか確認します。初めて導入する場合は次を実行します。
 
 ```bash
 uv tool install git+https://github.com/skanehira1126/knowledge-refinery.git
 uv tool dir --bin
 ```
 
-`uv tool dir --bin` の出力がPATHに含まれることを確認します。
+`uv tool dir --bin` の出力がCodex と Claude Code を起動する環境の PATH に含まれることを確認します。
 
 ## validationエラー
 

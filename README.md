@@ -8,7 +8,14 @@ Codex や Claude Code で得た開発経験を、複数のプロジェクトか�
 
 ## はじめる
 
-Python 3.11 以上と `uv` を用意します。初期設定に使う CLI はプラグインに同梱されています。
+先に Python 3.11 以上の環境で CLI をインストールします。Codex と Claude Code は、ホストの PATH にある `knowledge-refinery` を使います。
+
+```bash
+uv tool install git+https://github.com/skanehira1126/knowledge-refinery.git
+knowledge-refinery --version
+```
+
+SessionStart hook は CLI が見つからない場合や Plugin と版が異なる場合に通知します。CLI の導入・更新はユーザーが明示的に行います。
 
 ### Claude Code
 
@@ -37,7 +44,7 @@ Codex では `/hooks`（デスクトップでは `Settings → Hooks`）で、�
 
 登録後は新しいセッションで普段どおり開発を依頼できます。エージェントは過去の経験が役立つときに検索し、再利用できる試行や失敗を記録します。検索・診断・提案のみの依頼は読み取りで完了します。
 
-[端末用 CLI と手動セットアップ](docs/getting-started.md)・[Codex プラグインの更新](docs/development.md#plugin更新の確認)
+[CLI の導入と手動セットアップ](docs/getting-started.md)・[Codex プラグインの更新](docs/development.md#plugin更新の確認)
 
 ## 主な機能
 

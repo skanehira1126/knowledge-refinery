@@ -39,6 +39,6 @@ uv run tox
 codex plugin marketplace upgrade knowledge-refinery
 ```
 
-端末用CLIを別途導入している場合は `uv tool upgrade knowledge-refinery` で更新します。開発checkoutへ再接続するときは、そのrootで `PLUGIN_ROOT="$(pwd -P)"` を設定し、`uv tool install --force --editable "$PLUGIN_ROOT"` を実行します。
+GitHub から uv で導入した CLI は、Plugin とあわせて `uv tool upgrade knowledge-refinery` で更新します。開発checkoutへ再接続するときは、そのrootで `PLUGIN_ROOT="$(pwd -P)"` を設定し、`uv tool install --force --editable "$PLUGIN_ROOT"` を実行します。
 
 ローカルmarketplaceで反映を確認する場合も、Pluginを再installして新しいtaskを開きます。manifest、MCP tool名・引数・戻り値、YAML schemaを変更した場合はREADME、Skills、docs、テストを同時に更新します。

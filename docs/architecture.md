@@ -13,10 +13,13 @@ flowchart TB
 
     subgraph Plugin["Global Plugin"]
         SK["Plugin Skills"]
-        MCP["local stdio MCP"]
         HK["Codex / Claude Code hooks"]
+    end
+
+    subgraph Package["PATH上のknowledge-refinery"]
+        MCP["local stdio MCP"]
         CLI["context CLI"]
-        G["Plugin同梱の運用指示"]
+        G["CLIパッケージの運用指示"]
     end
 
     CFG["User config<br/>active vault"]
@@ -54,7 +57,7 @@ flowchart TB
 
 ## 境界
 
-- PluginとMCPはユーザー単位でグローバルに1つ導入します。
+- ユーザーが CLI を導入し、各ホストの Plugin が `knowledge-refinery mcp serve` でサーバーを起動します。
 - active vaultはユーザー設定に1つ持ちます。設定ファイルは `REFINERY_CONFIG` で明示でき、未指定時は `${XDG_CONFIG_HOME:-$HOME/.config}/knowledge-refinery/config.yaml` を使います。`REFINERY_VAULT` でactive vaultを一時overrideできます。
 - repo-scoped MCP toolsは`project_path`を受け、server側で`enabled`、project metadata、repoと
   active vaultの`vault_id`一致を検証します。

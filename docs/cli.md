@@ -102,7 +102,7 @@ version管理可能な`.refinery.yaml`には個人のvault identityを入れま�
 
 metadata更新は `show` の `updated_at` を `update --expected-updated-at` に渡します。指定したfieldだけを更新し、省略fieldは保持します。tagまたはtechnologyを空にする場合は `--clear-tags`、`--clear-technologies` を明示します。revisionなし、古いrevision、変更fieldなしの更新は拒否されます。tagはlowercase kebab-caseで指定します。
 
-`doctor` はactive vaultのschema、書き込み可能性、全knowledge文書、ローカルMCP runtime、project登録を検査します。MCP接続後は `refinery_info.version` を `doctor --mcp-version` へ渡すと、PATH上CLIと実際に接続されたPlugin内MCPのrelease driftも機械的に検出します。Codex側のPlugin登録状態そのものはCLI単独では確認できません。
+`doctor` はactive vaultのschema、書き込み可能性、全knowledge文書、ローカルMCP runtime、project登録を検査します。MCP接続後は `refinery_info.version` を `doctor --mcp-version` へ渡すと、PATH上のCLIと接続中のMCPサーバーのバージョン差も機械的に検出します。Codex側のPlugin登録状態そのものはCLI単独では確認できません。
 
 disabledはhealthy opt-outとして扱うため、disabledであることだけを理由にdoctor全体を失敗させません。
 `doctor --json`はvalidationで見つかった各文書の`path`と`error`を含みます。

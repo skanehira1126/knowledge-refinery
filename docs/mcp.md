@@ -48,7 +48,7 @@ vaultの棚卸し・横断参照・修復では、vaultをprojectとして登録
 ```json
 {
   "ready": true,
-  "version": "0.9.1",
+  "version": "0.10.0",
   "vault_context": {
     "vault_path": "/absolute/path/to/vault",
     "vault_id": "0123456789abcdef0123456789abcdef",
@@ -176,7 +176,7 @@ tagはlowercase kebab-caseで目的・領域を表し、技術名は `technologi
 
 検索とtag集計は破損文書を隔離して正常文書を返します。破損したtaxonomyや文書のpathと理由は管理tool `refinery_validate` で確認します。IDを指定するget toolは対象ファイルを直接読み、対象自身が不正な場合はエラーを返します。
 
-`refinery_info.version` はMCPを提供するPlugin側packageのversionです。PATH上CLIの `knowledge-refinery doctor --mcp-version VERSION` へ渡し、不一致なら両方を同じreleaseへ更新します。
+`refinery_info.version` は接続中のMCPサーバーを起動したCLIパッケージのversionです。PATH上CLIの `knowledge-refinery doctor --mcp-version VERSION` へ渡し、不一致ならホストのPATHを確認し、CLI更新後にセッションを開き直します。
 
 ## 拒否条件
 

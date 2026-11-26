@@ -10,7 +10,7 @@ Codexで得た開発経験を、次の判断に使えるナレッジへ変える
 
     ---
 
-    プラグインをインストールし、`refinery-project` に中央vaultと利用先リポジトリの設定を依頼します。
+    CLI とプラグインをインストールし、`refinery-project` に中央vaultと利用先リポジトリの設定を依頼します。
 
     [インストールと初期設定 →](getting-started.md)
 

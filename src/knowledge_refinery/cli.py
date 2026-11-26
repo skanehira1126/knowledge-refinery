@@ -482,7 +482,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser.add_argument(
         "--mcp-version",
         default=None,
-        help="version returned by refinery_info; enables CLI/Plugin drift detection",
+        help="compare the connected MCP server version from refinery_info with this CLI",
     )
     doctor_parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     doctor_parser.set_defaults(handler=run_doctor)
@@ -812,6 +812,7 @@ def run_doctor(args: argparse.Namespace) -> int:
     active_vault = Path(str(project["active_vault"])) if project["active_vault"] else None
     write_ok, write_detail = _vault_write_check(active_vault)
     mcp_runtime, vault_documents = _mcp_runtime_and_vault_check()
+    cli_path = shutil.which("knowledge-refinery")
     runtime_checks: list[dict[str, object]] = [
         {
             "name": "python",
@@ -820,9 +821,9 @@ def run_doctor(args: argparse.Namespace) -> int:
         },
         mcp_runtime,
         {
-            "name": "uv",
-            "ok": shutil.which("uv") is not None,
-            "detail": shutil.which("uv") or "executable not found",
+            "name": "knowledge-refinery",
+            "ok": cli_path is not None,
+            "detail": cli_path or "executable not found on PATH",
         },
         {
             "name": "active_vault",

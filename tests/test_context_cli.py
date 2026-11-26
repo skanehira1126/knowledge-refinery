@@ -2,7 +2,8 @@ import io
 import json
 from pathlib import Path
 import re
-import shlex
+import shutil
+import subprocess
 from typing import Any
 
 import pytest
@@ -55,7 +56,7 @@ def test_manifests_route_matching_events_to_the_host_server(project_store: Path)
     root = Path(__file__).resolve().parents[1]
     codex = json.loads((root / ".codex-plugin/plugin.json").read_text())
     claude = json.loads((root / ".claude-plugin/plugin.json").read_text())
-    shared = "hooks/hooks.json"
+    shared = "./hooks/hooks.json"
     events = ("UserPromptSubmit", "PreToolUse", "PostToolUse", "SubagentStart")
     tools = ("Bash", "apply_patch", "Edit", "Write")
     cwd = str(Path.cwd())
@@ -76,13 +77,8 @@ def test_manifests_route_matching_events_to_the_host_server(project_store: Path)
         assert set(groups) == {"SessionStart", *events}
         (start,) = groups.pop("SessionStart")
         (fixed,) = start["hooks"]
-        program, *args = shlex.split(fixed["command"])
-        assert fixed["type"] == "command" and program.endswith("/bin/knowledge-refinery")
-        assert args[:2] == ["context", "guidance-hook"]
-        for source in ("startup", "compact", "resume", "clear", "fork"):
-            assert bool(re.fullmatch(start["matcher"], source)) == (
-                source in ("startup", "compact")
-            )
+        assert fixed["type"] == "command"
+        assert "matcher" not in start and shared in paths
         for event, (group,) in groups.items():
             (handler,) = group["hooks"]
             assert handler["type"] == "mcp_tool" and handler["server"] == server
@@ -106,6 +102,59 @@ def test_manifests_route_matching_events_to_the_host_server(project_store: Path)
                         "additionalContext": f"本文 {target}",
                     }
                 }
+
+
+@pytest.mark.parametrize(
+    ("host_root", "cli_version", "expected_message"),
+    [
+        ("PLUGIN_ROOT", None, "PATH に knowledge-refinery が見つかりません"),
+        ("CLAUDE_PLUGIN_ROOT", "0.0.1", "CLI 0.0.1"),
+        ("PLUGIN_ROOT", "", "knowledge-refinery --version が失敗"),
+        ("CLAUDE_PLUGIN_ROOT", "installed", None),
+    ],
+)
+def test_session_start_reports_cli_problems_or_delivers_guidance(
+    tmp_path: Path, host_root: str, cli_version: str | None, expected_message: str | None
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    plugin = tmp_path / "installed plugin"
+    plugin.symlink_to(root, target_is_directory=True)
+    manifest = json.loads((plugin / ".codex-plugin/plugin.json").read_text())
+    (group,) = json.loads((plugin / "hooks/hooks.json").read_text())["hooks"]["SessionStart"]
+    (hook,) = group["hooks"]
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name in ("sh", "sed"):
+        program = shutil.which(name)
+        assert program
+        (bin_dir / name).symlink_to(program)
+    cli = bin_dir / "knowledge-refinery"
+    if cli_version == "installed":
+        program = shutil.which("knowledge-refinery")
+        assert program
+        cli.symlink_to(program)
+    elif cli_version is not None:
+        response = f"echo {cli_version}" if cli_version else "exit 1"
+        cli.write_text(f'#!/bin/sh\n[ "$1" = --version ] || exit 2\n{response}\n')
+        cli.chmod(0o755)
+    (tmp_path / ".refinery.yaml").write_text("schema_version: 2\nproject_id: product\n")
+    payload = {"hook_event_name": "SessionStart", "source": "startup", "cwd": str(tmp_path)}
+    result = subprocess.run(
+        ["/bin/sh", "-c", hook["command"]],
+        cwd=tmp_path,
+        env={"PATH": str(bin_dir), host_root: str(plugin)},
+        input=json.dumps(payload),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    output = json.loads(result.stdout)
+    if expected_message:
+        assert expected_message in output["systemMessage"]
+        assert manifest["version"] in output["systemMessage"]
+        assert "hookSpecificOutput" not in output
+    else:
+        assert output["hookSpecificOutput"]["additionalContext"] == load_agents_snippet("jp")
 
 
 def test_fixed_guidance_uses_only_local_enablement(

@@ -1,4 +1,0 @@
-#!/bin/sh
-set -eu
-plugin_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
-exec uv run --no-dev --project "$plugin_root" python -m knowledge_refinery "$@"

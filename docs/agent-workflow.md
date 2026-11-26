@@ -31,7 +31,7 @@ Pluginの各`SKILL.md`は、共通の実行・承認・完了条件を
 `skills/operating-rules.md`から読み、個別手順は各Skillで扱います。Experienceの記録と導入の詳細は、
 該当操作のときだけ参照ファイルを読みます。タグ選択の共通規則は
 `skills/knowledge-tags.md`に置き、タグを付けるときやtaxonomyを点検するときに読みます。
-固定hookはrepoの有効設定を見て、新規開始・圧縮時にPlugin同梱の運用指示を返します。
+固定hookはrepoの有効設定を見て、新規開始・圧縮時にCLIパッケージの運用指示を返します。
 project別の本文は入力時、ツールの実行前後、サブエージェント開始時にホストが接続済みMCPから取得します。
 運用指示をファイルでも配布したい場合は`--agents`で日英のmanaged blockを
 追加できます。記録形式やAPI操作はPlugin Skillが扱います。
@@ -124,7 +124,7 @@ Evidenceは既定ではpathやURIへの参照であり、参照先の安全性�
 
 ## 自動運用を停止・再開する
 
-Codexでは `/hooks` で `context guidance-hook` だけを無効にできます。以降の新規セッションでは、
+Codexでは `/hooks` で固定の SessionStart hook（`session-start.sh`）を無効にできます。これにより CLI のバージョン通知も停止します。以降の新規セッションでは、
 project固有のcontext配信とSkillの明示呼び出しを使い続けられます。過去に`--agents`で追加した
 ファイル内の指示も読み込まれる環境では、その指示は引き続き適用されます。[Codexのhook設定](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)
 

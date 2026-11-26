@@ -27,7 +27,7 @@ IDやパスが未確定なら、登録済みプロジェクトの候補を `sess
 
 ## 2. CLIで抽出する
 
-対象のCodexログが読める環境で、Plugin同梱の `knowledge-refinery session` を使う。
+対象のCodexログが読める環境で、PATH 上の `knowledge-refinery session` を使う。
 抽出に失敗した場合は原因を報告し、解析を保留する。
 
 `/status` のセッションIDを使う場合は、CLIが共有 `session_id` で親ログを探し、既定で子孫も抽出する。

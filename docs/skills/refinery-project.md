@@ -7,7 +7,7 @@ repoの導入、project metadataの管理、有効化、無効化、診断を担
 診断・説明のみなら変更しません。setupではimmutableなIDとactive vaultの選択を、`vault init`を
 含む書き込みより先に確認します。同じ正確な値への明示承認があれば、そのまま実行・検証へ進みます。
 
-ON/OFF操作は中央vaultのknowledgeを削除しません。disabledは正常なopt-outであり、検索・記録依頼から暗黙にenableしません。診断時は `refinery_info.version` をdoctorへ渡してPlugin/CLI driftも検査します。
+ON/OFF操作は中央vaultのknowledgeを削除しません。disabledは正常なopt-outであり、検索・記録依頼から暗黙にenableしません。診断時は `refinery_info.version` をdoctorへ渡して接続中のMCPとCLIの版の差も検査します。
 
 Knowledge Refinery設定のrepairには、このpluginに存在する`refinery-project` Skillと文書化されたCLIだけを使います。存在しないrepair Skillやcommandを案内しません。Skillのsource of truthは `skills/refinery-project/SKILL.md` です。
 

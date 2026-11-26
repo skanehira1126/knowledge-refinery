@@ -3,9 +3,8 @@
     "knowledge-refinery": {
       "title": "Knowledge Refinery",
       "description": "中央vaultのexperienceとmemoryを検索・更新します。",
-      "cwd": ".",
-      "command": "uv",
-      "args": ["run", "--project", ".", "knowledge-refinery", "mcp", "serve"],
+      "command": "knowledge-refinery",
+      "args": ["mcp", "serve"],
       "tool_timeout_sec": 300
     }
   }

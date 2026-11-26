@@ -630,7 +630,7 @@ def test_cli_can_disable_status_and_reenable_project(
     assert drift["runtime"][-1] == {
         "name": "version_match",
         "ok": False,
-        "detail": "cli=0.9.1, mcp=0.1.0",
+        "detail": "cli=0.10.0, mcp=0.1.0",
     }
 
 
